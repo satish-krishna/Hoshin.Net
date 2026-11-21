@@ -1,0 +1,2717 @@
+{
+  "system": "demo",
+  "changes": [
+    {
+      "change": "2026-08-01-finished-000",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-000",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-000` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-001",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-001",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-001` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-002",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-002",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-002` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-003",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-003",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-003` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-004",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-004",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-004` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-005",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-005",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-005` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-006",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-006",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-006` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-007",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-007",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-007` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-008",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-008",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-008` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-009",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-009",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-009` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-010",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-010",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-010` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-08-01-finished-011",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-08-01-finished-011",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-08-01-finished-011` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-09-01-fix-finished",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-09-01-fix-finished",
+      "inCopy": false,
+      "title": "Fix the greeting typo",
+      "track": "fix",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 1,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1"
+          ],
+          "logged": [
+            "T1"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": {
+        "row": 8,
+        "facts": {
+          "intent": {
+            "inHead": true,
+            "headStatus": "accepted",
+            "workingStatus": "accepted"
+          },
+          "spec": {
+            "inHead": true,
+            "headStatus": "accepted",
+            "workingStatus": "accepted"
+          },
+          "plan": {
+            "inHead": true,
+            "headStatus": "accepted",
+            "workingStatus": "accepted"
+          },
+          "unrecorded": [],
+          "ownLinesOnly": false,
+          "accepted": "all",
+          "acceptanceLast": false,
+          "built": true
+        }
+      },
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": "`2026-09-01-fix-finished` is on the light track; `fix --accept 2026-09-01-fix-finished` finishes or revises its documents.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "`2026-09-01-fix-finished` is on the light track; `fix --accept 2026-09-01-fix-finished` finishes or revises its documents.",
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-09-01-fix-finished` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-09-02-rejected-on-main",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-09-02-rejected-on-main",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "rejected",
+          "workingStatus": "rejected",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        },
+        "plan": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        }
+      },
+      "scenarios": null,
+      "tasks": null,
+      "schedule": null,
+      "buildLogs": {},
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": "This intent is `rejected`. The product owner accepts it by changing its status to `accepted` and committing; the spec runs only after that.",
+          "accept": []
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "This spec is `missing`. The product owner accepts it by changing its status to `accepted` and committing.",
+          "accept": []
+        },
+        "build": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": []
+        },
+        "review": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": []
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-09-02-rejected-on-main` is closed: its intent was rejected.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-09-03-merged-copy-kept",
+      "master": "<ws>/.hoshin/copies/2026-09-03-merged-copy-kept",
+      "folder": "<ws>/.hoshin/copies/2026-09-03-merged-copy-kept/intent/demo/2026-09-03-merged-copy-kept",
+      "inCopy": true,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        },
+        "plan": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        }
+      },
+      "scenarios": null,
+      "tasks": null,
+      "schedule": null,
+      "buildLogs": {},
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "This spec is `missing`. The product owner accepts it by changing its status to `accepted` and committing.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "review": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-10-01-draft",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-10-01-draft",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "draft",
+          "workingStatus": "draft",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        },
+        "plan": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        }
+      },
+      "scenarios": null,
+      "tasks": null,
+      "schedule": null,
+      "buildLogs": {},
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": "This intent is `draft`. The product owner accepts it by changing its status to `accepted` and committing; the spec runs only after that.",
+          "accept": []
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "This spec is `missing`. The product owner accepts it by changing its status to `accepted` and committing.",
+          "accept": []
+        },
+        "build": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": []
+        },
+        "review": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": []
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-10-02-spec-draft",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-10-02-spec-draft",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "draft",
+          "workingStatus": "draft",
+          "uncommitted": false,
+          "pin": "missing"
+        },
+        "plan": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        }
+      },
+      "scenarios": 2,
+      "tasks": null,
+      "schedule": null,
+      "buildLogs": {},
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "This spec is `draft`. The product owner accepts it by changing its status to `accepted` and committing.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "review": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-10-03-planned",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-10-03-planned",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [],
+          "unlogged": [
+            "T1",
+            "T2"
+          ],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "ready",
+            "task": "T1",
+            "waitingOn": []
+          }
+        ],
+        "next": "build",
+        "oneAtATime": false
+      },
+      "buildLogs": {},
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": false,
+          "stop": "These tasks have no build log entry yet: `app`: T1, T2.",
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-10-04-built",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-10-04-built",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [
+            "T1",
+            "T2"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 1,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": true,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-10-04-built` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-10-05-fix-built",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-10-05-fix-built",
+      "inCopy": false,
+      "title": "Fix the greeting typo",
+      "track": "fix",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 1,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1"
+          ],
+          "logged": [
+            "T1"
+          ],
+          "unlogged": [],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "done",
+            "task": null,
+            "waitingOn": []
+          }
+        ],
+        "next": "review",
+        "oneAtATime": false
+      },
+      "buildLogs": {
+        "app": "clean"
+      },
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": {
+        "row": 8,
+        "facts": {
+          "intent": {
+            "inHead": true,
+            "headStatus": "accepted",
+            "workingStatus": "accepted"
+          },
+          "spec": {
+            "inHead": true,
+            "headStatus": "accepted",
+            "workingStatus": "accepted"
+          },
+          "plan": {
+            "inHead": true,
+            "headStatus": "accepted",
+            "workingStatus": "accepted"
+          },
+          "unrecorded": [],
+          "ownLinesOnly": false,
+          "accepted": "all",
+          "acceptanceLast": false,
+          "built": true
+        }
+      },
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": "`2026-10-05-fix-built` is on the light track; `fix --accept 2026-10-05-fix-built` finishes or revises its documents.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "`2026-10-05-fix-built` is on the light track; `fix --accept 2026-10-05-fix-built` finishes or revises its documents.",
+          "accept": [
+            "intent.md",
+            "spec.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md",
+            "spec.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-10-05-fix-built` has build work (a build log or a review), so it is not rejected. The engineer settles that work first.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-10-06-fix-dirty",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-10-06-fix-dirty",
+      "inCopy": false,
+      "title": "Fix the greeting typo",
+      "track": "fix",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": true,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 1,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1"
+          ],
+          "logged": [],
+          "unlogged": [
+            "T1"
+          ],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "ready",
+            "task": "T1",
+            "waitingOn": []
+          }
+        ],
+        "next": "build",
+        "oneAtATime": false
+      },
+      "buildLogs": {},
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": {
+        "row": 3,
+        "facts": {
+          "intent": {
+            "inHead": true,
+            "headStatus": "accepted",
+            "workingStatus": "accepted"
+          },
+          "spec": {
+            "inHead": true,
+            "headStatus": "accepted",
+            "workingStatus": "accepted"
+          },
+          "plan": {
+            "inHead": true,
+            "headStatus": "accepted",
+            "workingStatus": "accepted"
+          },
+          "unrecorded": [
+            "spec"
+          ],
+          "ownLinesOnly": false,
+          "accepted": "all",
+          "acceptanceLast": false,
+          "built": false
+        }
+      },
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": "`2026-10-06-fix-dirty` is on the light track; `fix --accept 2026-10-06-fix-dirty` finishes or revises its documents.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "`2026-10-06-fix-dirty` is on the light track; `fix --accept 2026-10-06-fix-dirty` finishes or revises its documents.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": "`spec.md` has uncommitted changes. Commit the acceptance first, so history shows what was accepted.",
+          "accept": [
+            "intent.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": false,
+          "stop": "`spec.md` has uncommitted changes. Commit the acceptance first, so history shows what was accepted.",
+          "accept": [
+            "intent.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`spec.md` has uncommitted changes. Commit or discard them first, so the rejection does not carry them unread.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-10-07-full-dirty",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-10-07-full-dirty",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": true,
+          "pin": "holds"
+        },
+        "plan": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false,
+          "pin": "holds"
+        }
+      },
+      "scenarios": 2,
+      "tasks": {
+        "app": {
+          "all": [
+            "T1",
+            "T2"
+          ],
+          "logged": [],
+          "unlogged": [
+            "T1",
+            "T2"
+          ],
+          "commits": {
+            "T1": [
+              "e9eb7b943f71fe484fcff407ed7231854c75e3bf"
+            ],
+            "T2": [
+              "dd25a1d5d774e4ebaaae971558bfc740a6b770f2"
+            ]
+          },
+          "untasked": [],
+          "uncommitted": []
+        }
+      },
+      "schedule": {
+        "repos": [
+          {
+            "repo": "app",
+            "state": "ready",
+            "task": "T1",
+            "waitingOn": []
+          }
+        ],
+        "next": "build",
+        "oneAtATime": false
+      },
+      "buildLogs": {},
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "`spec.md` has uncommitted changes. Commit the acceptance first, so history shows what was accepted.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": "`spec.md` has uncommitted changes. Commit the acceptance first, so history shows what was accepted.",
+          "accept": [
+            "intent.md",
+            "plan.md"
+          ]
+        },
+        "review": {
+          "candidate": false,
+          "stop": "`spec.md` has uncommitted changes. Commit the acceptance first, so history shows what was accepted.",
+          "accept": [
+            "intent.md",
+            "plan.md"
+          ]
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`spec.md` has uncommitted changes. Commit or discard them first, so the rejection does not carry them unread.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-10-08-rejected-on-work",
+      "master": "<ws>/master",
+      "folder": "<ws>/master/intent/demo/2026-10-08-rejected-on-work",
+      "inCopy": false,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "rejected",
+          "workingStatus": "rejected",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        },
+        "plan": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        }
+      },
+      "scenarios": null,
+      "tasks": null,
+      "schedule": null,
+      "buildLogs": {},
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": false,
+          "stop": "This intent is `rejected`. The product owner accepts it by changing its status to `accepted` and committing; the spec runs only after that.",
+          "accept": []
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "This spec is `missing`. The product owner accepts it by changing its status to `accepted` and committing.",
+          "accept": []
+        },
+        "build": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": []
+        },
+        "review": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": []
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": "`2026-10-08-rejected-on-work` is closed: its intent was rejected.",
+          "accept": []
+        }
+      }
+    },
+    {
+      "change": "2026-10-09-in-copy",
+      "master": "<ws>/.hoshin/copies/2026-10-09-in-copy",
+      "folder": "<ws>/.hoshin/copies/2026-10-09-in-copy/intent/demo/2026-10-09-in-copy",
+      "inCopy": true,
+      "title": "Greeting",
+      "track": "full",
+      "documents": {
+        "intent": {
+          "exists": true,
+          "inHead": true,
+          "headStatus": "accepted",
+          "workingStatus": "accepted",
+          "uncommitted": false
+        },
+        "spec": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        },
+        "plan": {
+          "exists": false,
+          "inHead": false,
+          "headStatus": null,
+          "workingStatus": null,
+          "uncommitted": false,
+          "pin": null
+        }
+      },
+      "scenarios": null,
+      "tasks": null,
+      "schedule": null,
+      "buildLogs": {},
+      "review": {
+        "committed": 0,
+        "draft": "none"
+      },
+      "fix": null,
+      "ready": {
+        "spec": {
+          "candidate": true,
+          "stop": null,
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "plan": {
+          "candidate": false,
+          "stop": "This spec is `missing`. The product owner accepts it by changing its status to `accepted` and committing.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "build": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "review": {
+          "candidate": false,
+          "stop": "This plan is `missing`. The engineer accepts it by changing its status to `accepted` and committing.",
+          "accept": [
+            "intent.md"
+          ]
+        },
+        "done": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        },
+        "reject": {
+          "candidate": false,
+          "stop": null,
+          "accept": []
+        }
+      }
+    }
+  ],
+  "problems": []
+}

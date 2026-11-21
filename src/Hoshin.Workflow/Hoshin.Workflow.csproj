@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Hoshin.Workflow</RootNamespace>
+    <AssemblyName>Hoshin.Workflow</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Gherkin" Version="43.0.0" />
+    <PackageReference Include="Markdig" Version="1.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Documents/Schemas/*.json" />
+    <EmbeddedResource Include="Workspace/Templates/*.md" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,36 @@
+## .NET build & test outputs
+bin/
+obj/
+out/
+artifacts/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+## IDE & editor files
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*~
+
+## NuGet & packages
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+
+## OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+## Dogfooding safety: never commit local harness hooks in the repo root during development
+/.agents/hooks.json
+/.claude-plugin/
