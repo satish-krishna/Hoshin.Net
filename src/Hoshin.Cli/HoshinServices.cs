@@ -5,6 +5,7 @@ using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Events.Steps;
 using Hoshin.Workflow.Git;
+using Hoshin.Workflow.Migration;
 using Hoshin.Workflow.Red;
 using Hoshin.Workflow.Workspace;
 
@@ -37,6 +38,8 @@ public sealed class HoshinServices
     public Committer Committer { get; }
     public ChangeRenameService ChangeRename { get; }
     public ChangeRemoveService ChangeRemove { get; }
+    public IYamlToJsoncConverter YamlConverter { get; }
+    public IDocumentMigrator DocumentMigrator { get; }
     public WorkspaceMigrator Migrator { get; }
     public HookConfigService HookConfig { get; }
     public LedgerStore Ledger { get; }
@@ -83,7 +86,9 @@ public sealed class HoshinServices
         Committer = new Committer(Git, Resolver, ChangeLocator, Apps, DocumentChecker, Progress, ReviewReader);
         ChangeRename = new ChangeRenameService(Git, Apps, BranchChecker);
         ChangeRemove = new ChangeRemoveService(Git, Apps);
-        Migrator = new WorkspaceMigrator(Git, Resolver);
+        YamlConverter = YamlToJsoncConverter.Default;
+        DocumentMigrator = new DocumentMigrator(YamlConverter);
+        Migrator = new WorkspaceMigrator(Git, Resolver, DocumentMigrator);
 
         HookConfig = new HookConfigService(Git);
         Ledger = new LedgerStore(Git);

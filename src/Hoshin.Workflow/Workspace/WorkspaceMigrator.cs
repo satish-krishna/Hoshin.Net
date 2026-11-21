@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Git;
+using Hoshin.Workflow.Migration;
 
 namespace Hoshin.Workflow.Workspace;
 
@@ -17,8 +18,8 @@ public sealed record MigrateResult(
     List<string> Manual,
     List<string> Problems);
 
-/// <summary>Migrates a workspace from legacy <c>ai-sdlc</c> names to <c>hoshin</c> names (idempotent, dry-run by default).</summary>
-public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver? resolver = null)
+/// <summary>Migrates a workspace from legacy <c>ai-sdlc</c> names to <c>hoshin</c> names and rewrites legacy YAML documents / <c>change.yml</c> to Layout 2 JSONC (idempotent, dry-run by default).</summary>
+public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver? resolver = null, IDocumentMigrator? documentMigrator = null)
 {
     public static WorkspaceMigrator Default { get; } = new();
 
@@ -31,6 +32,7 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
 
     private readonly IGitClient _git = git ?? ProcessGitClient.Default;
     private readonly IWorkspaceResolver _resolver = resolver ?? new WorkspaceResolver(git);
+    private readonly IDocumentMigrator _documents = documentMigrator ?? DocumentMigrator.Default;
 
     private sealed record PlannedStep(MigrateStep Step, Func<string?>? Act, string? Branch = null);
 
@@ -192,7 +194,49 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
             .ToList();
 
         var instructionStep = InstructionsStep(workspace, main, marker, master);
-        return ([markers, copies, stateSteps, [instructionStep]], moving.Select(w => Path.GetFileName(w.Path)).ToList());
+        var documentSteps = DocumentSteps(checkouts, oldCopiesReal, newCopies);
+        List<List<PlannedStep>> allGroups = [markers, copies, stateSteps, [instructionStep]];
+        if (documentSteps.Count > 0)
+        {
+            allGroups.Add(documentSteps);
+        }
+
+        return (allGroups, moving.Select(w => Path.GetFileName(w.Path)).ToList());
+    }
+
+    private List<PlannedStep> DocumentSteps(List<GitWorktree> checkouts, string oldCopiesReal, string newCopies)
+    {
+        var planned = new List<PlannedStep>();
+        foreach (var wt in checkouts)
+        {
+            var intentDir = Path.Combine(wt.Path, "intent");
+            if (!Directory.Exists(intentDir))
+            {
+                continue;
+            }
+
+            var isMoving = Path.GetDirectoryName(wt.Path) is { } parent && PathHelpers.PathsEqual(parent, oldCopiesReal);
+            var targetRoot = isMoving ? Path.Combine(newCopies, Path.GetFileName(wt.Path)) : wt.Path;
+
+            foreach (var item in _documents.PlanDirectory(intentDir))
+            {
+                if (item.Status == "refused")
+                {
+                    planned.Add(new PlannedStep(new MigrateStep("document", item.Path, item.To, "refused", item.Detail), null));
+                    continue;
+                }
+
+                var rel = Path.GetRelativePath(wt.Path, item.Path);
+                var targetFile = Path.Combine(targetRoot, rel);
+                planned.Add(new PlannedStep(new MigrateStep("document", item.Path, item.To, "would", null), () =>
+                {
+                    var res = _documents.MigratePaths([targetFile], write: true);
+                    return res.Problems.Count == 0 ? null : string.Join("; ", res.Problems);
+                }));
+            }
+        }
+
+        return planned;
     }
 
     private bool Tracked(string dir, string file) => _git.Run(dir, ["ls-files", "--error-unmatch", "--", file]).Ok;
