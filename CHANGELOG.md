@@ -30,6 +30,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Corrupt-ledger protection & locked `LedgerStore.Update` (T19):** `LedgerStore.Read` now throws `CouldNotRunException` naming the file instead of swallowing corrupt JSON and wiping history, and added `LedgerStore.Update` (backed by shared `FileLock` and unique-temp atomic `File.Move`), routing `RedRecorder`, `EventRunner`, `BaselineApprovals`, and `GateCommand` through it.
 - **`SpecReader` fence & `Scenario Template` fixes (T20):** Updated `SpecReader.FindBlock` to select the first top-level `gherkin` fence from `Doc.Fences` (ignoring nested `gherkin` snippets inside outer fenced examples) and detected outlines by `Examples` presence or `Scenario Outline`/`Scenario Template` keywords.
 - **Session-scoped hook & guard isolation (T22):** Extracted shared `HookSessionScope.IsRunSession` so `HookOrchestrator` (`HandleStart`, `HandleResult`, `HandleSubagentStop`, `HandleStop`) and `GuardCommand` act strictly for the owning run session or its registered active subagent, treating missing `session_id` and unrelated sessions/agents as outside the run.
+- **Non-intrusive `setup`/`context` hooks (T23):** Moved the `setup`/`context` early return in `HookOrchestrator.HandleStart` above active-run checks, `ReadState`, `WriteRunMarker`, `ResetStops`, and step writes so `setup`/`context` work in repositories without a change plan and never take over an active run.
 
 ## [2.0.0] - 2026-11-21
 

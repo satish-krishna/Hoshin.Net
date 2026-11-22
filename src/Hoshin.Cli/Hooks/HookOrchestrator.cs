@@ -26,6 +26,13 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), "no repo");
         }
 
+        var invocation = SkillInvocationDetector.Detect(ev);
+        if (invocation is { Skill: "setup" or "context" })
+        {
+            // H2: setup/context never take over the run, never touch run.json/step.json/stop-blocks, and work without a change plan.
+            return (_adapter.EmptyOutput(ev.Harness), $"{invocation.Skill}: allowed");
+        }
+
         if (File.Exists(repo.RunMarkerPath))
         {
             var existingMarker = repo.ReadRunMarker();
@@ -49,7 +56,6 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             }
         }
 
-        var invocation = SkillInvocationDetector.Detect(ev);
         if (invocation is null)
         {
             return (_adapter.EmptyOutput(ev.Harness), "not ours");
@@ -114,11 +120,6 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             var fixArgs = ev.CommandArgs ?? slashArgs ?? "";
             var desc = fixArgs.Trim().Length > 0 ? $"\n\nThe engineer's fix request: {fixArgs.Trim()}" : "";
             return EmitStartContext(ev, repo, HookInstructions.For(fixStep, ev.Harness) + desc, "fix: Fix");
-        }
-
-        if (invoked is "setup" or "context")
-        {
-            return (_adapter.EmptyOutput(ev.Harness), $"{invoked}: allowed");
         }
 
         if (invoked is "accept" or "done")
