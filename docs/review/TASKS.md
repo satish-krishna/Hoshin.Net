@@ -125,7 +125,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | T32 | G | Cross-platform packager and CI (Linux + Windows) | §8.6 | — | done |
 | T33 | G | Warnings as errors, analyzers, complexity limit, `.editorconfig` | §8.6 | — | done |
-| T39 | G | Architecture tests with a shrinking baseline | CONTRIBUTING §3–§5 | — | open |
+| T39 | G | Architecture tests with a shrinking baseline | CONTRIBUTING §3–§5 | — | done |
 | T40 | G | Conventional names check | CONTRIBUTING §1 | — | open |
 | T42 | G | Coverage gate on changed lines | CONTRIBUTING §6 T3 | T32 | open |
 | T01 | P0 | Scope the guard and hook logging to the active run | S2, H8 | D2 ✔ | open |
