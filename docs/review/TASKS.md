@@ -55,7 +55,7 @@ The options:
 - **(b)** Make System B self-sufficient and retire System A, apart from the CLI contract.
 - **(c)** Keep both, and document System B as single-repo only.
 
-**Answer: (a).** The recommended option, recorded 2026-11-22. The section "P1 — Unify the two systems" breaks this into tasks A1–A8. To change this answer, edit it here and re-plan A1–A8 before any of them starts.
+**Answer: (a).** Decided by the engineer, 2026-11-22. The section "P1 — Unify the two systems" breaks this into tasks A1–A8. To change this answer, edit it here and re-plan A1–A8 before any of them starts.
 
 ### D2 — When does the guard apply?
 Today the static rules (no push, no PR, protected files) apply in **every repository on the machine** (S2). The options:
@@ -64,14 +64,14 @@ Today the static rules (no push, no PR, protected files) apply in **every reposi
 
 Either way, the guard must stay silent outside hoshin workspaces.
 
-**Answer: (a).** Adopted 2026-11-22: the guard applies only while a hoshin run is active for the calling session (the session in `run.json`, or its registered subagent). Every other session, in any repository, gets no guard output.
+**Answer: (a).** Decided by the engineer, 2026-11-22: the guard applies only while a hoshin run is active for the calling session (the session in `run.json`, or its registered subagent). Every other session, in any repository, gets no guard output.
 
 ### D3 — How should `hoshin migrate` parse YAML?
 The hand-written converter loses data (L1–L3). The options:
 - **(a, recommended)** Move `migrate` into a new `Hoshin.Migration` assembly referenced only by `Hoshin.Cli`, and use YamlDotNet there. `Hoshin.Workflow` stays dependency-free.
 - **(b)** Keep the hand-written converter, but make it refuse every construct it doesn't fully support.
 
-**Answer: (a).** Adopted 2026-11-22: a new `Hoshin.Migration` assembly uses YamlDotNet, and `Hoshin.Workflow` keeps only Markdig and Gherkin. T10 (fail closed) still lands first, as a safety net.
+**Answer: (a).** Decided by the engineer, 2026-11-22: a new `Hoshin.Migration` assembly uses YamlDotNet, and `Hoshin.Workflow` keeps only Markdig and Gherkin. T10 (fail closed) still lands first, as a safety net.
 
 ### D4 — Publishing defaults
 - **Branch:** `hoshin/<change>` (today) or `change/<change>` (the original GRAMMAR).
@@ -80,7 +80,7 @@ The hand-written converter loses data (L1–L3). The options:
 
 Recommended: `change/<change>`, open a PR, and require the review gate.
 
-**Answer: as recommended.** Adopted 2026-11-22:
+**Answer: as recommended.** Decided by the engineer, 2026-11-22:
 - the default branch is `change/<change>` (`branch` in `change.jsonc` still overrides it);
 - publishing opens a PR against `base`, or reuses an open one;
 - publishing requires a committed review at the current head with no `high` findings.
@@ -90,7 +90,7 @@ GRAMMAR allows plan tasks that have no test (config, docs) and tasks that only a
 
 Recommended: allow them, as the original does.
 
-**Answer: allow them.** Adopted 2026-11-22, following the original's rule (`hoshin/skills/plan/references/drafting.md`): "A task with no testable behavior (configuration, documentation) says so, has no `test` and no `compile`, and its 'done when' is the check." See T41.
+**Answer: allow them.** Decided by the engineer, 2026-11-22, following the original's rule (`hoshin/skills/plan/references/drafting.md`): "A task with no testable behavior (configuration, documentation) says so, has no `test` and no `compile`, and its 'done when' is the check." See T41.
 
 ---
 
