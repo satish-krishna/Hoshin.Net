@@ -21,7 +21,8 @@ public sealed record WorkflowPlan(
     bool HasPlan = true,
     string? Branch = null,
     string WorkType = "feat",
-    IReadOnlyList<string>? TestPatterns = null)
+    IReadOnlyList<string>? TestPatterns = null,
+    string[]? EnvAllow = null)
 {
     public string EffectiveBranch => string.IsNullOrWhiteSpace(Branch) ? $"hoshin/{Change}" : Branch;
 
@@ -132,6 +133,11 @@ public sealed record WorkflowBaselineRun(string BaseHead, bool Passed, string Ou
 public sealed record WorkflowApproval(string Head, bool Approved, string Note, DateTimeOffset At);
 
 public sealed record WorkflowPublished(string Head, string Ref, DateTimeOffset At, string? PullRequestUrl = null);
+
+public sealed record WorkflowPublishResult(WorkflowPublished? Published, string? Error)
+{
+    public bool Ok => Published is not null && Error is null;
+}
 
 public sealed record WorkflowReviewRun(string Head, int ReviewNumber, int FindingCount, int HighCount, DateTimeOffset At);
 

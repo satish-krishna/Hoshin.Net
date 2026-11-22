@@ -23,7 +23,7 @@ public interface IWorkflowRunner
 
     WorkflowApproval Answer(WorkflowRepo repo, WorkflowState state, bool approved, string note);
 
-    WorkflowPublished? Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = false);
+    WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = false);
 
     (IReadOnlyList<Problem> Problems, string? Commit) CommitDocument(WorkflowRepo repo, WorkflowState state, string name);
 
@@ -251,10 +251,12 @@ public sealed partial class WorkflowRunner(
             return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, "not observed: missing test or production changes", reasons, DateTimeOffset.UtcNow));
         }
 
+        var taskEnv = AllowListedCommandRunner.CollectAdditionalEnvironment(plan.EnvAllow);
+
         // Step 1: Verify Green on the full working tree before committing anything.
         if (task.Compile is { Length: > 0 })
         {
-            var compile = _runner.Run(repo.Root, task.Compile, TimeSpan.FromMinutes(5));
+            var compile = _runner.Run(repo.Root, task.Compile, TimeSpan.FromMinutes(5), taskEnv);
             if (!compile.Ok)
             {
                 reasons.Add($"compile: `{string.Join(' ', task.Compile)}` failed: {Squash(compile.Tail(15))}");
@@ -262,7 +264,7 @@ public sealed partial class WorkflowRunner(
             }
         }
 
-        var greenPre = _runner.Run(repo.Root, task.Test, TimeSpan.FromMinutes(5));
+        var greenPre = _runner.Run(repo.Root, task.Test, TimeSpan.FromMinutes(5), taskEnv);
         if (!greenPre.Ok)
         {
             reasons.Add($"green: `{string.Join(' ', task.Test)}` failed in the working tree: {Squash(greenPre.Tail(15))}");
@@ -271,7 +273,7 @@ public sealed partial class WorkflowRunner(
 
         // Step 2: Verify Red on a cached detached worktree containing ONLY testChanges on top of startHead.
         var prodPathsForRed = prodChanges.Select(c => c.Path).ToList();
-        var redCheck = ObserveRedOnCachedWorktree(repo, task, startHead, testChanges, prodPathsForRed);
+        var redCheck = ObserveRedOnCachedWorktree(repo, task, startHead, testChanges, prodPathsForRed, taskEnv);
         redSummary = redCheck.Summary;
         if (!redCheck.IsValidRed)
         {
@@ -320,7 +322,7 @@ public sealed partial class WorkflowRunner(
         var headSha = repo.Head();
 
         // Step 4: Observe Green at committed HEAD.
-        var greenHead = _runner.Run(repo.Root, task.Test, TimeSpan.FromMinutes(5));
+        var greenHead = _runner.Run(repo.Root, task.Test, TimeSpan.FromMinutes(5), taskEnv);
         if (!greenHead.Ok)
         {
             repo.Git("reset", "--mixed", "--quiet", startHead);
@@ -339,7 +341,9 @@ public sealed partial class WorkflowRunner(
         var outputs = new List<string>();
         var passed = true;
 
-        var env = new Dictionary<string, string> { ["HOSHIN_BASELINE"] = "1" };
+        var env = AllowListedCommandRunner.CollectAdditionalEnvironment(
+            state.Plan.EnvAllow,
+            new Dictionary<string, string> { ["HOSHIN_BASELINE"] = "1" });
         foreach (var check in state.Plan.Checks)
         {
             var run = _runner.Run(repo.Root, check, TimeSpan.FromMinutes(10), env);
@@ -360,10 +364,11 @@ public sealed partial class WorkflowRunner(
     {
         var outputs = new List<string>();
         var passed = true;
+        var env = AllowListedCommandRunner.CollectAdditionalEnvironment(state.Plan.EnvAllow);
 
         foreach (var check in state.Plan.Checks)
         {
-            var run = _runner.Run(repo.Root, check, TimeSpan.FromMinutes(10));
+            var run = _runner.Run(repo.Root, check, TimeSpan.FromMinutes(10), env);
             passed &= run.Ok;
             outputs.Add($"$ {string.Join(' ', check)} -> {run.ExitCode}\n{run.Tail(20)}");
         }
@@ -392,12 +397,14 @@ public sealed partial class WorkflowRunner(
         return approval;
     }
 
-    public WorkflowPublished? Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = false)
+    public WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = false)
     {
-        var push = repo.Git("push", "origin", $"HEAD:{targetRef}");
+        var pushEnv = AllowListedCommandRunner.CollectPushEnvironment();
+        var push = repo.GitWithEnv(pushEnv, "push", "origin", $"HEAD:{targetRef}");
         if (!push.Ok)
         {
-            return null;
+            var error = Squash(push.Tail(15));
+            return new WorkflowPublishResult(null, string.IsNullOrWhiteSpace(error) ? $"git push failed (exit {push.ExitCode})" : error);
         }
 
         string? prUrl = null;
@@ -427,7 +434,7 @@ public sealed partial class WorkflowRunner(
             l.Published.Add(published);
             return 0;
         });
-        return published;
+        return new WorkflowPublishResult(published, null);
     }
 
     /// <summary>
@@ -801,7 +808,8 @@ public sealed partial class WorkflowRunner(
         WorkflowTask task,
         string startHead,
         List<WorkingTreeChange> testChanges,
-        IReadOnlyList<string> prodPaths)
+        IReadOnlyList<string> prodPaths,
+        IReadOnlyDictionary<string, string>? taskEnv)
     {
         var wtDir = repo.RedWorktreePath;
         var prepared = EnsureCachedWorktree(repo, wtDir, startHead);
@@ -829,7 +837,7 @@ public sealed partial class WorkflowRunner(
             }
         }
 
-        var redRun = _runner.Run(wtDir, task.Test, TimeSpan.FromMinutes(5));
+        var redRun = _runner.Run(wtDir, task.Test, TimeSpan.FromMinutes(5), taskEnv);
         // Clean worktree back to startHead for reuse.
         WorkflowRepo.GitIn(_runner, wtDir, "reset", "--hard", "--quiet", startHead);
         WorkflowRepo.GitIn(_runner, wtDir, "clean", "-fd", "--quiet");

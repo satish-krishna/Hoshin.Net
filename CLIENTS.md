@@ -167,7 +167,7 @@ Adding is not breaking. A client ignores a field, a value of `type` in a stream,
 
 ## Files a client reads itself
 
-- `.hoshin.json` in the master repository's root
+- `.hoshin.json` in the master repository's root (optional `env.allow` list extends the task command environment allow-list)
 - `.ai-sdlc.json` in the master repository's root (for legacy migration detection)
 - `<workspace>/.hoshin/copies/<change>`
 - `intent/<system>/<change>/change.jsonc` (migrated from `change.yml` in v2.0.0)

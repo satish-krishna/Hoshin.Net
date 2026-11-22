@@ -35,7 +35,7 @@ public static class MarkerReader
     private static readonly Regex DrivePrefix = new(@"^[A-Za-z]:", RegexOptions.Compiled);
     public static readonly Regex CommitScopeRegex = new(@"^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled);
 
-    private static readonly HashSet<string> MarkerFields = ["version", "layout", "systems", "hooks", "gateRetries"];
+    private static readonly HashSet<string> MarkerFields = ["version", "layout", "systems", "hooks", "gateRetries", "env"];
     private static readonly HashSet<string> SystemFields = ["repos", "apps", "commitScope", "naming"];
 
     public static string? MarkerFileIn(string folder, IReadOnlyList<string>? names = null)
@@ -79,6 +79,35 @@ public static class MarkerReader
     private static bool Within(string inner, string outer) =>
         inner == outer || inner.StartsWith(outer + "/", StringComparison.Ordinal);
 
+    private static void ValidateEnvConfig(JsonElement raw, List<string> problems)
+    {
+        if (!raw.TryGetProperty("env", out var envProp))
+        {
+            return;
+        }
+
+        if (envProp.ValueKind != JsonValueKind.Object)
+        {
+            problems.Add("env must be an object");
+            return;
+        }
+
+        foreach (var prop in envProp.EnumerateObject())
+        {
+            if (prop.Name != "allow")
+            {
+                problems.Add($"env: unknown field {prop.Name}");
+                continue;
+            }
+
+            if (prop.Value.ValueKind != JsonValueKind.Array ||
+                prop.Value.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString())))
+            {
+                problems.Add("env.allow must be an array of non-empty variable names");
+            }
+        }
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static List<string> MarkerProblems(JsonElement raw)
     {
@@ -101,6 +130,8 @@ public static class MarkerReader
                 problems.Add($"unknown field {prop.Name}");
             }
         }
+
+        ValidateEnvConfig(raw, problems);
 
         foreach (var sysProp in systemsProp.EnumerateObject())
         {

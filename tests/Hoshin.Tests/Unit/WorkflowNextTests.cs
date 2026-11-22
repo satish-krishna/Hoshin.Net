@@ -241,19 +241,28 @@ public sealed class WorkflowNextTests
     [Fact]
     public void AllowListedCommandRunner_StripsSecretEnvironmentVariables()
     {
-        var previous = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+        var prevAnthropic = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+        var prevGhToken = Environment.GetEnvironmentVariable("GH_TOKEN");
+        var prevSsh = Environment.GetEnvironmentVariable("SSH_AUTH_SOCK");
+        var prevProxy = Environment.GetEnvironmentVariable("HTTPS_PROXY");
         try
         {
             Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "sk-secret-must-not-leak");
+            Environment.SetEnvironmentVariable("GH_TOKEN", "ghp_secret_must_not_leak");
+            Environment.SetEnvironmentVariable("SSH_AUTH_SOCK", "/tmp/ssh-agent-sock");
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", "http://x");
             var res = AllowListedCommandRunner.Default.Run(
                 Directory.GetCurrentDirectory(),
-                ["node", "-e", "process.stdout.write(process.env.ANTHROPIC_API_KEY || 'STRIPPED')"]);
+                ["node", "-e", "process.stdout.write([process.env.ANTHROPIC_API_KEY || 'STRIPPED', process.env.GH_TOKEN || 'STRIPPED', process.env.SSH_AUTH_SOCK || 'STRIPPED', process.env.HTTPS_PROXY || 'MISSING'].join('|'))"]);
             Assert.True(res.Ok, res.Output);
-            Assert.Equal("STRIPPED", res.Output.Trim());
+            Assert.Equal("STRIPPED|STRIPPED|STRIPPED|http://x", res.Output.Trim());
         }
         finally
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", previous);
+            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", prevAnthropic);
+            Environment.SetEnvironmentVariable("GH_TOKEN", prevGhToken);
+            Environment.SetEnvironmentVariable("SSH_AUTH_SOCK", prevSsh);
+            Environment.SetEnvironmentVariable("HTTPS_PROXY", prevProxy);
         }
     }
 

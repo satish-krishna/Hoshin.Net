@@ -32,7 +32,14 @@ public sealed class AllowListedCommandRunner : IAllowListedCommandRunner
     public static readonly IReadOnlyList<string> AllowedEnvironmentVariables =
     [
         "PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "USER", "NODE_PATH",
-        "DOTNET_ROOT", "DOTNET_CLI_TELEMETRY_OPTOUT", "DOTNET_NOLOGO", "NUGET_PACKAGES",
+        "DOTNET_ROOT", "DOTNET_CLI_TELEMETRY_OPTOUT", "DOTNET_NOLOGO", "DOTNET_ENVIRONMENT", "NUGET_PACKAGES",
+        // Proxy and CA certificate settings (non-secret).
+        "HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY", "no_proxy",
+        "SSL_CERT_FILE", "SSL_CERT_DIR", "NODE_EXTRA_CA_CERTS",
+        // Toolchain paths and package registries (non-secret).
+        "JAVA_HOME", "GOPATH", "GOROOT", "CARGO_HOME", "RUSTUP_HOME",
+        "VIRTUAL_ENV", "PYTHONPATH", "PNPM_HOME", "NVM_DIR",
+        "NPM_CONFIG_REGISTRY", "PIP_INDEX_URL", "UV_CACHE_DIR",
         // Safe git identity/config variables for deterministic commits (no tokens/secrets).
         "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL",
         "GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM",
@@ -41,6 +48,60 @@ public sealed class AllowListedCommandRunner : IAllowListedCommandRunner
         "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "OS", "ProgramFiles", "ProgramFiles(x86)", "ProgramData",
         "APPDATA", "LOCALAPPDATA",
     ];
+
+    public static readonly IReadOnlyList<string> PushAllowedEnvironmentVariables =
+    [
+        "SSH_AUTH_SOCK", "GIT_SSH_COMMAND", "GIT_ASKPASS",
+    ];
+
+    public static Dictionary<string, string> CollectPushEnvironment()
+    {
+        var env = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var name in PushAllowedEnvironmentVariables)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (value is not null)
+            {
+                env[name] = value;
+            }
+        }
+
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            if (entry.Key is string key &&
+                key.StartsWith("GCM_", StringComparison.OrdinalIgnoreCase) &&
+                entry.Value is string val)
+            {
+                env[key] = val;
+            }
+        }
+
+        return env;
+    }
+
+    public static Dictionary<string, string>? CollectAdditionalEnvironment(IReadOnlyList<string>? allowedNames, IReadOnlyDictionary<string, string>? baseExtra = null)
+    {
+        Dictionary<string, string>? merged = baseExtra is not null
+            ? new Dictionary<string, string>(baseExtra, StringComparer.Ordinal)
+            : null;
+
+        if (allowedNames is null || allowedNames.Count == 0)
+        {
+            return merged;
+        }
+
+        foreach (var name in allowedNames)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (value is not null)
+            {
+                merged ??= new Dictionary<string, string>(StringComparer.Ordinal);
+                merged[name] = value;
+            }
+        }
+
+        return merged;
+    }
 
     public AllowListedCommandResult Run(
         string workingDirectory,

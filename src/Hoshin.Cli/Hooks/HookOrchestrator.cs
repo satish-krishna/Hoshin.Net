@@ -454,9 +454,11 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
                     continue;
 
                 case Publish p:
-                    if (_runner.Publish(repo, state, p.Ref) is null)
+                    var publish = _runner.Publish(repo, state, p.Ref);
+                    if (!publish.Ok)
                     {
-                        return new Done(false, $"could not push to {p.Ref}");
+                        var detail = string.IsNullOrWhiteSpace(publish.Error) ? "" : $": {publish.Error}";
+                        return new Done(false, $"could not push to {p.Ref}{detail}");
                     }
 
                     continue;
