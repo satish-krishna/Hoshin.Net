@@ -177,10 +177,11 @@ sequenceDiagram
 
 - **Valid Red:**
   - Test assertion / runtime failure (`RedKind.AssertionFailure`).
-  - Missing target symbol compilation errors (`RedKind.MissingSymbol`) that resolve cleanly in Green: C# (`CS0246`, `CS0103`, `CS1061`, `CS0117`, `CS0234`, `CS0115`, `CS0535`, `CS1501`, `CS1729`, `CS7036`), TypeScript (`TS2304`, `TS2305`, `TS2307`, `TS2339`, `TS2551`, `TS2554`, `TS2614`), and Node ESM missing exports (`does not provide an export named`, `Cannot find module`, `ERR_MODULE_NOT_FOUND`).
+  - Missing target symbol compilation errors (`RedKind.MissingSymbol`) that resolve cleanly in Green: C# (`CS0246`, `CS0103`, `CS1061`, `CS0117`, `CS0234`, `CS0115`, `CS0535`, `CS1501`, `CS1729`, `CS7036`), TypeScript (`TS2304`, `TS2305`, `TS2339`, `TS2551`, `TS2554`, `TS2614`), Rust (`error[E0425]`, `error[E0433]`, `error[E0412]`), Node ESM missing exports (`does not provide an export named`), and `Cannot find module` / `ERR_MODULE_NOT_FOUND` / `TS2307` **only** when the specifier is relative (`./`, `../`) or matches a path in the task's production changes.
 - **Invalid Red (rejected without committing):**
   - Test passes without production changes (`RedKind.PassedUnexpectedly`).
-  - Hard syntax errors (`CS1002`, `CS1513`, `TS1005`, `SyntaxError`, `IndentationError`, etc.).
+  - Command could not run (`RedKind.CouldNotRun`): exit codes `126` / `127`, `could not start`, worktree preparation failures, and bare/non-target missing packages (`Cannot find module 'vitest'`, `TS2307` on a bare package).
+  - Hard syntax or non-missing-symbol compile errors (`RedKind.SyntaxError`): C# (`CS1002`, `CS1513`, other `CSxxxx`), TypeScript (`TS1005`, other `TSxxxx`), Python (`SyntaxError:`, `IndentationError:`), Go (`syntax error:`, `*.go:<line>:<col>: expected`), Rust (`error: expected`, other `error[E0xxx]:`), and Java (`error: ';' expected`).
   - Timeout (`RedKind.TimedOut`).
 
 ### Test File Identification

@@ -270,7 +270,8 @@ public sealed partial class WorkflowRunner(
         }
 
         // Step 2: Verify Red on a cached detached worktree containing ONLY testChanges on top of startHead.
-        var redCheck = ObserveRedOnCachedWorktree(repo, task, startHead, testChanges);
+        var prodPathsForRed = prodChanges.Select(c => c.Path).ToList();
+        var redCheck = ObserveRedOnCachedWorktree(repo, task, startHead, testChanges, prodPathsForRed);
         redSummary = redCheck.Summary;
         if (!redCheck.IsValidRed)
         {
@@ -799,13 +800,14 @@ public sealed partial class WorkflowRunner(
         WorkflowRepo repo,
         WorkflowTask task,
         string startHead,
-        List<WorkingTreeChange> testChanges)
+        List<WorkingTreeChange> testChanges,
+        IReadOnlyList<string> prodPaths)
     {
         var wtDir = repo.RedWorktreePath;
         var prepared = EnsureCachedWorktree(repo, wtDir, startHead);
         if (!prepared.Ok)
         {
-            return new RedClassification(RedKind.TimedOut, false, $"not observed: could not prepare detached worktree at {WorkflowEngine.Short(startHead)}: {Squash(prepared.Tail(5))}");
+            return new RedClassification(RedKind.CouldNotRun, false, $"not observed: could not prepare detached worktree at {WorkflowEngine.Short(startHead)}: {Squash(prepared.Tail(5))}");
         }
 
         // Overlay ONLY the test files from the working tree onto the detached worktree.
@@ -832,7 +834,7 @@ public sealed partial class WorkflowRunner(
         WorkflowRepo.GitIn(_runner, wtDir, "reset", "--hard", "--quiet", startHead);
         WorkflowRepo.GitIn(_runner, wtDir, "clean", "-fd", "--quiet");
 
-        return RedClassifier.Classify(redRun);
+        return RedClassifier.Classify(redRun, prodPaths);
     }
 
     private AllowListedCommandResult EnsureCachedWorktree(WorkflowRepo repo, string wtDir, string startHead)
