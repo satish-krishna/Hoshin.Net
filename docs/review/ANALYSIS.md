@@ -4,7 +4,7 @@
 **Compared against:** the original plugin, `satish-krishna/hoshin` at `19db71c` (behavior reference: `tools/GRAMMAR.md`)
 **Date:** 2026-11-22
 
-The companion document [PRIMER.md](PRIMER.md) explains the layout and where to start reading. This document is the verdict and the findings.
+The companion document [PRIMER.md](PRIMER.md) explains the layout and where to start reading. This document is the verdict and the findings. [TASKS.md](TASKS.md) turns the findings into work items a coding agent can act on, and lists the decisions that need an engineer.
 
 ---
 
