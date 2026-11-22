@@ -35,7 +35,7 @@ public static class MarkerReader
     private static readonly Regex DrivePrefix = new(@"^[A-Za-z]:", RegexOptions.Compiled);
     public static readonly Regex CommitScopeRegex = new(@"^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled);
 
-    private static readonly HashSet<string> MarkerFields = ["version", "layout", "systems", "hooks", "gateRetries", "env", "build"];
+    private static readonly HashSet<string> MarkerFields = ["version", "layout", "systems", "hooks", "gateRetries", "env", "build", "testPatterns"];
     private static readonly HashSet<string> SystemFields = ["repos", "apps", "commitScope", "naming"];
 
     public static string? MarkerFileIn(string folder, IReadOnlyList<string>? names = null)
@@ -79,63 +79,6 @@ public static class MarkerReader
     private static bool Within(string inner, string outer) =>
         inner == outer || inner.StartsWith(outer + "/", StringComparison.Ordinal);
 
-    private static void ValidateEnvConfig(JsonElement raw, List<string> problems)
-    {
-        if (!raw.TryGetProperty("env", out var envProp))
-        {
-            return;
-        }
-
-        if (envProp.ValueKind != JsonValueKind.Object)
-        {
-            problems.Add("env must be an object");
-            return;
-        }
-
-        foreach (var prop in envProp.EnumerateObject())
-        {
-            if (prop.Name != "allow")
-            {
-                problems.Add($"env: unknown field {prop.Name}");
-                continue;
-            }
-
-            if (prop.Value.ValueKind != JsonValueKind.Array ||
-                prop.Value.EnumerateArray().Any(item => item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString())))
-            {
-                problems.Add("env.allow must be an array of non-empty variable names");
-            }
-        }
-    }
-
-    private static void ValidateBuildConfig(JsonElement raw, List<string> problems)
-    {
-        if (!raw.TryGetProperty("build", out var buildProp))
-        {
-            return;
-        }
-
-        if (buildProp.ValueKind != JsonValueKind.Object)
-        {
-            problems.Add("build must be an object");
-            return;
-        }
-
-        foreach (var prop in buildProp.EnumerateObject())
-        {
-            if (prop.Name is not ("testTimeoutSeconds" or "checkTimeoutSeconds" or "maxAttempts"))
-            {
-                problems.Add($"build: unknown field {prop.Name}");
-                continue;
-            }
-
-            if (prop.Value.ValueKind != JsonValueKind.Number || !prop.Value.TryGetInt32(out var val) || val < 1)
-            {
-                problems.Add($"build.{prop.Name} must be a positive integer");
-            }
-        }
-    }
-
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static List<string> MarkerProblems(JsonElement raw)
     {
@@ -159,8 +102,7 @@ public static class MarkerReader
             }
         }
 
-        ValidateEnvConfig(raw, problems);
-        ValidateBuildConfig(raw, problems);
+        MarkerOptionValidation.Validate(raw, problems);
 
         foreach (var sysProp in systemsProp.EnumerateObject())
         {

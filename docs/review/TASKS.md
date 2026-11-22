@@ -154,7 +154,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T26 | P1 | Separate stop counters; honor `stop_hook_active` | H6 | — | done |
 | T27 | P1 | Truncate injected text without losing the closing marker | H7 | — | done |
 | T28 | P1 | Make timeouts and the attempt cap configurable | E10 | — | done |
-| T29 | P1 | Accept `testPatterns` in `.hoshin.json` | §7 | — | open |
+| T29 | P1 | Accept `testPatterns` in `.hoshin.json` | §7 | — | done |
 | T30 | P1 | The intent brief finds the system's context files | §6 | — | open |
 | T31 | P1 | Publishing: PR, review gate, branch default, diagnostics | E8 | D4 ✔ | open |
 | T41 | P1 | Tasks with no testable behavior | §6 | D5 ✔ | open |
