@@ -188,6 +188,12 @@ sequenceDiagram
 
 A changed path is classified as a test file if it matches either the file paths referenced in the task's `test` command argv or the repository's configured `testPatterns` in `.hoshin.json` (default: `test/**`, `tests/**`, `*.test.*`, `*Tests.cs`, `*Test.cs`).
 
+### Tasks Without Testable Behavior (`test: null`)
+
+Plan tasks may omit `test` or set `"test": null` for non-testable work (configuration, documentation). `WorkflowRunner.EvaluateAndCommitTask` dispatches through `ITaskVerdictPolicy`:
+- `RedGreenPolicy` handles tasks with a `test` command (two-phase test + production commits with isolated detached-worktree Red).
+- `NoTestPolicy` handles tasks with `test: null`: skips Red/Green (`red: "skipped: no testable behavior"`), requires at least one non-test change, refuses any test-file modification (`order: a task with no test must not change test files`), and records one `<type>(<scope>): <title>` commit. The repository's `build.finish` checks still run afterward to verify the change.
+
 ## 5. Dual-Harness Hook Protocol (Claude Code & Antigravity)
 
 `HarnessAdapter` inspects `stdin` JSON and auto-detects **Google Antigravity** (`camelCase` protojson: `hookEventName`, `conversationId`, `toolCall`, `workspacePaths`, `fullyIdle`, etc.) vs. **Claude Code** (`snake_case`: `hook_event_name`, `session_id`, `tool_name`, `tool_input`, `tool_response`, `background_tasks`, etc.).

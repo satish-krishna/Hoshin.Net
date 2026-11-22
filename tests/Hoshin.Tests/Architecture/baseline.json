@@ -73,7 +73,6 @@
                        "CA1502:src/Hoshin.Workflow/Engine/WorkflowEngine.cs#Next",
                        "CA1502:src/Hoshin.Workflow/Engine/WorkflowRepo.cs#ReadPlan",
                        "CA1502:src/Hoshin.Workflow/Engine/WorkflowRepo.cs#ResolveChangeFolder",
-                       "CA1502:src/Hoshin.Workflow/Engine/WorkflowRunner.cs#EvaluateAndCommitTask",
                        "CA1502:src/Hoshin.Workflow/Engine/WorkflowRunner.cs#Issue",
                        "CA1502:src/Hoshin.Workflow/Engine/WorkflowRunner.cs#TryAutoWrapBareJsonFrontMatter",
                        "CA1502:src/Hoshin.Workflow/Events/CheckReader.cs#Read",

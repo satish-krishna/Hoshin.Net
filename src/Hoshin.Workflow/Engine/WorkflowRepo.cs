@@ -212,16 +212,11 @@ public sealed class WorkflowRepo
         var tasks = new List<WorkflowTask>();
         foreach (var t in read.Document.Tasks)
         {
-            if (t.Test is null && (planDocStatus.Uncommitted || !planDocStatus.InHead))
-            {
-                return LoadPlanMetadataOnly(changePath, settings);
-            }
-
             tasks.Add(new WorkflowTask(
                 t.Id,
                 t.Name,
                 string.Join("\n\n", t.Sections.Select(s => s.Body)),
-                t.Test ?? throw new CouldNotRunException($"plan.md: {t.Id} has no test command"),
+                t.Test,
                 t.Compile,
                 t.Files,
                 t.Timeout));

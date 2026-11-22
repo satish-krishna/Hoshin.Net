@@ -2,12 +2,12 @@ using System.Text.Json.Serialization;
 
 namespace Hoshin.Workflow.Engine;
 
-/// <summary>A single task in a workflow plan; its test command is the verdict.</summary>
+/// <summary>A single task in a workflow plan; its optional test command is the verdict (null means no testable behavior).</summary>
 public sealed record WorkflowTask(
     string Id,
     string Title,
     string Text,
-    string[] Test,
+    string[]? Test,
     string[]? Compile = null,
     IReadOnlyList<string>? Files = null,
     int? TimeoutSeconds = null);
@@ -185,7 +185,8 @@ public sealed record CurrentStep(
     IReadOnlyList<string>? TestPatterns = null,
     IReadOnlyList<string>? TaskTestFiles = null,
     string? Change = null,
-    string? DispatchNonce = null);
+    string? DispatchNonce = null,
+    bool HasTest = true);
 
 /// <summary>Active run marker stored in <c>.git/hoshin/run.json</c> identifying the owning session and harness.</summary>
 public sealed record RunMarker(

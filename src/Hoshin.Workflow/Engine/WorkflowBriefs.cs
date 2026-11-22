@@ -34,7 +34,15 @@ public static class WorkflowBriefs
         b.AppendLine(task.Text);
         b.AppendLine();
         b.AppendLine(CultureInfo.InvariantCulture, $"Repository: {state.RepoRoot}");
-        b.AppendLine(CultureInfo.InvariantCulture, $"Test command for this task: `{string.Join(' ', task.Test)}`");
+        if (task.Test is { Length: > 0 })
+        {
+            b.AppendLine(CultureInfo.InvariantCulture, $"Test command for this task: `{string.Join(' ', task.Test)}`");
+        }
+        else
+        {
+            b.AppendLine("Test command for this task: none (no testable behavior; the repository's `build.finish` checks prove this task).");
+        }
+
         if (task.Compile is { Length: > 0 })
         {
             b.AppendLine(CultureInfo.InvariantCulture, $"Compile command for this task: `{string.Join(' ', task.Compile)}`");
@@ -43,9 +51,18 @@ public static class WorkflowBriefs
         b.AppendLine();
         b.AppendLine("## What to hand back");
         b.AppendLine();
-        b.AppendLine("1. Write the new failing test first, verify it fails for the right reason, then implement the production change so the test passes.");
-        b.AppendLine("2. Edit only the working tree. Do not commit, stage, or push, and do not edit `.hoshin/`, `.git/`, or `.agents/`.");
-        b.AppendLine("3. Reply with two or three sentences summarizing what you changed and what test proves it.");
+        if (task.Test is { Length: > 0 })
+        {
+            b.AppendLine("1. Write the new failing test first, verify it fails for the right reason, then implement the production change so the test passes.");
+            b.AppendLine("2. Edit only the working tree. Do not commit, stage, or push, and do not edit `.hoshin/`, `.git/`, or `.agents/`.");
+            b.AppendLine("3. Reply with two or three sentences summarizing what you changed and what test proves it.");
+        }
+        else
+        {
+            b.AppendLine("1. This task has no testable behavior: make the required non-test change without adding or modifying test files. The repository's `build.finish` checks prove it.");
+            b.AppendLine("2. Edit only the working tree. Do not commit, stage, or push, and do not edit `.hoshin/`, `.git/`, or `.agents/`.");
+            b.AppendLine("3. Reply with two or three sentences summarizing what you changed.");
+        }
 
         if (handoff.Count > 0)
         {

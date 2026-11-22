@@ -33,12 +33,22 @@ public static class GuardStepEvaluator
         }
 
         // Red-phase enforcement: during Implement/Retry, deny production file edits until at least one test file
-        // has been created or modified in the working tree.
+        // has been created or modified in the working tree (unless the task has no test, in which case test files are denied).
         if (step is { Kind: "Implement" or "Retry", Task: not null })
         {
             var rel = Path.GetRelativePath(repo.Root, full).Replace('\\', '/');
-            if (!WorkflowRepo.IsTestPath(rel, step.TestPatterns, step.TaskTestFiles)
-                && !HasModifiedTestFileInWorkingTree(repo, step))
+            var isTest = WorkflowRepo.IsTestPath(rel, step.TestPatterns, step.TaskTestFiles);
+            if (!step.HasTest)
+            {
+                if (isTest)
+                {
+                    return "A task with no test must not change test files.";
+                }
+
+                return null;
+            }
+
+            if (!isTest && !HasModifiedTestFileInWorkingTree(repo, step))
             {
                 return $"Write the failing test for {step.Task} first; production files may only change after a test file has been written.";
             }

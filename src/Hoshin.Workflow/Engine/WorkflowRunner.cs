@@ -61,6 +61,7 @@ public sealed partial class WorkflowRunner(
     private readonly SpecReader _specReader = specReader ?? new SpecReader();
     private readonly PlanReader _planReader = planReader ?? new PlanReader();
     private readonly ReviewReader _reviewReader = reviewReader ?? new ReviewReader();
+    private readonly IReadOnlyList<ITaskVerdictPolicy> _verdictPolicies = [new NoTestPolicy(), new RedGreenPolicy()];
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public void Issue(WorkflowRepo repo, WorkflowState state, Step step, string? sessionId = null)
@@ -69,7 +70,8 @@ public sealed partial class WorkflowRunner(
         {
             var agent = step is Implement i ? i.Agent : ((Retry)step).Agent;
             var task = state.Plan.Tasks.FirstOrDefault(t => t.Id == agent.Task);
-            var taskTestFiles = task is null ? null : WorkflowRepo.ExtractTestFilesFromArgv(task.Test, repo.Root, state.Plan.EffectiveTestPatterns);
+            var hasTest = task?.Test is { Length: > 0 };
+            var taskTestFiles = hasTest ? WorkflowRepo.ExtractTestFilesFromArgv(task!.Test!, repo.Root, state.Plan.EffectiveTestPatterns) : null;
 
             repo.WithLedger(ledger =>
             {
@@ -99,8 +101,8 @@ public sealed partial class WorkflowRunner(
                 ? previous.DispatchNonce
                 : $"<!-- hoshin:{agent.Task}:attempt-{agent.Attempt}:{Guid.NewGuid().ToString("N")[..8]} -->";
             var nextStep = same
-                ? previous! with { SessionId = activeSession, ChangeFolder = repo.ChangeFolder, TestPatterns = state.Plan.EffectiveTestPatterns, TaskTestFiles = taskTestFiles, DispatchNonce = nonce }
-                : new CurrentStep(step.Kind, agent.Task, agent.Attempt, start, DateTimeOffset.UtcNow, AgentId: null, SessionId: activeSession, ChangeFolder: repo.ChangeFolder, TestPatterns: state.Plan.EffectiveTestPatterns, TaskTestFiles: taskTestFiles, DispatchNonce: nonce);
+                ? previous! with { SessionId = activeSession, ChangeFolder = repo.ChangeFolder, TestPatterns = state.Plan.EffectiveTestPatterns, TaskTestFiles = taskTestFiles, DispatchNonce = nonce, HasTest = hasTest }
+                : new CurrentStep(step.Kind, agent.Task, agent.Attempt, start, DateTimeOffset.UtcNow, AgentId: null, SessionId: activeSession, ChangeFolder: repo.ChangeFolder, TestPatterns: state.Plan.EffectiveTestPatterns, TaskTestFiles: taskTestFiles, DispatchNonce: nonce, HasTest: hasTest);
             repo.WriteStep(nextStep);
         }
         else
@@ -166,20 +168,13 @@ public sealed partial class WorkflowRunner(
     }
 
     /// <summary>
-    /// Evaluates the agent's working-tree edits and performs the strongly-typed two-phase Red/Green commit split:
-    /// 1. Partitions working-tree changes into test files vs. production files.
-    /// 2. Verifies Green on the working tree (test command passes with both test and production changes).
-    /// 3. Verifies Red on a cached detached worktree containing ONLY the test files on top of <c>startHead</c>
-    ///    (failing assertion OR missing-symbol compilation error such as CS0246/CS0103/CS1061/TS2304; never syntax errors).
-    /// 4. Commits test files first (<c>test(&lt;scope&gt;): &lt;task title&gt;</c> with <c>Plan-Task</c> and <c>Generated-By</c> trailers),
-    ///    then commits production files (<c>&lt;type&gt;(&lt;scope&gt;): &lt;task title&gt;</c> with trailers) and verifies Green at HEAD.
-    /// Any failure commits NOTHING, preserving working-tree changes as handoff for <see cref="Retry"/>.
+    /// Evaluates the agent's working-tree edits under the run lock, enforces HEAD/index/protected-path invariants,
+    /// and delegates verification and committing to the matching <see cref="ITaskVerdictPolicy"/> (<see cref="RedGreenPolicy"/>
+    /// or <see cref="NoTestPolicy"/>). Any failure commits NOTHING, preserving working-tree edits as handoff for <see cref="Retry"/>.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public WorkflowVerdict EvaluateAndCommitTask(WorkflowRepo repo, WorkflowState state, string taskId, int attempt)
     {
-        var plan = state.Plan;
-        var task = plan.Tasks.First(t => t.Id == taskId);
+        var task = state.Plan.Tasks.First(t => t.Id == taskId);
 
         using var runLock = repo.AcquireRunLock();
         var liveLedger = repo.ReadLedger();
@@ -191,6 +186,7 @@ public sealed partial class WorkflowRunner(
 
         var startHead = repo.Head();
         ClearActiveSubagent(repo);
+        var now = DateTimeOffset.UtcNow;
 
         if (WorkflowHeadGuard.HasUnexpectedHeadMove(liveLedger, taskId, startHead))
         {
@@ -201,7 +197,7 @@ public sealed partial class WorkflowRunner(
                 false,
                 "not observed: HEAD moved outside the workflow",
                 [WorkflowHeadGuard.UnexpectedHeadMoveReason],
-                DateTimeOffset.UtcNow));
+                now));
         }
 
         var issued = liveLedger.Issued.FirstOrDefault(x => x.Task == taskId && x.Attempt == attempt);
@@ -214,131 +210,40 @@ public sealed partial class WorkflowRunner(
                 false,
                 "not observed: index had staged changes",
                 [WorkingTreeSnapshot.StagedIndexRefusalReason],
-                DateTimeOffset.UtcNow));
+                now));
         }
 
         var changed = WorkingTreeSnapshot.FilterTaskChanges(repo, WorkingTreeSnapshot.GetChanges(repo), issued?.PreIssuePaths);
-        var reasons = new List<string>();
-        var redSummary = "not observed: no test commit";
+        var defaultRed = task.Test is { Length: > 0 } ? "not observed: no test commit" : NoTestPolicy.SkippedRedSummary;
 
         if (changed.Count == 0)
         {
-            reasons.Add($"work: no working-tree changes were made for {taskId}");
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
+            return RecordVerdict(repo, new WorkflowVerdict(
+                taskId,
+                attempt,
+                startHead,
+                false,
+                defaultRed,
+                [$"work: no working-tree changes were made for {taskId}"],
+                now));
         }
 
-        // Refuse edits to protected workflow/harness folders and the change folder.
         var protectedHits = changed.Where(c => IsProtectedPath(c.Path, repo.Root, repo.ChangeFolder)).Select(c => c.Path).ToList();
         if (protectedHits.Count > 0)
         {
-            reasons.Add($"protected: modified protected workflow files: {string.Join(", ", protectedHits)}");
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
+            return RecordVerdict(repo, new WorkflowVerdict(
+                taskId,
+                attempt,
+                startHead,
+                false,
+                defaultRed,
+                [$"protected: modified protected workflow files: {string.Join(", ", protectedHits)}"],
+                now));
         }
 
-        var taskTestFiles = WorkflowRepo.ExtractTestFilesFromArgv(task.Test, repo.Root, plan.EffectiveTestPatterns);
-        var testChanges = changed.Where(c => WorkflowRepo.IsTestPath(c.Path, plan.EffectiveTestPatterns, taskTestFiles)).ToList();
-        var prodChanges = changed.Where(c => !WorkflowRepo.IsTestPath(c.Path, plan.EffectiveTestPatterns, taskTestFiles)).ToList();
-
-        if (testChanges.Count == 0)
-        {
-            reasons.Add($"order: no test file was added or modified for {taskId}");
-        }
-
-        if (prodChanges.Count == 0)
-        {
-            reasons.Add($"order: no production file was added or modified for {taskId}");
-        }
-
-        if (reasons.Count > 0)
-        {
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, "not observed: missing test or production changes", reasons, DateTimeOffset.UtcNow));
-        }
-
-        var taskEnv = AllowListedCommandRunner.CollectAdditionalEnvironment(plan.EnvAllow);
-        var taskTimeout = plan.EffectiveTaskTimeout(task);
-
-        // Step 1: Verify Green on the full working tree before committing anything.
-        if (task.Compile is { Length: > 0 })
-        {
-            var compile = _runner.Run(repo.Root, task.Compile, taskTimeout, taskEnv);
-            if (!compile.Ok)
-            {
-                var kind = compile.TimedOut ? $"timed out after {(int)taskTimeout.TotalSeconds}s" : "failed";
-                reasons.Add($"compile: `{string.Join(' ', task.Compile)}` {kind}: {Squash(compile.Tail(15))}");
-                return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, "not observed: working tree did not compile", reasons, DateTimeOffset.UtcNow));
-            }
-        }
-
-        var greenPre = _runner.Run(repo.Root, task.Test, taskTimeout, taskEnv);
-        if (!greenPre.Ok)
-        {
-            var kind = greenPre.TimedOut ? $"timed out after {(int)taskTimeout.TotalSeconds}s" : "failed";
-            reasons.Add($"green: `{string.Join(' ', task.Test)}` {kind} in the working tree: {Squash(greenPre.Tail(15))}");
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, "not observed: green did not pass", reasons, DateTimeOffset.UtcNow));
-        }
-
-        // Step 2: Verify Red on a cached detached worktree containing ONLY testChanges on top of startHead.
-        var prodPathsForRed = prodChanges.Select(c => c.Path).ToList();
-        var redCheck = ObserveRedOnCachedWorktree(repo, task, startHead, testChanges, prodPathsForRed, taskEnv, taskTimeout);
-        redSummary = redCheck.Summary;
-        if (!redCheck.IsValidRed)
-        {
-            reasons.Add($"red: {redCheck.Summary}");
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
-        }
-
-        // Step 3: Two-phase atomic commit split (test commit first, then production commit).
-        var trailers = $"Plan-Task: {task.Id}\nGenerated-By: hoshin";
-        var testPaths = testChanges.Select(c => c.Path).ToArray();
-        var prodPaths = prodChanges.Select(c => c.Path).ToArray();
-
-        if (!StagePaths(repo, testPaths, out var stageTestErr))
-        {
-            repo.Git("reset", "--mixed", "--quiet", startHead);
-            reasons.Add($"git: could not stage test files: {stageTestErr}");
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
-        }
-
-        var testCommit = CommitPaths(repo, $"test({plan.Scope}): {task.Title}", trailers, testPaths);
-        if (!testCommit.Ok)
-        {
-            repo.Git("reset", "--mixed", "--quiet", startHead);
-            reasons.Add($"git: test commit failed: {Squash(testCommit.Tail(10))}");
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
-        }
-
-        var testCommitSha = repo.Head();
-
-        if (!StagePaths(repo, prodPaths, out var stageProdErr))
-        {
-            repo.Git("reset", "--mixed", "--quiet", startHead);
-            reasons.Add($"git: could not stage production files: {stageProdErr}");
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
-        }
-
-        var workType = string.IsNullOrWhiteSpace(plan.WorkType) ? "feat" : plan.WorkType;
-        var prodCommit = CommitPaths(repo, $"{workType}({plan.Scope}): {task.Title}", trailers, prodPaths);
-        if (!prodCommit.Ok)
-        {
-            repo.Git("reset", "--mixed", "--quiet", startHead);
-            reasons.Add($"git: implementation commit failed: {Squash(prodCommit.Tail(10))}");
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
-        }
-
-        var headSha = repo.Head();
-
-        // Step 4: Observe Green at committed HEAD.
-        var greenHead = _runner.Run(repo.Root, task.Test, taskTimeout, taskEnv);
-        if (!greenHead.Ok)
-        {
-            repo.Git("reset", "--mixed", "--quiet", startHead);
-            var kind = greenHead.TimedOut ? $"timed out after {(int)taskTimeout.TotalSeconds}s" : "failed";
-            reasons.Add($"green: `{string.Join(' ', task.Test)}` {kind} at HEAD: {Squash(greenHead.Tail(15))}");
-            return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
-        }
-
-        var finalRed = $"{redCheck.Summary} at {WorkflowEngine.Short(testCommitSha)}";
-        return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, headSha, true, finalRed, [], DateTimeOffset.UtcNow, testCommitSha));
+        var policy = _verdictPolicies.First(p => p.AppliesTo(task));
+        var verdict = policy.EvaluateAndCommit(new TaskEvaluationContext(repo, state, task, attempt, startHead, changed, _runner, now));
+        return RecordVerdict(repo, verdict);
     }
 
     public WorkflowBaselineRun RunBaseline(WorkflowRepo repo, WorkflowState state)
@@ -853,91 +758,6 @@ public sealed partial class WorkflowRunner(
         {
             return [new Problem(file, 1, e.Message)];
         }
-    }
-
-    private RedClassification ObserveRedOnCachedWorktree(
-        WorkflowRepo repo,
-        WorkflowTask task,
-        string startHead,
-        List<WorkingTreeChange> testChanges,
-        IReadOnlyList<string> prodPaths,
-        IReadOnlyDictionary<string, string>? taskEnv,
-        TimeSpan taskTimeout)
-    {
-        var wtDir = repo.RedWorktreePath;
-        var prepared = EnsureCachedWorktree(repo, wtDir, startHead);
-        if (!prepared.Ok)
-        {
-            return new RedClassification(RedKind.CouldNotRun, false, $"not observed: could not prepare detached worktree at {WorkflowEngine.Short(startHead)}: {Squash(prepared.Tail(5))}");
-        }
-
-        // Overlay ONLY the test files from the working tree onto the detached worktree.
-        foreach (var change in testChanges)
-        {
-            var src = Path.Combine(repo.Root, change.Path.Replace('/', Path.DirectorySeparatorChar));
-            var dst = Path.Combine(wtDir, change.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (change.Deleted || !File.Exists(src))
-            {
-                if (File.Exists(dst))
-                {
-                    File.Delete(dst);
-                }
-            }
-            else
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
-                File.Copy(src, dst, overwrite: true);
-            }
-        }
-
-        var redRun = _runner.Run(wtDir, task.Test, taskTimeout, taskEnv);
-        // Clean worktree back to startHead for reuse.
-        WorkflowRepo.GitIn(_runner, wtDir, "reset", "--hard", "--quiet", startHead);
-        WorkflowRepo.GitIn(_runner, wtDir, "clean", "-fd", "--quiet");
-
-        return RedClassifier.Classify(redRun, prodPaths);
-    }
-
-    private AllowListedCommandResult EnsureCachedWorktree(WorkflowRepo repo, string wtDir, string startHead)
-    {
-        var gitMarker = Path.Combine(wtDir, ".git");
-        if (Directory.Exists(wtDir) && (File.Exists(gitMarker) || Directory.Exists(gitMarker)))
-        {
-            var checkout = WorkflowRepo.GitIn(_runner, wtDir, "checkout", "--detach", "--force", startHead);
-            if (checkout.Ok)
-            {
-                WorkflowRepo.GitIn(_runner, wtDir, "clean", "-fd", "--quiet");
-                return checkout;
-            }
-
-            // Corrupted cached worktree: remove and recreate.
-            repo.Git("worktree", "remove", "--force", wtDir);
-            repo.Git("worktree", "prune");
-        }
-
-        Directory.CreateDirectory(Path.GetDirectoryName(wtDir)!);
-        if (Directory.Exists(wtDir))
-        {
-            Directory.Delete(wtDir, recursive: true);
-        }
-
-        return repo.Git("worktree", "add", "--detach", "--force", wtDir, startHead);
-    }
-
-    private static bool StagePaths(WorkflowRepo repo, string[] paths, out string error)
-    {
-        var args = new List<string> { "add", "-A", "--" };
-        args.AddRange(paths);
-        var res = repo.Git([.. args]);
-        error = res.Ok ? "" : Squash(res.Tail(10));
-        return res.Ok;
-    }
-
-    private static AllowListedCommandResult CommitPaths(WorkflowRepo repo, string subject, string trailers, string[] paths)
-    {
-        var args = new List<string> { "commit", "-q", "-m", subject, "-m", trailers, "--" };
-        args.AddRange(paths);
-        return repo.Git([.. args]);
     }
 
     private static bool IsProtectedPath(string relativePath, string repoRoot, string changeFolder)

@@ -108,7 +108,7 @@ Adding is not breaking. A client ignores a field, a value of `type` in a stream,
 - Options: `--json`
 - Fields: `kind`, `layout`, `document`, `problems`, `file`, `line`, `message`, `requirements`, `id`, `title`, `from`, `scenarios`, `outline`, `steps`, `examples`, `tasks`, `shared_decisions`, `name`, `repo`, `depends_on`, `uses`, `files`, `covers`, `supports`, `sections`, `body`, `text`, `question`, `owner`, `function`, `entries`, `task`, `commits`, `departure`, `reviews`, `reviewed_at`, `findings`, `severity`, `concern`, `rule`, `test`, `compile`, `timeout`, `red`
 - Values: `spec`, `plan`, `build-log`, `review`, `high`, `medium`, `low`, `bug`, `convention`
-- Hoshin.Net v2.0.0 reads **layout 2 JSONC** only; use `hoshin migrate` to upgrade legacy YAML and layout 1 documents.
+- Hoshin.Net v2.0.0 reads **layout 2 JSONC** only; use `hoshin migrate` to upgrade legacy YAML and layout 1 documents. Plan tasks may omit `test` or set `test` to `null` for tasks with no testable behavior.
 
 ## `red show`
 
