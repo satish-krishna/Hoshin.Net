@@ -75,7 +75,6 @@
                        "CA1502:src/Hoshin.Workflow/Documents/ReviewReader.cs#ReadSection",
                        "CA1502:src/Hoshin.Workflow/Documents/SpecReader.cs#ReadBlock",
                        "CA1502:src/Hoshin.Workflow/Engine/WorkflowEngine.cs#Next",
-                       "CA1502:src/Hoshin.Workflow/Engine/WorkflowRepo.cs#ReadChecksFromHooks",
                        "CA1502:src/Hoshin.Workflow/Engine/WorkflowRepo.cs#ReadPlan",
                        "CA1502:src/Hoshin.Workflow/Engine/WorkflowRepo.cs#ResolveChangeFolder",
                        "CA1502:src/Hoshin.Workflow/Engine/WorkflowRunner.cs#EvaluateAndCommitTask",

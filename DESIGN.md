@@ -121,7 +121,7 @@ stateDiagram-v2
 - `AwaitAccept(Document, Path, Head)` — Committed draft awaiting `accept`.
 - `WriteFix(ChangeFolder, Brief)` — Light-track drafting of `intent.md`, `spec.md`, and `plan.md` together (enforcing 1 repository and ≤ 3 tasks).
 - `Implement(AgentTask)` / `Retry(AgentTask, Handoff)` — Agent work requests carrying the embedded/loaded role procedure and attempt brief.
-- `RunChecks(Head)` — Library-executed `build.finish` blocking checks from `hooks.jsonc` / `hooks.json`.
+- `RunChecks(Head)` — Library-executed `build.finish` blocking checks read strictly from the change's **base branch** ref (`git show <base>:...`), combining `.hoshin.json`, `intent/<system>/hooks.json` (via `HookConfigService`), and any committed per-change `hooks.jsonc`/`hooks.json` (defaulting `blocking` to `true` unless explicitly `false`), never from the working tree.
 - `ReviewDocument(Path, Head, Brief)` — Independent read-only review appended to `build/review.md`.
 - `NeedsApproval(Head, Reason)` — Built and verified change waiting for human approval.
 - `Publish(Head, Ref)` — Library-owned `git push` (and optional PR creation via `IPullRequestClient`).

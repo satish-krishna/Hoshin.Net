@@ -132,7 +132,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T02 | P0 | Make approval and acceptance human-only | S1 | — | done |
 | T03 | P0 | Protect harness config and hoshin state from the agent | S4, S5 | — | done |
 | T04 | P0 | Close the trivial guard bypasses, and enforce "no agent commits" in the library | S3 | — | done |
-| T05 | P0 | Read build checks from the base branch, not the working tree | S6 | — | open |
+| T05 | P0 | Read build checks from the base branch, not the working tree | S6 | — | done |
 | T06 | P0 | Protect the change folder and shell writes during a build | S7 | — | open |
 | T07 | P0 | Scope the workflow ledger to one change | E1 | — | open |
 | T08 | P0 | Commit only the task's own paths | E2, E11 | — | open |

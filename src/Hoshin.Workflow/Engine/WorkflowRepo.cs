@@ -215,12 +215,13 @@ public sealed class WorkflowRepo
                 t.Files));
         }
 
+        var systemName = Jsonc.String(read.FrontMatter, "system") ?? scope;
         return new WorkflowPlan(
             Change: change,
             Scope: scope,
             Base: baseBranch,
             Tasks: tasks,
-            Checks: ReadChecksFromHooks(),
+            Checks: BaseBranchChecksReader.Read(this, baseBranch, systemName),
             HasPlan: true,
             Branch: branch,
             WorkType: workType,
@@ -236,12 +237,14 @@ public sealed class WorkflowRepo
 
         var only = ParseJsoncObject(changePath);
         var changeName = Jsonc.String(only, "change") ?? Path.GetFileName(ChangeFolder);
+        var scope = Jsonc.String(only, "scope") ?? throw new CouldNotRunException("change.jsonc lacks scope");
+        var baseBranch = Jsonc.String(only, "base") ?? "main";
         return new WorkflowPlan(
             Change: changeName,
-            Scope: Jsonc.String(only, "scope") ?? throw new CouldNotRunException("change.jsonc lacks scope"),
-            Base: Jsonc.String(only, "base") ?? "main",
+            Scope: scope,
+            Base: baseBranch,
             Tasks: [],
-            Checks: ReadChecksFromHooks(),
+            Checks: BaseBranchChecksReader.Read(this, baseBranch, scope),
             HasPlan: false,
             Branch: Jsonc.String(only, "branch"),
             WorkType: Jsonc.String(only, "type") ?? "feat",
@@ -274,57 +277,6 @@ public sealed class WorkflowRepo
         {
             return null;
         }
-    }
-
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
-    private List<string[]> ReadChecksFromHooks()
-    {
-        var checks = new List<string[]>();
-        foreach (var candidate in new[]
-        {
-            Path.Combine(ChangeFolder, "hooks.jsonc"),
-            Path.Combine(ChangeFolder, "hooks.json"),
-        })
-        {
-            if (!File.Exists(candidate))
-            {
-                continue;
-            }
-
-            var obj = ParseJsoncObject(candidate);
-            if (!obj.TryGetProperty("hooks", out var hooks))
-            {
-                continue;
-            }
-
-            if (hooks.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var hook in hooks.EnumerateArray())
-                {
-                    if (Jsonc.String(hook, "event") == "build.finish" &&
-                        hook.TryGetProperty("blocking", out var b) && b.ValueKind == JsonValueKind.True &&
-                        Jsonc.Argv(hook, "run") is { } run)
-                    {
-                        checks.Add(run);
-                    }
-                }
-            }
-            else if (hooks.ValueKind == JsonValueKind.Object &&
-                     hooks.TryGetProperty("build.finish", out var bf) &&
-                     bf.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var hook in bf.EnumerateArray())
-                {
-                    var isBlocking = !hook.TryGetProperty("blocking", out var b) || b.ValueKind != JsonValueKind.False;
-                    if (isBlocking && Jsonc.Argv(hook, "run") is { } run)
-                    {
-                        checks.Add(run);
-                    }
-                }
-            }
-        }
-
-        return checks;
     }
 
     private List<string>? ReadTestPatternsFromMarker()
