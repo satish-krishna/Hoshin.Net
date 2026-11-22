@@ -107,7 +107,7 @@ export const buildLog = (tasks) =>
  * A workspace: `master` (marker with system demo over `app`, and a change folder with an accepted intent) and `app`.
  */
 export function workspace({ marker = {}, masterFiles = {}, repos = ['app'], built = false } = {}) {
-  const ws = realpathSync(tempDir('hoshin-ws-'));
+  const ws = realpathSync.native(tempDir('hoshin-ws-'));
   const fullMarker = { version: 1, systems: { demo: { repos } }, ...marker };
   const folder = `intent/demo/${CHANGE}`;
   repo(join(ws, 'master'), {

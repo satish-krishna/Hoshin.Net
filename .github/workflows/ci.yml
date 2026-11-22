@@ -1,0 +1,199 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      run_ci: ${{ steps.filter.outputs.run_ci }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed files
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "Push event — running full CI."
+            exit 0
+          fi
+
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.event.pull_request.head.sha }}"
+          changed=$(git diff --name-only "$base_sha...$head_sha")
+          echo "Changed files:"
+          echo "$changed"
+
+          if [ -z "$changed" ]; then
+            echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "No diff detected — defaulting to full CI."
+            exit 0
+          fi
+
+          run_ci="false"
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            if [[ "$file" =~ ^LICENSE(\..*)?$ ]] \
+              || [[ "$file" =~ ^(README|DESIGN|AGENTS|CHANGELOG)\.md$ ]] \
+              || [[ "$file" =~ ^docs/ ]] \
+              || [[ "$file" == ".gitignore" ]]; then
+              continue
+            fi
+            run_ci="true"
+            echo "CI required due to: $file"
+          done <<< "$changed"
+
+          echo "run_ci=$run_ci" >> "$GITHUB_OUTPUT"
+          if [ "$run_ci" == "false" ]; then
+            echo "Docs/metadata-only PR — skipping build, tests, conformance, and packaging."
+          fi
+
+  build-and-unit:
+    name: build & unit (${{ matrix.os }})
+    needs: [changes]
+    if: needs.changes.outputs.run_ci == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build solution (warnings as errors)
+        run: dotnet build Hoshin.sln --configuration Release -p:TreatWarningsAsErrors=true
+
+      - name: Run unit, migration, state-machine, and dual-harness hook tests
+        run: dotnet test tests/Hoshin.Tests/Hoshin.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName!~BlackBoxConformanceTests" --logger "trx;LogFileName=unit-${{ matrix.os }}.trx"
+
+      - name: Upload unit test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-unit-${{ matrix.os }}
+          path: tests/Hoshin.Tests/TestResults/*.trx
+          if-no-files-found: ignore
+
+  blackbox-conformance:
+    name: black-box conformance (${{ matrix.os }})
+    needs: [changes]
+    if: needs.changes.outputs.run_ci == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build solution
+        run: dotnet build Hoshin.sln --configuration Release
+
+      - name: Run all 44 black-box CLI conformance suites
+        run: dotnet test tests/Hoshin.Tests/Hoshin.Tests.csproj --configuration Release --no-build --filter "FullyQualifiedName~BlackBoxConformanceTests" --logger "trx;LogFileName=blackbox-${{ matrix.os }}.trx"
+
+      - name: Upload black-box test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-blackbox-${{ matrix.os }}
+          path: tests/Hoshin.Tests/TestResults/*.trx
+          if-no-files-found: ignore
+
+  package:
+    name: package release bundles
+    needs: [changes, build-and-unit]
+    if: needs.changes.outputs.run_ci == 'true' && needs.build-and-unit.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build portable CLI, NuGet package, Claude Code plugin, and Antigravity bundle
+        shell: pwsh
+        run: ./packaging/package.ps1 -Configuration Release
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoshin-net-release-artifacts
+          path: artifacts/
+          retention-days: 14
+
+  ci-gate:
+    name: ci gate
+    needs: [changes, build-and-unit, blackbox-conformance, package]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate CI gate
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          RUN_CI: ${{ needs.changes.outputs.run_ci }}
+          BUILD_RESULT: ${{ needs.build-and-unit.result }}
+          BLACKBOX_RESULT: ${{ needs.blackbox-conformance.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+        run: |
+          if [ "$CHANGES_RESULT" != "success" ]; then
+            echo "::error::Change detection failed ($CHANGES_RESULT)."
+            exit 1
+          fi
+
+          if [ "$RUN_CI" != "true" ]; then
+            echo "Docs/metadata-only PR — build, tests, conformance, and packaging skipped."
+            exit 0
+          fi
+
+          status=0
+          for pair in \
+            "build-and-unit:$BUILD_RESULT" \
+            "blackbox-conformance:$BLACKBOX_RESULT" \
+            "package:$PACKAGE_RESULT"; do
+            name="${pair%%:*}"
+            result="${pair#*:}"
+            if [ "$result" != "success" ]; then
+              echo "::error::Required job '$name' did not succeed (result: $result)."
+              status=1
+            fi
+          done
+          exit $status

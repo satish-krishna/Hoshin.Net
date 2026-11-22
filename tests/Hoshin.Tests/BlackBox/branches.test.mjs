@@ -30,7 +30,7 @@ test("change start creates the branch off the base, the change's copy on it, and
   assert.equal(run(copy, ['check', join(copy, 'intent', 'demo', NEW, 'change.jsonc')]).status, 0);
   const resolved = run(copy, ['resolve', '--json']);
   assert.equal(resolved.json.masterIsCopy, true);
-  assert.equal(realpathSync(resolved.json.workspace), ws);
+  assert.equal(realpathSync.native(resolved.json.workspace), ws);
   const again = start(master);
   assert.equal(again.json.details.created, false);
 });

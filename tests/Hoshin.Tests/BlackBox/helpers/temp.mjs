@@ -1,5 +1,5 @@
 // Scratch folders for the black-box tests.
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +17,7 @@ process.on('exit', () => {
 });
 
 export function tempDir(prefix) {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
+  const dir = realpathSync.native(mkdtempSync(join(realpathSync.native(tmpdir()), prefix)));
   made.push(dir);
   return dir;
 }

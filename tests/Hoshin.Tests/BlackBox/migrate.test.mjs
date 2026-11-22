@@ -10,7 +10,7 @@ import { singleRepo } from './helpers/single-repo.mjs';
 import { tempDir } from './helpers/temp.mjs';
 
 const migrate = (cwd, ...args) => run(cwd, ['migrate', '--json', ...args]);
-const real = (p) => realpathSync(p);
+const real = (p) => realpathSync.native(p);
 const norm = (p) => p.replaceAll('\\', '/');
 const same = (a, b) => assert.equal(norm(real(a)), norm(real(b)));
 const read = (p) => readFileSync(p, 'utf8');
@@ -294,7 +294,7 @@ test('a commit the repository refuses is undone, and reported as the step\'s fai
 });
 
 test('with no marker of either name it cannot run', () => {
-  const folder = realpathSync(tempDir('hoshin-none-'));
+  const folder = realpathSync.native(tempDir('hoshin-none-'));
   const r = spawnSync(dotnet, [program, 'migrate', '--json'], { cwd: folder, encoding: 'utf8', env });
   assert.equal(r.status, 2);
   assert.match(r.stderr, /No master repository found/);
@@ -303,7 +303,7 @@ test('with no marker of either name it cannot run', () => {
 
 test('--master and --workspace mean what they mean for resolve', () => {
   const w = legacy();
-  const elsewhere = realpathSync(tempDir('hoshin-else-'));
+  const elsewhere = realpathSync.native(tempDir('hoshin-else-'));
   const r = migrate(elsewhere, '--master', w.master, '--workspace', w.ws);
   assert.equal(r.status, 0, r.stdout + r.stderr);
   same(r.json.master, w.master);

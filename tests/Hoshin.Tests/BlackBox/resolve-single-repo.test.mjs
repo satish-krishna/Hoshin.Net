@@ -31,7 +31,7 @@ test('from a copy the copy is the master, and the workspace is the main checkout
   const s = singleRepo();
   const copy = join(s.root, 'ws', '.hoshin', 'copies', 'x');
   s.git('worktree', 'add', '-q', '-b', 'change/x', copy);
-  const path = realpathSync(copy);
+  const path = realpathSync.native(copy);
   for (const cwd of [path, join(path, 'apps', 'api')]) {
     const r = run(cwd);
     assert.equal(r.status, 0, r.stderr);
@@ -43,11 +43,11 @@ test('--master naming the repository or a copy resolves it from anywhere', () =>
   const s = singleRepo();
   const copy = join(s.root, 'copies', 'y');
   s.git('worktree', 'add', '-q', '-b', 'change/y', copy);
-  const outside = realpathSync(s.root);
+  const outside = realpathSync.native(s.root);
   const main = run(outside, '--master', s.repo);
   assert.deepEqual(main.out, { workspace: s.workspace, master: s.repo, masterIsCopy: false, problems: [], layout: 'single-repo' });
   const c = run(outside, '--master', copy);
-  assert.deepEqual(c.out, { workspace: s.workspace, master: realpathSync(copy), masterIsCopy: true, problems: [], layout: 'single-repo' });
+  assert.deepEqual(c.out, { workspace: s.workspace, master: realpathSync.native(copy), masterIsCopy: true, problems: [], layout: 'single-repo' });
 });
 
 test('--workspace overrides the parent folder', () => {
@@ -55,7 +55,7 @@ test('--workspace overrides the parent folder', () => {
   const other = join(s.root, 'elsewhere');
   mkdirSync(other);
   const r = run(s.repo, '--workspace', other);
-  assert.equal(r.out.workspace, realpathSync(other));
+  assert.equal(r.out.workspace, realpathSync.native(other));
   assert.equal(r.out.master, s.repo);
   assert.equal(r.out.layout, 'single-repo');
 });
@@ -85,7 +85,7 @@ test('the default layout prints layout workspace and nothing else changes', () =
   assert.deepEqual(r.out, { workspace: w.ws, master: w.master, masterIsCopy: false, problems: [], layout: 'workspace' });
   const empty = join(w.ws, 'empty');
   mkdirSync(empty);
-  const refusal = run(realpathSync(empty));
+  const refusal = run(realpathSync.native(empty));
   assert.equal(refusal.status, 1);
   assert.equal(refusal.out.layout, 'workspace');
   assert.equal(Object.keys(r.out).at(-1), 'layout');

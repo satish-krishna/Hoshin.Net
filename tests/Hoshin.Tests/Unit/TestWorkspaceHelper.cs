@@ -136,6 +136,8 @@ internal static class TestGitFixture
     {
         Directory.CreateDirectory(path);
         Git(path, "init", "-q", "-b", "main");
+        Git(path, "config", "user.name", "Test User");
+        Git(path, "config", "user.email", "test@example.com");
         foreach (var (name, text) in files ?? new Dictionary<string, string> { ["README.md"] = "# repo\n" })
         {
             Write(Path.Combine(path, name), text);

@@ -10,7 +10,7 @@ import { tempDir } from './helpers/temp.mjs';
 const NAME = '2026-11-02-wave';
 
 function scratch() {
-  return realpathSync(tempDir('hoshin-hooks-'));
+  return realpathSync.native(tempDir('hoshin-hooks-'));
 }
 
 /** A hook that appends where it ran and what it was told to `out`. */
@@ -45,7 +45,7 @@ test('a hook runs in the app folder of the copy, and HOSHIN_ROOT holds the repos
   const s = started({ 'task.done': [recorder('where', out)] });
   assert.equal(taskDone(s, 'api').json.outcome, 'passed');
   const [seen] = lines(out);
-  assert.equal(realpathSync(seen.cwd), realpathSync(join(s.copy, 'apps', 'api')));
+  assert.equal(realpathSync.native(seen.cwd), realpathSync.native(join(s.copy, 'apps', 'api')));
   assert.equal(seen.repoPath, join(s.copy, 'apps', 'api'));
   assert.equal(seen.root, s.copy);
 });

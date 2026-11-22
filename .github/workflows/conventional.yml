@@ -1,0 +1,33 @@
+name: conventional
+
+# Squash merges use the pull request title as the commit on main, so PR titles and branch names
+# must follow Conventional Commits (see AGENTS.md).
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  names:
+    name: conventional names
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check pull request title and branch name
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          types='feat|fix|docs|test|refactor|perf|build|ci|chore'
+          status=0
+          if ! [[ "$TITLE" =~ ^($types)\([a-z0-9]+(-[a-z0-9]+)*\)!?:\ [^[:space:]].*$ ]]; then
+            echo "::error::Pull request title '$TITLE' is not '<type>(<scope>): <subject>' with a type of $types and a lowercase kebab-case scope."
+            status=1
+          fi
+          if ! [[ "$BRANCH" =~ ^($types)/[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+            echo "::error::Branch '$BRANCH' is not '<type>/<short-description>' in lowercase kebab case with a type of $types."
+            status=1
+          fi
+          exit $status
