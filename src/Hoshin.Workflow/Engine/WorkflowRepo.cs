@@ -61,6 +61,7 @@ public sealed class WorkflowRepo
         return new WorkflowRepo(root, commonDir, changeFolder, r);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     private static string ResolveChangeFolder(string root, string commonDir, string? explicitChangeFolder)
     {
         if (!string.IsNullOrWhiteSpace(explicitChangeFolder))
@@ -145,6 +146,7 @@ public sealed class WorkflowRepo
 
     public string Head() => Git("rev-parse", "HEAD").Output.Trim();
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public WorkflowPlan? ReadPlan(PlanReader? planReader = null)
     {
         var reader = planReader ?? new PlanReader();
@@ -274,6 +276,7 @@ public sealed class WorkflowRepo
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     private List<string[]> ReadChecksFromHooks()
     {
         var checks = new List<string[]>();

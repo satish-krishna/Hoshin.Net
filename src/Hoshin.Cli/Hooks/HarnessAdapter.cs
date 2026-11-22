@@ -84,6 +84,7 @@ public sealed class HarnessAdapter : IHookAdapter
         return Parse(raw);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public NormalizedHookEvent Parse(string rawJson)
     {
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(rawJson) ? "{}" : rawJson);

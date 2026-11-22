@@ -25,8 +25,11 @@ public static class FrontMatterCheck
 }
 
 /// <summary>Updates a string field inside a document's line-1 <c>```jsonc</c> front matter in place, preserving all other lines.</summary>
-public static class FrontMatterEdit
+public static partial class FrontMatterEdit
 {
+    [GeneratedRegex(@"""([^""]+)""\s*:\s*""(?:[^""\\]|\\.)*""")]
+    private static partial Regex StringFieldRegex();
+
     public static void Set(string path, string field, string value)
     {
         var lines = File.ReadAllText(path).Replace("\r\n", "\n").Split('\n');
@@ -37,14 +40,16 @@ public static class FrontMatterEdit
         }
 
         var encoded = JsonSerializer.Serialize(value);
-        var existing = new Regex($"\"{Regex.Escape(field)}\"\\s*:\\s*\"(?:[^\"\\\\]|\\\\.)*\"");
         for (var i = 1; i < close; i++)
         {
-            if (existing.IsMatch(lines[i]))
+            foreach (Match m in StringFieldRegex().Matches(lines[i]))
             {
-                lines[i] = existing.Replace(lines[i], $"\"{field}\": {encoded}", 1);
-                File.WriteAllText(path, string.Join('\n', lines));
-                return;
+                if (string.Equals(m.Groups[1].Value, field, StringComparison.Ordinal))
+                {
+                    lines[i] = lines[i][..m.Index] + $"\"{field}\": {encoded}" + lines[i][(m.Index + m.Length)..];
+                    File.WriteAllText(path, string.Join('\n', lines));
+                    return;
+                }
             }
         }
 

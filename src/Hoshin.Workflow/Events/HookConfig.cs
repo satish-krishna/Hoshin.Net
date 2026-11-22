@@ -184,6 +184,7 @@ public sealed class HookConfigService(IGitClient? git = null)
         return systems.EnumerateObject().SelectMany(p => NamesOf(p.Value)).ToList();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static (List<HookDefinition> Hooks, List<string> Problems) ParseHooks(
         JsonElement? value,
         string layer,

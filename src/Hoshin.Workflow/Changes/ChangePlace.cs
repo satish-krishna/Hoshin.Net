@@ -30,6 +30,7 @@ public sealed class ChangePlacer(
     private readonly IWorkspaceResolver _resolver = resolver ?? new WorkspaceResolver(git);
     private readonly ChangeLocator _locator = locator ?? new ChangeLocator(git);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Placement PlaceChanges(string cwd, StateOptions options, Dictionary<string, GitDirsInfo?>? dirsCache = null)
     {
         dirsCache ??= new Dictionary<string, GitDirsInfo?>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -135,7 +136,7 @@ public sealed class ChangePlacer(
         return info;
     }
 
-    private HashSet<string> ChangesIn(string top, string system, SystemRead read)
+    private static HashSet<string> ChangesIn(string top, string system, SystemRead read)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
         var baseDir = Path.Combine(top, "intent", system);

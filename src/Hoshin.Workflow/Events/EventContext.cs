@@ -64,6 +64,7 @@ public sealed class EventContextFactory(
     private readonly ChangeLocator _locator = locator ?? new ChangeLocator(git);
     private readonly AppService _apps = apps ?? new AppService(git);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public EventContext Build(string cwd, EventContextArgs args, Func<string, string?>? recoverInterrupted = null)
     {
         var resolution = _resolver.Resolve(cwd, args.ResolveOptions);

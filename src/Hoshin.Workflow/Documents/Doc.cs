@@ -19,10 +19,21 @@ public sealed record RecordHeading(Regex Prefix, Regex Strict, string What);
 /// A Markdown document split into normalized lines with Markdig CommonMark heading and fence metadata.
 /// Enforces the unread-record and raw-key-line invariants of GRAMMAR.md for JSONC record blocks.
 /// </summary>
-public sealed class Doc
+public sealed partial class Doc
 {
     private static readonly MarkdownPipeline CommonMark = new MarkdownPipelineBuilder().Build();
-    private static readonly Regex Opener = new(@"^[\s>\-*+0-9.]*(`{3,}|~{3,})", RegexOptions.Compiled);
+
+    [GeneratedRegex(@"^[\s>\-*+0-9.]*(`{3,}|~{3,})")]
+    private static partial Regex OpenerRegex();
+
+    [GeneratedRegex(@"^[\s>]*(`{3,}|~{3,})\s*$")]
+    private static partial Regex ClosingFenceRegex();
+
+    [GeneratedRegex(@"^\s*[\[{]*\s*""([^""]+)""\s*:")]
+    private static partial Regex KeyLineRegex();
+
+    [GeneratedRegex(@"^\s*[\[{,]*\s*""([^""]+)""\s*:")]
+    private static partial Regex RawRecordKeyRegex();
 
     private Doc(string[] lines, bool[] fenced, bool[] heading, List<Fence> fences)
     {
@@ -75,7 +86,7 @@ public sealed class Doc
             else if (node is FencedCodeBlock code)
             {
                 var open = code.Line;
-                var mark = Opener.Match(lines[open]);
+                var mark = OpenerRegex().Match(lines[open]);
                 if (!mark.Success)
                 {
                     continue;
@@ -84,8 +95,10 @@ public sealed class Doc
                 var length = mark.Groups[1].Value.Length;
                 var ch = mark.Groups[1].Value[0];
                 var last = Math.Min(LineOf(Math.Max(code.Span.End, code.Span.Start)), lines.Length - 1);
-                var closing = new Regex($"^[\\s>]*{(ch == '`' ? "`" : "~")}{{{length},}}\\s*$");
-                var closed = last > open && closing.IsMatch(lines[last]);
+                var closeMatch = last > open ? ClosingFenceRegex().Match(lines[last]) : Match.Empty;
+                var closed = closeMatch.Success
+                    && closeMatch.Groups[1].Value[0] == ch
+                    && closeMatch.Groups[1].Value.Length >= length;
                 var info = $"{code.Info} {code.Arguments}".Trim();
                 fences.Add(new Fence(open, closed ? last : -1, ch, length, info));
                 for (var i = open; i <= last; i++)
@@ -133,10 +146,10 @@ public sealed class Doc
     /// <summary>The 1-based line of the first <c>"key":</c> inside a block, or the block's opening line.</summary>
     public int KeyLine(Block block, string key)
     {
-        var re = new Regex($"^\\s*[\\[{{]*\\s*\"{Regex.Escape(key)}\"\\s*:");
         for (var i = block.First; i <= block.Last; i++)
         {
-            if (re.IsMatch(Lines[i]))
+            var m = KeyLineRegex().Match(Lines[i]);
+            if (m.Success && string.Equals(m.Groups[1].Value, key, StringComparison.Ordinal))
             {
                 return i + 1;
             }
@@ -154,10 +167,14 @@ public sealed class Doc
             return value is { ValueKind: JsonValueKind.Object } v && keys.Any(k => v.TryGetProperty(k, out _));
         }
 
-        var raw = new Regex($"^\\s*[\\[{{,]*\\s*\"({string.Join('|', keys.Select(Regex.Escape))})\"\\s*:");
-        return block.Text.Split('\n').Any(raw.IsMatch);
+        return block.Text.Split('\n').Any(line =>
+        {
+            var m = RawRecordKeyRegex().Match(line);
+            return m.Success && keys.Contains(m.Groups[1].Value);
+        });
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public void ReportUnread(
         string file,
         List<Problem> problems,

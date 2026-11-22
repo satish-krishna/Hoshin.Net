@@ -79,6 +79,7 @@ public static class MarkerReader
     private static bool Within(string inner, string outer) =>
         inner == outer || inner.StartsWith(outer + "/", StringComparison.Ordinal);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static List<string> MarkerProblems(JsonElement raw)
     {
         if (raw.ValueKind != JsonValueKind.Object || !raw.TryGetProperty("systems", out var systemsProp) || systemsProp.ValueKind != JsonValueKind.Object)
@@ -234,6 +235,7 @@ public static class MarkerReader
         return problems;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static Marker ReadMarker(string path)
     {
         JsonDocument doc;

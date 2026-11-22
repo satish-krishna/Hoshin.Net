@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Git;
 using Hoshin.Workflow.Workspace;
@@ -45,6 +46,7 @@ public sealed class ChangeLocator(IGitClient? git = null, AppService? apps = nul
             .ToList();
     }
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public List<string> ChangeHolders(string master, string workspace, string change)
     {
         var own = Path.Combine(CopiesFolder(workspace), change);
@@ -65,6 +67,7 @@ public sealed class ChangeLocator(IGitClient? git = null, AppService? apps = nul
         return holders;
     }
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public List<string> SystemsHolding(string master, string change)
     {
         var intent = Path.Combine(master, "intent");

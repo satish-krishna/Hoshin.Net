@@ -15,6 +15,7 @@ public sealed class ChangeRemoveService(IGitClient? git = null, AppService? apps
     private readonly IGitClient _git = git ?? ProcessGitClient.Default;
     private readonly AppService _apps = apps ?? new AppService(git);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public RemoveOutcome Remove(RemoveInput input)
     {
         var record = ChangeRecordStore.Read(Path.Combine(input.Copy, "intent", input.System, input.Change));

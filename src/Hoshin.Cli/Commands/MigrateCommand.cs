@@ -8,6 +8,7 @@ public sealed class MigrateCommand(HoshinServices services) : IHoshinCommand
     public string Name => "migrate";
     public string Usage => "migrate --json [--write] [--dry-run] [--documents] [--master <path>] [--workspace <path>] [<path>...]";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Task<int> RunAsync(IReadOnlyList<string> args)
     {
         var o = OptionParser.Parse(

@@ -24,6 +24,7 @@ public sealed class WorkspaceResolver(IGitClient? git = null) : IWorkspaceResolv
 
     private readonly IGitClient _git = git ?? ProcessGitClient.Default;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Resolution Resolve(string cwd, ResolveOptions options, IReadOnlyList<string>? markers = null)
     {
         var markerNames = markers ?? MarkerConstants.DefaultMarkers;
@@ -72,6 +73,7 @@ public sealed class WorkspaceResolver(IGitClient? git = null) : IWorkspaceResolv
         return new Resolution(workspace, master, MasterIsCopy: false, [], LayoutOf(master, markerNames));
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private Resolution WithMaster(string path, string? workspaceOption, string? sessionTop, IReadOnlyList<string> markerNames)
     {
         if (!PathHelpers.IsDirectory(path))

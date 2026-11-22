@@ -6,6 +6,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 
 ### Changed
 - **Cross-platform packager (`packaging/package.ps1`):** Uses `Join-Path` throughout, runs under `pwsh` on Linux and Windows, reads default version from `Directory.Build.props` (`VersionPrefix`), and stamps `-Version` into the generated Claude Code `plugin.json`.
+- **Strict analyzer & complexity build gate:** Enabled `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild`, `.editorconfig`, and `CA1502` (cyclomatic complexity ≤ 15 via `CodeMetricsConfig.txt`); replaced per-call hot-path regexes with `[GeneratedRegex]`.
 
 ## [2.0.0] - 2026-11-21
 

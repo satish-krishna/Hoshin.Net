@@ -1,0 +1,69 @@
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = false
+trim_trailing_whitespace = true
+
+[*.{json,jsonc,yml,yaml,xml,csproj,props,mjs}]
+indent_size = 2
+
+[*.cs]
+indent_size = 4
+
+# File-scoped namespaces
+csharp_style_namespace_declarations = file_scoped:warning
+
+# Prefer var
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+
+# Braces
+csharp_prefer_braces = true:warning
+
+# Expression-bodied members
+csharp_style_expression_bodied_methods = when_on_single_line:suggestion
+csharp_style_expression_bodied_properties = true:suggestion
+csharp_style_expression_bodied_accessors = true:suggestion
+
+# Using directives
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning
+
+# Naming
+dotnet_naming_rule.private_fields_underscore.severity = suggestion
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel_case
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_symbols.private_fields.required_modifiers =
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+
+# Cyclomatic complexity (CONTRIBUTING.md §3.2 S3, threshold configured in CodeMetricsConfig.txt)
+dotnet_diagnostic.CA1502.severity = warning
+
+# C#-only codebase: VB/F# reserved keyword & type-name collisions (Step, Jsonc.String, Fence.Char) are intentional public API
+dotnet_diagnostic.CA1716.severity = none
+dotnet_diagnostic.CA1720.severity = none
+
+[tests/**/*.cs]
+# Test naming uses Method_Behavior_Scenario with underscores and end-to-end tests may have longer flows
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1502.severity = none
+dotnet_diagnostic.CA1861.severity = none
+dotnet_diagnostic.CA1822.severity = none
+dotnet_diagnostic.CA2000.severity = none
+dotnet_diagnostic.CA1062.severity = none
+dotnet_diagnostic.CA1305.severity = none
+dotnet_diagnostic.CA1307.severity = none
+dotnet_diagnostic.CA1310.severity = none
+dotnet_diagnostic.CA1865.severity = none
+dotnet_diagnostic.CA1866.severity = none
+dotnet_diagnostic.CA1867.severity = none
+dotnet_diagnostic.CA1859.severity = none
+dotnet_diagnostic.CA1031.severity = none
+dotnet_diagnostic.SYSLIB1045.severity = none

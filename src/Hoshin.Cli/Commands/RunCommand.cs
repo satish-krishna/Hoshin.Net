@@ -10,6 +10,7 @@ public sealed class RunCommand(HoshinServices services) : IHoshinCommand
     public string Name => "run";
     public string Usage => "run <event> --json --change <change> [--system s] [--repo r]... [--document f] [--task T<n>] [--again] [--check] [--stream] [--master p] [--workspace p]";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public async Task<int> RunAsync(IReadOnlyList<string> args)
     {
         var repos = new List<string>();

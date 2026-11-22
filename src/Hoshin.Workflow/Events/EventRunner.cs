@@ -85,6 +85,7 @@ public sealed class EventRunner
         ];
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public async Task<EventOutcome> RunAsync(EventContext ctx, EventRunOptions? options = null)
     {
         options ??= new EventRunOptions();

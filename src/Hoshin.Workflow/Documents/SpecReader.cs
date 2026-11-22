@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using Gherkin;
 using Gherkin.Ast;
@@ -9,7 +10,7 @@ namespace Hoshin.Workflow.Documents;
 /// Reads a Layout 2 <c>spec.md</c> using Cucumber's <c>Gherkin</c> parser and enforces all GRAMMAR.md tag,
 /// outline-parameter, and unread-tag rules.
 /// </summary>
-public sealed class SpecReader
+public sealed partial class SpecReader
 {
     private static readonly Regex RuleTag = new(@"^@R[0-9]+$", RegexOptions.Compiled);
     private static readonly Regex ScenarioTag = new(@"^@R([0-9]+)\.[0-9]+$", RegexOptions.Compiled);
@@ -19,8 +20,15 @@ public sealed class SpecReader
     private static readonly Regex PlaceholderRegex = new(@"<([^<>\s][^<>]*)>", RegexOptions.Compiled);
     private static readonly Regex FenceOpener = new(@"^\s*(`{3,}|~{3,})(.*)$", RegexOptions.Compiled);
 
+    [GeneratedRegex(@"^\s*(`{3,}|~{3,})\s*$")]
+    private static partial Regex FenceCloserRegex();
+
+    [GeneratedRegex(@"^\(\d+:\d+\):\s*")]
+    private static partial Regex GherkinLocationPrefixRegex();
+
     private sealed record GherkinBlock(string Text, int Offset);
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected document reader service.")]
     public SpecReadResult Read(string text, string file)
     {
         var doc = Doc.Split(text);
@@ -74,8 +82,11 @@ public sealed class SpecReader
                 continue;
             }
 
-            var closer = new Regex($"^\\s*{(fence[0] == '`' ? "`" : "~")}{{{fence.Length},}}\\s*$");
-            var close = Array.FindIndex(lines, open + 1, l => closer.IsMatch(l));
+            var close = Array.FindIndex(lines, open + 1, l =>
+            {
+                var cm = FenceCloserRegex().Match(l);
+                return cm.Success && cm.Groups[1].Value[0] == fence[0] && cm.Groups[1].Value.Length >= fence.Length;
+            });
             if (close < 0)
             {
                 close = lines.Length;
@@ -87,6 +98,7 @@ public sealed class SpecReader
         return null;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static bool ReadBlock(
         GherkinBlock block,
         string file,
@@ -266,5 +278,5 @@ public sealed class SpecReader
         }
     }
 
-    private static string Strip(string message) => Regex.Replace(message, @"^\(\d+:\d+\):\s*", "");
+    private static string Strip(string message) => GherkinLocationPrefixRegex().Replace(message, "");
 }

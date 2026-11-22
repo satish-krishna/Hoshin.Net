@@ -1,0 +1,2 @@
+# Maximum cyclomatic complexity per method (CONTRIBUTING.md §3.2 S3)
+CA1502: 15

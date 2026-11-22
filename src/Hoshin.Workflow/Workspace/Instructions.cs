@@ -114,6 +114,7 @@ public static class InstructionsService
         return result;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static InstructionsResult Run(InstructionsInput input)
     {
         var single = input.Marker.Layout == WorkspaceLayout.SingleRepo;

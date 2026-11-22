@@ -87,6 +87,7 @@ public sealed class BaselineTaker(
         return new TakenBaseline(baseCommit, entry, entry is not null, "passed", []);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public async Task<TakenBaseline> TakeAsync(EventContext ctx, HookConfig config, bool retake = false)
     {
         var stored = Stored(ctx, config);

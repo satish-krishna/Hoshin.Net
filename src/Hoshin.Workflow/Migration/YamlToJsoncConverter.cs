@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -293,6 +294,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             return (node, comment);
         }
 
+        [SuppressMessage("Performance", "CA1859:Use concrete types when possible for improved performance", Justification = "Returns polymorphic YamlNode; converter is replaced in T11.")]
         private YamlNode ParseNestedBlockAfterKey(int keyIndent, bool forceString)
         {
             var saved = _pos;
@@ -443,15 +445,29 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
 
                 if (inDouble)
                 {
-                    if (c == '\\') escape = true;
-                    else if (c == '"') inDouble = false;
+                    if (c == '\\')
+                    {
+                        escape = true;
+                    }
+                    else if (c == '"')
+                    {
+                        inDouble = false;
+                    }
+
                     continue;
                 }
 
                 if (inSingle)
                 {
-                    if (c == '\'' && i + 1 < text.Length && text[i + 1] == '\'') i++;
-                    else if (c == '\'') inSingle = false;
+                    if (c == '\'' && i + 1 < text.Length && text[i + 1] == '\'')
+                    {
+                        i++;
+                    }
+                    else if (c == '\'')
+                    {
+                        inSingle = false;
+                    }
+
                     continue;
                 }
 
@@ -473,6 +489,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             return ParseFlowNode(text, ref cursor, forceString);
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: replaced in T11")]
         private YamlNode ParseFlowNode(string text, ref int i, bool forceString)
         {
             SkipWs(text, ref i);
@@ -490,7 +507,11 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
                     SkipWs(text, ref i);
                     if (i >= text.Length || text[i] == ']')
                     {
-                        if (i < text.Length) i++;
+                        if (i < text.Length)
+                        {
+                            i++;
+                        }
+
                         break;
                     }
 
@@ -515,7 +536,11 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
                     SkipWs(text, ref i);
                     if (i >= text.Length || text[i] == '}')
                     {
-                        if (i < text.Length) i++;
+                        if (i < text.Length)
+                        {
+                            i++;
+                        }
+
                         break;
                     }
 
@@ -630,6 +655,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             return text[start..i];
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: replaced in T11")]
         private string ParseBlockScalar(string header, int parentIndent)
         {
             var folded = header[0] == '>';
@@ -788,6 +814,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             }
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: replaced in T11")]
         private static (string Value, string? Comment) SplitInlineComment(string text)
         {
             var inSingle = false;
@@ -805,15 +832,29 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
 
                 if (inDouble)
                 {
-                    if (c == '\\') escape = true;
-                    else if (c == '"') inDouble = false;
+                    if (c == '\\')
+                    {
+                        escape = true;
+                    }
+                    else if (c == '"')
+                    {
+                        inDouble = false;
+                    }
+
                     continue;
                 }
 
                 if (inSingle)
                 {
-                    if (c == '\'' && i + 1 < text.Length && text[i + 1] == '\'') i++;
-                    else if (c == '\'') inSingle = false;
+                    if (c == '\'' && i + 1 < text.Length && text[i + 1] == '\'')
+                    {
+                        i++;
+                    }
+                    else if (c == '\'')
+                    {
+                        inSingle = false;
+                    }
+
                     continue;
                 }
 
@@ -836,6 +877,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             return (text.TrimEnd(), null);
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: replaced in T11")]
         private static bool TrySplitKeyValue(string trimmed, out string key, out string rest)
         {
             key = "";
@@ -898,6 +940,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             return raw;
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: replaced in T11")]
         private static string UnquoteDouble(string raw)
         {
             if (raw.Length < 2 || raw[0] != '"' || raw[^1] != '"')
@@ -1054,6 +1097,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             sb.Append(pad).Append('}');
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: replaced in T11")]
         private static void EmitSequence(StringBuilder sb, YamlSequence seq, int indent)
         {
             if (seq.Items.Count == 0 && seq.LeadingComments.Count == 0 && seq.TrailingComments.Count == 0)

@@ -23,6 +23,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
     private readonly IHookAdapter _adapter = adapter ?? HarnessAdapter.Default;
     private readonly IWorkflowRunner _runner = runner ?? WorkflowRunner.Default;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public (string? Output, string Decision) HandleStart(NormalizedHookEvent ev, string? rolesRoot)
     {
         var repo = ResolveRepo(ev);
@@ -141,6 +142,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         return EmitStartContext(ev, repo, prefix + HookInstructions.For(step, ev.Harness) + idea, $"{invoked}: {step.Kind}");
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public (string? Output, string Decision) HandleResult(NormalizedHookEvent ev, string? rolesRoot)
     {
         var repo = ResolveRepo(ev);
@@ -216,6 +218,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         return (_adapter.EmptyOutput(ev.Harness), $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public (string? Output, string Decision) HandleStop(NormalizedHookEvent ev, string? rolesRoot)
     {
         var repo = ResolveRepo(ev);

@@ -42,6 +42,7 @@ public sealed class ProcessCommandRunner : ICommandRunner
     public Task<CommandOutcome> RunAsync(CommandRequest request, CancellationToken cancellationToken = default) =>
         Task.Run(() => RunCore(request), cancellationToken);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static CommandOutcome RunCore(CommandRequest request)
     {
         if (request.Argv.Count == 0)

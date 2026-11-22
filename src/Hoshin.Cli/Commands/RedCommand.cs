@@ -12,6 +12,7 @@ public sealed class RedCommand(HoshinServices services) : IHoshinCommand
     public string Name => "red";
     public string Usage => "red record|show --json --change c --repo r --task T<n> [--system s] [--master p] [--workspace p]";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public async Task<int> RunAsync(IReadOnlyList<string> args)
     {
         var o = OptionParser.Parse(args, values: ["change", "repo", "task", "system", "master", "workspace"], flags: ["json"]);

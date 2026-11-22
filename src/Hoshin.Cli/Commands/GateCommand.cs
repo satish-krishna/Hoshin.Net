@@ -37,6 +37,7 @@ public sealed class GateCommand(HoshinServices services) : IHoshinCommand
         return Task.FromResult(ExitCodes.Pass);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private (string? Block, string? Note) Decide(string cwd)
     {
         var top = services.Git.TopLevel(cwd);

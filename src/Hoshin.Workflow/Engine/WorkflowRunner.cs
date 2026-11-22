@@ -40,7 +40,7 @@ public interface IWorkflowRunner
 /// <see cref="IAllowListedCommandRunner"/>, performs the two-phase Red/Green commit split atomically (leaving zero
 /// commits on failure), and publishes branches/PRs only after approval.
 /// </summary>
-public sealed class WorkflowRunner(
+public sealed partial class WorkflowRunner(
     IAllowListedCommandRunner? commandRunner = null,
     IPullRequestClient? pullRequests = null,
     IntentReader? intentReader = null,
@@ -48,6 +48,8 @@ public sealed class WorkflowRunner(
     PlanReader? planReader = null,
     ReviewReader? reviewReader = null) : IWorkflowRunner
 {
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex WhitespaceRegex();
     public static WorkflowRunner Default { get; } = new();
 
     private static readonly StringComparison PathComparison =
@@ -60,6 +62,7 @@ public sealed class WorkflowRunner(
     private readonly PlanReader _planReader = planReader ?? new PlanReader();
     private readonly ReviewReader _reviewReader = reviewReader ?? new ReviewReader();
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public void Issue(WorkflowRepo repo, WorkflowState state, Step step, string? sessionId = null)
     {
         if (step is Implement or Retry)
@@ -160,6 +163,7 @@ public sealed class WorkflowRunner(
     ///    then commits production files (<c>&lt;type&gt;(&lt;scope&gt;): &lt;task title&gt;</c> with trailers) and verifies Green at HEAD.
     /// Any failure commits NOTHING, preserving working-tree changes as handoff for <see cref="Retry"/>.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public WorkflowVerdict EvaluateAndCommitTask(WorkflowRepo repo, WorkflowState state, string taskId, int attempt)
     {
         var plan = state.Plan;
@@ -514,9 +518,20 @@ public sealed class WorkflowRunner(
         var planRel = Path.GetRelativePath(repo.Root, planPath).Replace('\\', '/');
 
         var problems = new List<Problem>();
-        if (!File.Exists(intentPath)) problems.Add(new Problem(intentRel, 1, "light-track fix requires intent.md"));
-        if (!File.Exists(specPath)) problems.Add(new Problem(specRel, 1, "light-track fix requires spec.md"));
-        if (!File.Exists(planPath)) problems.Add(new Problem(planRel, 1, "light-track fix requires plan.md"));
+        if (!File.Exists(intentPath))
+        {
+            problems.Add(new Problem(intentRel, 1, "light-track fix requires intent.md"));
+        }
+
+        if (!File.Exists(specPath))
+        {
+            problems.Add(new Problem(specRel, 1, "light-track fix requires spec.md"));
+        }
+
+        if (!File.Exists(planPath))
+        {
+            problems.Add(new Problem(planRel, 1, "light-track fix requires plan.md"));
+        }
         if (problems.Count > 0)
         {
             return (problems, null);
@@ -591,6 +606,7 @@ public sealed class WorkflowRunner(
     /// If a document starts on line 1 with a bare JSONC object <c>{ ... }</c> (not fenced), wraps it in
     /// <c>```jsonc ... ```</c> fences when the bare object parses cleanly as JSONC.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public static string? TryAutoWrapBareJsonFrontMatter(string text)
     {
         var normalized = Doc.Normalize(text);
@@ -619,8 +635,15 @@ public sealed class WorkflowRunner(
 
                 if (inString)
                 {
-                    if (c == '\\') escape = true;
-                    else if (c == '"') inString = false;
+                    if (c == '\\')
+                    {
+                        escape = true;
+                    }
+                    else if (c == '"')
+                    {
+                        inString = false;
+                    }
+
                     continue;
                 }
 
@@ -878,7 +901,7 @@ public sealed class WorkflowRunner(
 
     private static string Squash(string text)
     {
-        var s = Regex.Replace(text, @"\s+", " ").Trim();
+        var s = WhitespaceRegex().Replace(text, " ").Trim();
         return s.Length > 400 ? s[..400] + "…" : s;
     }
 }

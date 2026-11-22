@@ -584,6 +584,7 @@ public sealed class DocumentMigrator(IYamlToJsoncConverter? yamlConverter = null
         return false;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static TransformResult MigrateLayout1Plan(Doc doc)
     {
         var coversByTask = ExtractScenarioCoverage(doc);
@@ -952,6 +953,7 @@ public sealed class DocumentMigrator(IYamlToJsoncConverter? yamlConverter = null
         return new TransformResult(cur, changed);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static TransformResult MigrateBuildLogTables(Doc doc)
     {
         var replacements = new List<(int Start, int EndExclusive, List<string> Replacement)>();
@@ -975,8 +977,15 @@ public sealed class DocumentMigrator(IYamlToJsoncConverter? yamlConverter = null
             var departureAt = 2;
             var findCommits = header.FindIndex(c => c.Equals("commits", StringComparison.OrdinalIgnoreCase));
             var findDeparture = header.FindIndex(c => c.Equals("departure", StringComparison.OrdinalIgnoreCase));
-            if (findCommits >= 0) commitsAt = findCommits;
-            if (findDeparture >= 0) departureAt = findDeparture;
+            if (findCommits >= 0)
+            {
+                commitsAt = findCommits;
+            }
+
+            if (findDeparture >= 0)
+            {
+                departureAt = findDeparture;
+            }
 
             var tableStart = i;
             var entries = new List<(string Task, List<string> Commits, string? Departure)>();

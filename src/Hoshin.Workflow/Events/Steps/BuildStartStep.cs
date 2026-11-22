@@ -61,6 +61,7 @@ public sealed class BuildStartStep(
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Task<List<string>> CheckAsync(EventContext ctx)
     {
         var branch = ChangeRecordStore.BranchOf(ctx.Folder);

@@ -53,6 +53,7 @@ public static class WorkflowEngine
 {
     public const int MaxAttempts = 3;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static Step Next(WorkflowState state)
     {
         // Authoring pipeline runs when an intent exists or no plan exists yet.

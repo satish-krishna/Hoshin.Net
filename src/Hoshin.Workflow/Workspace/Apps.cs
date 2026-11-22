@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Git;
 
@@ -12,12 +13,14 @@ public sealed class AppService(IGitClient? git = null)
 
     private readonly IGitClient _git = git ?? ProcessGitClient.Default;
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public bool IsSingleRepo(string master)
     {
         var file = Path.Combine(master, MarkerConstants.FileName);
         return File.Exists(file) && MarkerReader.ReadMarker(file).Layout == WorkspaceLayout.SingleRepo;
     }
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public Dictionary<string, string> AppFolders(string master, string system)
     {
         var marker = MarkerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName));
@@ -26,6 +29,7 @@ public sealed class AppService(IGitClient? git = null)
             : new Dictionary<string, string>(StringComparer.Ordinal);
     }
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public List<string> AppPathspec(string folder) => [folder, .. OwnFiles.ExcludingOwnFiles()];
 
     public List<string> UncommittedInApp(string root, string folder)

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace Hoshin.Workflow.Engine;
@@ -27,15 +28,15 @@ public static class WorkflowBriefs
     public static AgentTask Implement(WorkflowState state, WorkflowTask task, int attempt, IReadOnlyList<string> handoff)
     {
         var b = new StringBuilder();
-        b.AppendLine($"# Task {task.Id}: {task.Title}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"# Task {task.Id}: {task.Title}");
         b.AppendLine();
         b.AppendLine(task.Text);
         b.AppendLine();
-        b.AppendLine($"Repository: {state.RepoRoot}");
-        b.AppendLine($"Test command for this task: `{string.Join(' ', task.Test)}`");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Repository: {state.RepoRoot}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Test command for this task: `{string.Join(' ', task.Test)}`");
         if (task.Compile is { Length: > 0 })
         {
-            b.AppendLine($"Compile command for this task: `{string.Join(' ', task.Compile)}`");
+            b.AppendLine(CultureInfo.InvariantCulture, $"Compile command for this task: `{string.Join(' ', task.Compile)}`");
         }
 
         b.AppendLine();
@@ -48,11 +49,11 @@ public static class WorkflowBriefs
         if (handoff.Count > 0)
         {
             b.AppendLine();
-            b.AppendLine($"## Attempt {attempt}: the previous attempt was not accepted");
+            b.AppendLine(CultureInfo.InvariantCulture, $"## Attempt {attempt}: the previous attempt was not accepted");
             b.AppendLine();
             foreach (var reason in handoff)
             {
-                b.AppendLine($"- {reason}");
+                b.AppendLine(CultureInfo.InvariantCulture, $"- {reason}");
             }
 
             b.AppendLine();
@@ -73,14 +74,14 @@ public static class WorkflowBriefs
             : [];
 
         var b = new StringBuilder();
-        b.AppendLine($"# The intent for change {state.Plan.Change}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"# The intent for change {state.Plan.Change}");
         b.AppendLine();
-        b.AppendLine($"Write it to `{rel}` in {state.RepoRoot}. Read first: {(context.Count == 0 ? "no context files exist" : string.Join(", ", context.Select(c => $"`{c}`")))}.");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Write it to `{rel}` in {state.RepoRoot}. Read first: {(context.Count == 0 ? "no context files exist" : string.Join(", ", context.Select(c => $"`{c}`")))}.");
         b.AppendLine();
         b.AppendLine("The file starts on line 1 with a fenced `jsonc` front matter block:");
         b.AppendLine();
         b.AppendLine("```jsonc");
-        b.AppendLine($"{{ \"title\": \"<short title>\", \"system\": \"{state.Plan.Scope}\", \"author\": \"<name and role>\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\", \"scope\": \"{state.Plan.Scope}\" }}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"title\": \"<short title>\", \"system\": \"{state.Plan.Scope}\", \"author\": \"<name and role>\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\", \"scope\": \"{state.Plan.Scope}\" }}");
         b.AppendLine("```");
         b.AppendLine();
         b.AppendLine("Then include these headings in order, each with content: `# Intent: <title>`, `## Problem`, `## Proposed outcome`, `## Affected users and systems`, `## Constraints`, `## Decisions`, `## Open questions`.");
@@ -94,14 +95,14 @@ public static class WorkflowBriefs
         var specRel = RelativePath(state.RepoRoot, state.Spec.Path);
         var intentRel = RelativePath(state.RepoRoot, state.Intent.Path);
         var b = new StringBuilder();
-        b.AppendLine($"# The spec for change {state.Plan.Change}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"# The spec for change {state.Plan.Change}");
         b.AppendLine();
-        b.AppendLine($"Write it to `{specRel}` in {state.RepoRoot}, from the accepted intent `{intentRel}`.");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Write it to `{specRel}` in {state.RepoRoot}, from the accepted intent `{intentRel}`.");
         b.AppendLine();
         b.AppendLine("The file starts on line 1 with a fenced `jsonc` front matter block:");
         b.AppendLine();
         b.AppendLine("```jsonc");
-        b.AppendLine($"{{ \"layout\": 2, \"title\": \"<intent title>\", \"system\": \"{state.Plan.Scope}\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\" }}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"layout\": 2, \"title\": \"<intent title>\", \"system\": \"{state.Plan.Scope}\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\" }}");
         b.AppendLine("```");
         b.AppendLine();
         b.AppendLine("Then `# Spec: <title>` and `## Requirements` with one fenced `gherkin` block: a `Feature:`, one `Rule:` per requirement tagged `@R<n>` and at least one `@from:<source>`, and scenarios tagged `@R<n>.<m>`.");
@@ -115,14 +116,14 @@ public static class WorkflowBriefs
         var planRel = RelativePath(state.RepoRoot, state.PlanDoc.Path);
         var specRel = RelativePath(state.RepoRoot, state.Spec.Path);
         var b = new StringBuilder();
-        b.AppendLine($"# The plan for change {state.Plan.Change}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"# The plan for change {state.Plan.Change}");
         b.AppendLine();
-        b.AppendLine($"Write it to `{planRel}` in {state.RepoRoot}, from the accepted spec `{specRel}`.");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Write it to `{planRel}` in {state.RepoRoot}, from the accepted spec `{specRel}`.");
         b.AppendLine();
         b.AppendLine("The file starts on line 1 with a fenced `jsonc` front matter block:");
         b.AppendLine();
         b.AppendLine("```jsonc");
-        b.AppendLine($"{{ \"layout\": 2, \"system\": \"{state.Plan.Scope}\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\" }}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"layout\": 2, \"system\": \"{state.Plan.Scope}\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\" }}");
         b.AppendLine("```");
         b.AppendLine();
         b.AppendLine("Define `## Tasks` with `### T<n>: <name>` headings, each followed by a fenced `jsonc` fields block (`id`, `repo`, `depends_on`, `covers`, `test`) and `#### Change` / `#### Tests` sections.");
@@ -139,9 +140,9 @@ public static class WorkflowBriefs
         var shortHead = WorkflowEngine.Short(state.Head);
 
         var b = new StringBuilder();
-        b.AppendLine($"# Review for change {state.Plan.Change} (Review {nextNum})");
+        b.AppendLine(CultureInfo.InvariantCulture, $"# Review for change {state.Plan.Change} (Review {nextNum})");
         b.AppendLine();
-        b.AppendLine($"Write the review section to `{reviewRel}` in {state.RepoRoot} (head `{shortHead}`).");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Write the review section to `{reviewRel}` in {state.RepoRoot} (head `{shortHead}`).");
         b.AppendLine();
         b.AppendLine("Start a new file on line 1 with a fenced `jsonc` front matter block `{ \"layout\": 2 }`, then `# Review findings`, then `## Review " + nextNum + "` with a fenced `jsonc` header (`review`, `reviewed_at`, `commits`) and `### F<n>` findings (`id`, `severity`, `concern`, `file`, `line`, plus `rule` for every `convention` finding).");
         b.AppendLine();
@@ -156,9 +157,9 @@ public static class WorkflowBriefs
         var planRel = RelativePath(state.RepoRoot, state.PlanDoc.Path);
 
         var b = new StringBuilder();
-        b.AppendLine($"# Light-track fix for change {state.Plan.Change}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"# Light-track fix for change {state.Plan.Change}");
         b.AppendLine();
-        b.AppendLine($"Write all three change documents in {state.RepoRoot}: `{intentRel}`, `{specRel}`, and `{planRel}`.");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Write all three change documents in {state.RepoRoot}: `{intentRel}`, `{specRel}`, and `{planRel}`.");
         b.AppendLine();
         b.AppendLine("Light-track boundary: one repository, no business rule changes, at most 3 tasks, and 1 new behavior per task.");
         b.AppendLine("Use fenced `jsonc` front matter on line 1 (`status: \"draft\"`, `scope: \"" + state.Plan.Scope + "\"`, `layout: 2` on spec and plan).");

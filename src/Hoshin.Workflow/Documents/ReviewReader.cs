@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
@@ -45,7 +46,7 @@ public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
             var m = ReviewHeading.Match(doc.Lines[i]);
             if (m.Success)
             {
-                heads.Add((i, int.Parse(m.Groups[1].Value)));
+                heads.Add((i, int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)));
             }
         }
 
@@ -82,6 +83,7 @@ public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
         return new ReviewReadResult(fm.Layout, fm.Data, new ParsedReview(reviews), problems);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private ParsedReviewSection ReadSection(
         Doc doc,
         int index,
@@ -186,6 +188,7 @@ public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
         return new ParsedReviewSection(number, reviewedAt, commits, findings);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private ParsedFinding? ReadFinding(
         Doc doc,
         int index,

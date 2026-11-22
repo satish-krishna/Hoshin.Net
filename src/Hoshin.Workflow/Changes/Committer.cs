@@ -82,6 +82,7 @@ public sealed class Committer(
     private readonly ProgressService _progress = progress ?? ProgressService.Default;
     private readonly ReviewReader _review = reviewReader ?? new ReviewReader();
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public CommitOutcome Commit(CommitRequest req)
     {
         if (!Kinds.TryGetValue(req.Kind, out var rule))
@@ -324,6 +325,7 @@ public sealed class Committer(
         return added;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private List<string> BuildMessage(CommitRequest req, KindRule rule, TargetInfo t, List<string> paths)
     {
         List<string> Docs(string subject) => [$"docs({t.Scope}): {subject} {t.Change}", Trailer];

@@ -30,6 +30,7 @@ public sealed class ChangeDoneStep(
 
     internal void BindRunner(Func<EventContext, EventRunOptions?, Task<EventOutcome>> runEvent) => _runEvent = runEvent;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public async Task<List<string>> CheckAsync(EventContext ctx)
     {
         if (_apps.IsSingleRepo(ctx.Master))
@@ -177,6 +178,7 @@ public sealed class ChangeDoneStep(
         return problems;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Task<StepResult> ActAsync(EventContext ctx)
     {
         if (_apps.IsSingleRepo(ctx.Master))
@@ -301,6 +303,7 @@ public sealed class ChangeDoneStep(
         }));
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private async Task<List<string>> CheckSingleRepoAsync(EventContext ctx)
     {
         var record = RecordOf(ctx);
@@ -580,7 +583,7 @@ public sealed class ChangeDoneStep(
         return NamingService.RenderNaming(naming.Setting, new NamingValues(record.Type, record.Scope, ctx.Change, title)).PullRequestTitle ?? title;
     }
 
-    private ChangeRecord RecordOf(EventContext ctx)
+    private static ChangeRecord RecordOf(EventContext ctx)
     {
         var found = ChangeRecordStore.Read(ctx.Folder);
         if (found is not null)

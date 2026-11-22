@@ -45,6 +45,7 @@ public sealed class EmbeddedSchemaValidator : IJsonSchemaValidator
         return doc.RootElement.Clone();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static void Check(JsonElement schema, JsonElement value, string path, List<SchemaError> errors)
     {
         if (schema.TryGetProperty("type", out var type))

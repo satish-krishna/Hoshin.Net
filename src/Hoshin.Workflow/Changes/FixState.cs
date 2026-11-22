@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
@@ -152,6 +153,7 @@ public sealed class FixStateService(
             }
         }).ToList();
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public FixStateResult ComputeFromInput(FixInput input)
     {
         var paths = Documents.Select(d => $"{input.Prefix}{d}.md").ToArray();
@@ -243,6 +245,7 @@ public sealed class FixStateService(
         return new FixStateResult(RowOf(facts), facts);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private bool OnlyOwnLines(string top, string path, string headText, string workingText)
     {
         var args = new List<string> { "diff", "HEAD" };
@@ -298,10 +301,10 @@ public sealed class FixStateService(
                 }
 
                 inHunks = true;
-                oldStart = int.Parse(hunk.Groups[1].Value);
-                oldCount = hunk.Groups[2].Success ? int.Parse(hunk.Groups[2].Value) : 1;
+                oldStart = int.Parse(hunk.Groups[1].Value, CultureInfo.InvariantCulture);
+                oldCount = hunk.Groups[2].Success ? int.Parse(hunk.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
                 nextOld = oldStart;
-                nextNew = int.Parse(hunk.Groups[3].Value);
+                nextNew = int.Parse(hunk.Groups[3].Value, CultureInfo.InvariantCulture);
                 added = 0;
                 continue;
             }

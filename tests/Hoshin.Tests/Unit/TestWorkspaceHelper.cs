@@ -164,6 +164,8 @@ internal static class TestGitFixture
         public void Dispose() => Temp.Dispose();
     }
 
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
     public static WorkspaceFixture CreateWorkspace(object? markerExtra = null, string[]? repos = null, bool built = false)
     {
         var temp = new TempDir("hoshin-ws-");
@@ -187,7 +189,7 @@ internal static class TestGitFixture
         var folder = $"intent/demo/{ChangeName}";
         var masterFiles = new Dictionary<string, string>
         {
-            [".hoshin.json"] = JsonSerializer.Serialize(markerObj, new JsonSerializerOptions { WriteIndented = true }) + "\n",
+            [".hoshin.json"] = JsonSerializer.Serialize(markerObj, IndentedJson) + "\n",
             [$"{folder}/intent.md"] = IntentText + "\n",
         };
         if (built)
@@ -227,7 +229,7 @@ internal static class TestGitFixture
                 version = 1,
                 layout = "single-repo",
                 systems = new { demo = new { apps = appMap } },
-            }, new JsonSerializerOptions { WriteIndented = true }) + "\n",
+            }, IndentedJson) + "\n",
             ["intent/demo/policies.md"] = "# Policies\n",
         };
         foreach (var folder in appMap.Values)

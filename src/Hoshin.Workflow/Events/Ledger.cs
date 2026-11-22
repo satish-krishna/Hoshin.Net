@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Hoshin.Workflow.Git;
@@ -71,6 +72,7 @@ public sealed class LedgerStore(IGitClient? git = null)
     public string LedgerFolder(string master, string system, string change) =>
         _git.GitPath(master, Path.Combine("hoshin", system, change), common: true);
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public RepoLedger? Read(string folder, string repo)
     {
         var file = Path.Combine(folder, $"{repo}.json");
@@ -110,6 +112,7 @@ public sealed class LedgerStore(IGitClient? git = null)
         return list;
     }
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public void Write(string folder, RepoLedger ledger)
     {
         Directory.CreateDirectory(folder);

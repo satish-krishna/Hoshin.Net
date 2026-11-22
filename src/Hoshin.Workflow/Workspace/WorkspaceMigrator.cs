@@ -28,6 +28,7 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
     private const string OldStart = "<!-- ai-sdlc:start -->";
     private const string OldEnd = "<!-- ai-sdlc:end -->";
     private const string RerunSetup = "run the hoshin setup skill with `--instructions` to write the new block, then delete the old block between the `ai-sdlc` markers";
+    private static readonly string[] MergeOrRebaseFiles = ["MERGE_HEAD", "rebase-merge", "rebase-apply"];
     private static readonly Regex LineSplitWithNewline = new(@"(?<=\n)", RegexOptions.Compiled);
 
     private readonly IGitClient _git = git ?? ProcessGitClient.Default;
@@ -36,6 +37,7 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
 
     private sealed record PlannedStep(MigrateStep Step, Func<string?>? Act, string? Branch = null);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public MigrateResult Migrate(string cwd, ResolveOptions options, bool write)
     {
         var resolved = _resolver.Resolve(cwd, options, MarkerConstants.AnyMarkers);
@@ -134,6 +136,7 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
         return new MigrateResult(workspace, master, layout, write, steps, kept, manual, problems);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private (List<List<PlannedStep>> Groups, List<string> Moving) Plan(string workspace, string master, string main, Marker marker)
     {
         var oldCopies = Path.Combine(workspace, ".ai-sdlc", "copies");
@@ -264,7 +267,7 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
             why.Add("the index has staged changes");
         }
 
-        var midway = new[] { "MERGE_HEAD", "rebase-merge", "rebase-apply" }.Any(name =>
+        var midway = MergeOrRebaseFiles.Any(name =>
         {
             var gp = _git.Out(dir, ["rev-parse", "--git-path", name]) ?? name;
             var full = Path.IsPathRooted(gp) ? gp : Path.Combine(dir, gp);
@@ -283,7 +286,7 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
         return why;
     }
 
-    private string MarkerScope(string dir, string? copyName)
+    private static string MarkerScope(string dir, string? copyName)
     {
         var systems = MarkerReader.ReadMarker(MarkerReader.MarkerFileIn(dir, MarkerConstants.AnyMarkers)!).Systems.Keys.ToList();
         if (copyName is not null)

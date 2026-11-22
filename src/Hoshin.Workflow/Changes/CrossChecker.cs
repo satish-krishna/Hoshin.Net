@@ -7,8 +7,10 @@ namespace Hoshin.Workflow.Changes;
 public sealed record ChangeDoc(string File, ReadResult Result);
 
 /// <summary>Cross-document validation: plan tasks against spec scenarios/rules, plan self-references, and build logs against plan tasks.</summary>
-public static class CrossChecker
+public static partial class CrossChecker
 {
+    [GeneratedRegex(@"^\s*""([^""]+)""\s*:")]
+    private static partial Regex FieldLineRegex();
     public static List<Problem> CheckChange(IReadOnlyList<ChangeDoc> docs)
     {
         (ParsedSpec Doc, string File)? spec = null;
@@ -53,11 +55,11 @@ public static class CrossChecker
 
     private static int FieldLine(ParsedTask task, string key)
     {
-        var re = new Regex($"^\\s*\"{Regex.Escape(key)}\"\\s*:");
         var lines = task.Text.Split('\n');
         for (var i = 0; i < lines.Length; i++)
         {
-            if (re.IsMatch(lines[i]))
+            var m = FieldLineRegex().Match(lines[i]);
+            if (m.Success && string.Equals(m.Groups[1].Value, key, StringComparison.Ordinal))
             {
                 return task.Line + i;
             }
@@ -81,6 +83,7 @@ public static class CrossChecker
         return ids;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static List<Problem> CheckPlan(ParsedPlan plan, string planFile, (ParsedSpec Doc, string File)? spec)
     {
         var problems = new List<Problem>();

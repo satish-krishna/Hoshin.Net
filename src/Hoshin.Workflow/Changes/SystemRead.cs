@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
@@ -147,7 +148,7 @@ public sealed class SystemRead
             }
 
             var parts = header.Split(' ');
-            var size = int.Parse(parts[2]);
+            var size = int.Parse(parts[2], CultureInfo.InvariantCulture);
             texts.Add(Encoding.UTF8.GetString(output, at, size));
             at += size + 1;
         }

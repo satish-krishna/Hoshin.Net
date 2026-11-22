@@ -139,6 +139,7 @@ public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitCli
             .ToList();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private List<string> LayoutProblems(string file, string text)
     {
         JsonDocument doc;

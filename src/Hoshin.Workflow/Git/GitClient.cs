@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
@@ -467,7 +468,7 @@ public sealed class ProcessGitClient(ICommandRunner? runner = null) : IGitClient
         var args = new List<string> { "rev-list", "--count", $"{from}..{to}", "--" };
         args.AddRange(paths);
         var output = Out(dir, args);
-        return output is null || !DigitsRegex.IsMatch(output) ? null : int.Parse(output);
+        return output is null || !DigitsRegex.IsMatch(output) ? null : int.Parse(output, CultureInfo.InvariantCulture);
     }
 
     public List<TrailerCommit> CommitsWithTrailer(string dir, string from, string to, string key, IReadOnlyList<string>? paths = null)

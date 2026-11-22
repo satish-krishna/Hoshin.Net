@@ -28,6 +28,7 @@ public static class ChangeRecordStore
     private static readonly Regex HttpUrl = new(@"^https?://", RegexOptions.Compiled);
     private static readonly Regex CommitSha = new(@"^[0-9a-f]{7,40}$", RegexOptions.Compiled);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static List<string> RecordProblems(JsonElement? raw)
     {
         if (raw is not { ValueKind: JsonValueKind.Object } obj)

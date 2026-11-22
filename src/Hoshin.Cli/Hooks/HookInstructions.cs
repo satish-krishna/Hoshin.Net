@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Hoshin.Workflow.Engine;
 
@@ -32,16 +33,16 @@ public static class HookInstructions
     private static string Dispatch(AgentTask agent, HookHarness harness)
     {
         var b = new StringBuilder();
-        b.AppendLine($"Next step: build task {agent.Task}, attempt {agent.Attempt} of {WorkflowEngine.MaxAttempts}.");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Next step: build task {agent.Task}, attempt {agent.Attempt} of {WorkflowEngine.MaxAttempts}.");
         b.AppendLine();
         if (harness == HookHarness.Antigravity)
         {
-            b.AppendLine($"Use the `invoke_subagent` tool now, once: `TypeName` \"self\", `Role` \"Build {agent.Task}\", and as `Prompt` the text between the two marker lines below, exactly, without the marker lines.");
+            b.AppendLine(CultureInfo.InvariantCulture, $"Use the `invoke_subagent` tool now, once: `TypeName` \"self\", `Role` \"Build {agent.Task}\", and as `Prompt` the text between the two marker lines below, exactly, without the marker lines.");
             b.AppendLine("Do not do the task yourself and do not edit, commit, or run anything yourself. After calling `invoke_subagent`, end your turn (call no more tools) and wait for its completion message.");
         }
         else
         {
-            b.AppendLine($"Use the Agent tool now, once, in the foreground (`run_in_background: false`): `subagent_type` \"general-purpose\", `description` \"Build {agent.Task}\", and as its prompt the text between the two marker lines below, exactly, without the marker lines.");
+            b.AppendLine(CultureInfo.InvariantCulture, $"Use the Agent tool now, once, in the foreground (`run_in_background: false`): `subagent_type` \"general-purpose\", `description` \"Build {agent.Task}\", and as its prompt the text between the two marker lines below, exactly, without the marker lines.");
             b.AppendLine("Do not do the task yourself and do not edit, commit, or run anything yourself. When the subagent returns, wait for the next step.");
         }
 

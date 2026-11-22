@@ -59,7 +59,7 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 - **S2. Decisions are pure.** Code that decides a workflow outcome (the engine, Red classification, gates, document validation) takes values and returns values. It does no file, process, git, clock or environment access. **[test]** for `Engine/WorkflowEngine.cs` and `Engine/RedClassifier.cs` *(lands with T39)*; **[review]** elsewhere.
 - **S3. Size limits:**
   - a source file has at most **400 lines** **[test]** *(lands with T39)*;
-  - a method has a cyclomatic complexity of at most **15** **[test]** *(lands with T33, through analyzer CA1502 and `CodeMetricsConfig.txt`)*;
+  - a method has a cyclomatic complexity of at most **15** **[test]** (through analyzer CA1502 and `CodeMetricsConfig.txt`);
   - a method has at most **60 lines** **[review]**.
 
   A type that needs more is doing more than one thing; split it.
@@ -96,7 +96,7 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 
 ## 4. Code rules
 
-- **C1. Clean build.** `dotnet build` has 0 warnings with `TreatWarningsAsErrors` and the analyzers on. A suppression needs a comment saying why. **[CI]** *(lands with T33)*
+- **C1. Clean build.** `dotnet build` has 0 warnings with `TreatWarningsAsErrors` and the analyzers on. A suppression needs a comment saying why. **[CI]**
 - **C2. Nullable is honest.** Don't use `!` to silence a value that can really be null. Handle the null.
 - **C3. No silent catch.** No empty `catch {}`, and no `catch (Exception)` that neither logs nor rethrows. Catch the specific exception you expect, and say what happens next. **[test]** *(lands with T39)*
 - **C4. Fail closed on safety decisions.** When the guard, an approval check or a Red verdict can't decide (bad input, missing state), the answer is "no", with a message. The exception is availability: a hook must never crash a session. So a hook returns a deny or block reply with an explanation, rather than throwing. **[review]**
@@ -106,7 +106,7 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 - **C8. Atomic state writes.** Files under `.git/hoshin/` are written to a temp file and moved into place, under the shared file lock when other processes may write them. **[review]**
 - **C9. Regexes are generated.** Use `[GeneratedRegex]` for fixed patterns, and give regexes built from data a match timeout. **[review]**
 - **C10. Git output is parsed with `-z`** wherever paths are read from it. **[review]**
-- **C11. Language and formatting:** US English in code, comments and documents. Formatting follows `.editorconfig`. **[CI]** *(lands with T33)*
+- **C11. Language and formatting:** US English in code, comments and documents. Formatting follows `.editorconfig`. **[CI]**
 
 ## 5. Architecture invariants
 

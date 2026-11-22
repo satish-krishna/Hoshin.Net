@@ -144,6 +144,7 @@ public sealed class ChangeStateService(
         return new StateResult(place.System, changes, problems);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private ChangeStateItem ComputeOne(
         SystemRead read,
         Dictionary<string, GitDirsInfo?> dirsCache,
@@ -430,6 +431,7 @@ public sealed class ChangeStateService(
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private (Dictionary<string, List<string>>? Commits, List<string>? Untasked, List<string>? Uncommitted) RepositoryWork(
         string top,
         string workspace,
@@ -534,6 +536,7 @@ public sealed class ChangeStateService(
         return true;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static ReadinessMap ComputeReadiness(
         string change,
         string track,
@@ -610,7 +613,7 @@ public sealed class ChangeStateService(
             (dirtyLog.Key is not null ? $"The build log for `{dirtyLog.Key}` has uncommitted changes; rerun the build for `{dirtyLog.Key}` to commit them." : null);
 
         var allLogged = tasks is not null && unloggedRepos.Count == 0;
-        var uncommittedDoc = new[] { "intent", "spec", "plan" }.FirstOrDefault(Uncommitted);
+        var uncommittedDoc = AuthoringDocs.FirstOrDefault(Uncommitted);
         var rejectStop =
             (d.Intent.HeadStatus == "rejected" ? $"`{change}` is closed: its intent was rejected." : null) ??
             (buildLogs.Count > 0 || review.Committed > 0 || review.Draft != "none" ? $"`{change}` has build work (a build log or a review), so it is not rejected. The engineer settles that work first." : null) ??
@@ -624,6 +627,8 @@ public sealed class ChangeStateService(
             Done: new SkillReadiness(review.Committed > 0 && allLogged, null, []),
             Reject: new SkillReadiness(false, rejectStop, []));
     }
+
+    private static readonly string[] AuthoringDocs = ["intent", "spec", "plan"];
 
     private static string? PinValue(string? text, string file, string field)
     {

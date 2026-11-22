@@ -58,6 +58,7 @@ public sealed class RedRecorder(
             .ToList();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public async Task<RedRecordResult> RecordAsync(EventContext ctx, string task)
     {
         var planPath = Path.GetRelativePath(ctx.Master, Path.Combine(ctx.Folder, "plan.md")).Replace('\\', '/');
