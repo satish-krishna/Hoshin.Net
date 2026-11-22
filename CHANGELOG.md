@@ -12,6 +12,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Changed-line coverage gate (`.github/workflows/ci.yml`):** Collects full-suite coverage (including child `dotnet hoshin.dll` black-box processes) with `dotnet-coverage`, enforces ≥ 90% changed-line coverage on `src/**` via `diff-cover`, and uploads the HTML report artifact.
 - **Active-run guard & trace scoping (T01):** `hoshin guard` and `hooks.jsonl` tracing now apply strictly to repositories with an active, non-stale `.git/hoshin/run.json` matching the calling session (or its active subagent), stay silent without creating `.git/hoshin/` outside active runs, and log static denials when active.
 - **Human-only approval and acceptance (T02):** Generated `SKILL.md` wrappers for `accept` and `done` emit `disable-model-invocation: true`, and `HookOrchestrator` rejects model-sourced `accept`/`done` invocations (`PostToolUse(Skill)` or `SKILL.md` reads) without changing state.
+- **Harness config & hoshin state protection (T03):** `GuardTamperingProtection` denies writes to `.claude/settings*.json`, `.claude/hooks/`, `.git/hooks/`, `<git-common-dir>/hoshin`, and shell write commands targeting git/hoshin state tokens; `HookOrchestrator.HandleStop` blocks if `run.json` is deleted mid-run while an unfinished ledger exists.
 
 ## [2.0.0] - 2026-11-21
 

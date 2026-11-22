@@ -108,7 +108,7 @@ public sealed class GuardCommand : IHoshinCommand
         }
 
         // 2. Static rules apply to every tool call in the active run and are traced against repo.
-        var staticReason = StaticRefusal(ev);
+        var staticReason = StaticRefusal(ev, repo);
         if (staticReason is not null)
         {
             return (repo, $"hoshin: {staticReason}");
@@ -284,11 +284,17 @@ public sealed class GuardCommand : IHoshinCommand
         return $"While the {label} is written only {rels} may change.";
     }
 
-    private static string? StaticRefusal(NormalizedHookEvent ev)
+    private static string? StaticRefusal(NormalizedHookEvent ev, WorkflowRepo? repo = null)
     {
         if (ev.ToolName is not null && EditTools.Contains(ev.ToolName))
         {
             var path = ev.FilePath ?? "";
+            var tamperEdit = GuardTamperingProtection.CheckEditPath(path, repo);
+            if (tamperEdit is not null)
+            {
+                return tamperEdit;
+            }
+
             foreach (var (pattern, what) in Protected)
             {
                 if (pattern.IsMatch(path))
@@ -306,6 +312,12 @@ public sealed class GuardCommand : IHoshinCommand
         }
 
         var command = ev.CommandLine ?? "";
+        var tamperShell = GuardTamperingProtection.CheckShellCommand(command, Writes, repo);
+        if (tamperShell is not null)
+        {
+            return tamperShell;
+        }
+
         foreach (var (pattern, why) in Rules)
         {
             if (pattern.IsMatch(command))

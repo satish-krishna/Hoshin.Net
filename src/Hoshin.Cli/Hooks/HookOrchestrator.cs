@@ -230,8 +230,19 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
     public (string? Output, string Decision) HandleStop(NormalizedHookEvent ev, string? rolesRoot)
     {
         var repo = ResolveRepo(ev);
-        if (repo is null || !File.Exists(repo.RunMarkerPath))
+        if (repo is null)
         {
+            return (_adapter.EmptyOutput(ev.Harness), "no run");
+        }
+
+        if (!File.Exists(repo.RunMarkerPath))
+        {
+            var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, rolesRoot);
+            if (tamper is not null)
+            {
+                return (_adapter.BlockStopOutput(ev.Harness, tamper), "block: run.json tampering detected");
+            }
+
             return (_adapter.EmptyOutput(ev.Harness), "no run");
         }
 
