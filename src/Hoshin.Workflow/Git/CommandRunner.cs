@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Hoshin.Workflow.Common;
 
 namespace Hoshin.Workflow.Git;
 
@@ -50,7 +51,8 @@ public sealed class ProcessCommandRunner : ICommandRunner
             return new CommandOutcome(false, false, null, "", "", null, "empty command");
         }
 
-        var psi = new ProcessStartInfo(request.Argv[0])
+        var executable = ProcessExecutable.Resolve(request.Argv[0], request.WorkingDirectory);
+        var psi = new ProcessStartInfo(executable)
         {
             WorkingDirectory = request.WorkingDirectory,
             RedirectStandardOutput = true,

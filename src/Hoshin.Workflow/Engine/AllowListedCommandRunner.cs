@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Hoshin.Workflow.Common;
 
 namespace Hoshin.Workflow.Engine;
 
@@ -53,7 +54,8 @@ public sealed class AllowListedCommandRunner : IAllowListedCommandRunner
         }
 
         var start = Stopwatch.StartNew();
-        var psi = new ProcessStartInfo(argv[0])
+        var executable = ProcessExecutable.Resolve(argv[0], workingDirectory);
+        var psi = new ProcessStartInfo(executable)
         {
             WorkingDirectory = workingDirectory,
             RedirectStandardOutput = true,
