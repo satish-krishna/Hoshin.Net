@@ -139,7 +139,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T09 | P0 | Serialize evaluate-and-commit | E3 | — | done |
 | T10 | P0 | Make `migrate` fail closed | L1, L2, L3 | — | done |
 | T12 | P0 | `Jsonc.TryParse` accepts empty and comment-only text | L4 | — | done |
-| T13 | P0 | Rewrite `FrontMatterEdit.Set` on real JSONC tokens | L5 | — | open |
+| T13 | P0 | Rewrite `FrontMatterEdit.Set` on real JSONC tokens | L5 | — | done |
 | T14 | P1 | Harden `RedClassifier` | E4 | — | open |
 | T15 | P1 | Fix test-path classification and give it unit tests | E5 | — | open |
 | T16 | P1 | Resolve relative executables against the working directory | E6 | — | open |
