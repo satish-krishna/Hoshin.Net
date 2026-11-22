@@ -241,6 +241,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         }
 
         var (verdict, step) = JudgeAndAdvance(repo, rolesRoot, current, repo.ReadRunMarker()?.SessionId);
+        QueuePendingReport(repo, ReportVerdict(current, verdict));
         return (_adapter.EmptyOutput(ev.Harness), $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
     }
 
@@ -284,14 +285,14 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), $"allow: waiting for {trackedAgentId}");
         }
 
-        var verdictReport = "";
-        var justJudged = false;
+        var verdictReport = DrainPendingReport(repo);
+        var hasReport = verdictReport.Length > 0;
         if (current is { Task: not null } && trackedAgentId is not null &&
             !repo.ReadLedger().Verdicts.Any(v => v.Task == current.Task && v.Attempt == current.Attempt))
         {
             var (verdict, _) = JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId);
-            verdictReport = ReportVerdict(current, verdict);
-            justJudged = true;
+            verdictReport += ReportVerdict(current, verdict);
+            hasReport = true;
         }
 
         if (current?.Kind == "Review")
@@ -323,11 +324,11 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
 
                 return (_adapter.BlockStopOutput(ev.Harness, verdictReport + HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce)), $"block {blocks}: {step.Kind}");
 
-            case NeedsApproval when justJudged && ev.IsAntigravity:
+            case NeedsApproval when hasReport:
                 return (_adapter.BlockStopOutput(ev.Harness, verdictReport + HookInstructions.For(step, ev.Harness)), "continue: report NeedsApproval");
 
             case Done:
-                if (justJudged && ev.IsAntigravity)
+                if (hasReport)
                 {
                     return (_adapter.BlockStopOutput(ev.Harness, verdictReport + HookInstructions.For(step, ev.Harness)), "continue: report Done");
                 }
@@ -548,6 +549,34 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
     }
 
     private static string LastStartPath(WorkflowRepo repo) => Path.Combine(repo.HoshinDir, "last-start.txt");
+
+    private static string PendingReportPath(WorkflowRepo repo) => Path.Combine(repo.HoshinDir, "pending-report.txt");
+
+    private static void QueuePendingReport(WorkflowRepo repo, string report)
+    {
+        using var gate = repo.AcquireRunLock();
+        Directory.CreateDirectory(repo.HoshinDir);
+        File.AppendAllText(PendingReportPath(repo), report);
+    }
+
+    private static string DrainPendingReport(WorkflowRepo repo)
+    {
+        var path = PendingReportPath(repo);
+        if (!File.Exists(path))
+        {
+            return "";
+        }
+
+        using var gate = repo.AcquireRunLock();
+        if (!File.Exists(path))
+        {
+            return "";
+        }
+
+        var text = File.ReadAllText(path);
+        TryDelete(path);
+        return text;
+    }
 
     private static string StopsPath(WorkflowRepo repo) => Path.Combine(repo.HoshinDir, "stop-blocks");
 

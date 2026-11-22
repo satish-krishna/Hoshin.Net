@@ -357,7 +357,7 @@ public sealed class DualHarnessHookIntegrationTests
         Assert.True(toy.Repo.ReadLedger().Verdicts.Single().Passed);
         Assert.Null(toy.Repo.ReadLedger().ActiveSubagent);
 
-        // Next parent Stop blocks with T2 brief.
+        // Next parent Stop blocks with T1 verdict report AND T2 brief.
         var (_, nextStop, _) = RunHook(toy.RepoDir, "hook stop", new
         {
             hook_event_name = "Stop",
@@ -367,7 +367,54 @@ public sealed class DualHarnessHookIntegrationTests
         });
         var stopDoc = JsonDocument.Parse(nextStop).RootElement;
         Assert.Equal("block", stopDoc.GetProperty("decision").GetString());
-        Assert.Contains("build task T2", stopDoc.GetProperty("reason").GetString());
+        var t1Reason = stopDoc.GetProperty("reason").GetString()!;
+        Assert.Contains("T1 attempt 1 is accepted", t1Reason);
+        Assert.Contains("build task T2", t1Reason);
+
+        // Run T2 async through SubagentStop -> next parent Stop blocks once with T2 verdict + "ready for approval".
+        var t2Nonce = toy.Repo.ReadStep()!.DispatchNonce;
+        RunHook(toy.RepoDir, "hook result", new
+        {
+            hook_event_name = "PostToolUse",
+            cwd = toy.RepoDir,
+            session_id = "claude-async",
+            tool_name = "Agent",
+            tool_input = new { prompt = t2Nonce },
+            tool_response = new { isAsync = true, status = "async_launched", agentId = "agent-t2" },
+        });
+        toy.WriteTaskWork("T2");
+        RunHook(toy.RepoDir, "hook subagent-stop", new
+        {
+            hook_event_name = "SubagentStop",
+            cwd = toy.RepoDir,
+            session_id = "claude-async",
+            agent_id = "agent-t2",
+        });
+
+        var (_, approvalStop, _) = RunHook(toy.RepoDir, "hook stop", new
+        {
+            hook_event_name = "Stop",
+            cwd = toy.RepoDir,
+            session_id = "claude-async",
+            background_tasks = Array.Empty<object>(),
+        });
+        Assert.False(string.IsNullOrWhiteSpace(approvalStop), "Expected parent Stop to report T2 verdict and NeedsApproval once");
+        var approvalDoc = JsonDocument.Parse(approvalStop).RootElement;
+        Assert.Equal("block", approvalDoc.GetProperty("decision").GetString());
+        var approvalReason = approvalDoc.GetProperty("reason").GetString()!;
+        Assert.Contains("T2 attempt 1 is accepted", approvalReason);
+        Assert.Contains("ready for approval", approvalReason);
+        Assert.Contains("/hoshin:accept", approvalReason);
+
+        // Following Stop at NeedsApproval allows cleanly.
+        var (_, secondApprovalStop, _) = RunHook(toy.RepoDir, "hook stop", new
+        {
+            hook_event_name = "Stop",
+            cwd = toy.RepoDir,
+            session_id = "claude-async",
+            background_tasks = Array.Empty<object>(),
+        });
+        Assert.Equal("", secondApprovalStop);
     }
 
     // =========================================================================

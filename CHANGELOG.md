@@ -32,6 +32,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Session-scoped hook & guard isolation (T22):** Extracted shared `HookSessionScope.IsRunSession` so `HookOrchestrator` (`HandleStart`, `HandleResult`, `HandleSubagentStop`, `HandleStop`) and `GuardCommand` act strictly for the owning run session or its registered active subagent, treating missing `session_id` and unrelated sessions/agents as outside the run.
 - **Non-intrusive `setup`/`context` hooks (T23):** Moved the `setup`/`context` early return in `HookOrchestrator.HandleStart` above active-run checks, `ReadState`, `WriteRunMarker`, `ResetStops`, and step writes so `setup`/`context` work in repositories without a change plan and never take over an active run.
 - **Dispatched subagent nonce verification (T24):** Embedded a per-attempt dispatch nonce (`<!-- hoshin:<task>:attempt-<n>:<8 hex> -->`) in `CurrentStep.DispatchNonce` and `HookInstructions.For`, and updated `HookOrchestrator.HandleResult` to judge or register only subagents whose prompt contains the active nonce (ignoring Explore/research subagents without burning attempts).
+- **Async verdict & `NeedsApproval` reporting (T25):** `HookOrchestrator.HandleSubagentStop` now queues the verdict report into `.git/hoshin/pending-report.txt` under the run lock, and `HandleStop` drains and prepends it on the parent's next Stop, reporting `NeedsApproval` or `Done` once before allowing the following Stop cleanly.
 
 ## [2.0.0] - 2026-11-21
 
