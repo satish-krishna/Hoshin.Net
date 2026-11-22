@@ -18,6 +18,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Change-folder & shell-redirect protection (T06):** Protected the active change folder during `Implement`/`Retry` in both `WorkflowRunner.IsProtectedPath` and `GuardCommand`, and added `ShellWriteTargets` to enforce Red-phase and single-document write locks on shell `>`, `>>`, and `tee` targets.
 - **Per-change workflow ledger (T07):** Scoped the workflow ledger to `.git/hoshin/changes/<change>/workflow-ledger.json` via `ChangeLedgerPaths` so task IDs across different changes never collide, with one-time migration of legacy `.git/hoshin/workflow-ledger.json` when `run.json` names a change.
 - **Task path isolation & NUL-delimited status parsing (T08):** `WorkingTreeSnapshot` captures pre-issue dirty/untracked file digests and staged-index state on `WorkflowIssued`, parses `git status --porcelain=v1 -z -uall`, refuses attempts when the index had staged changes before issue, excludes unchanged pre-issue files, commits with explicit `-- <paths>` pathspecs, and resets `--mixed` to `startHead` on any failure after staging begins.
+- **Serialized task evaluation and commit (T09):** Added `FileLock` and a run-level lock (`.git/hoshin/run.lock`) held across `WorkflowRunner.EvaluateAndCommitTask`, re-reading the live ledger inside the lock to return any existing verdict before touching the working tree, worktree, or git history.
 
 ## [2.0.0] - 2026-11-21
 

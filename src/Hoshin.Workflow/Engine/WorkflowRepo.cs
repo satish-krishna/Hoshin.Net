@@ -36,6 +36,8 @@ public sealed class WorkflowRepo
 
     public string RunMarkerPath => Path.Combine(HoshinDir, "run.json");
 
+    public string RunLockPath => Path.Combine(HoshinDir, "run.lock");
+
     public string PendingContextPath => Path.Combine(HoshinDir, "pending-context.txt");
 
     public string HooksLogPath => Path.Combine(HoshinDir, "hooks.jsonl");
@@ -347,21 +349,11 @@ public sealed class WorkflowRepo
         return result;
     }
 
-    private FileStream AcquireLock()
-    {
-        var path = Path.Combine(HoshinDir, "workflow-ledger.lock");
-        for (var i = 0; ; i++)
-        {
-            try
-            {
-                return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-            }
-            catch (IOException) when (i < 200)
-            {
-                Thread.Sleep(25);
-            }
-        }
-    }
+    public FileStream AcquireRunLock(TimeSpan? timeout = null) =>
+        FileLock.Acquire(RunLockPath, timeout ?? TimeSpan.FromMinutes(10));
+
+    private FileStream AcquireLock() =>
+        FileLock.Acquire(Path.Combine(HoshinDir, "workflow-ledger.lock"), TimeSpan.FromSeconds(5));
 
     private void WriteAtomic(string path, string text)
     {

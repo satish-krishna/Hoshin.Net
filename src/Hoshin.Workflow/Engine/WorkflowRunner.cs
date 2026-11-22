@@ -177,17 +177,19 @@ public sealed partial class WorkflowRunner(
     {
         var plan = state.Plan;
         var task = plan.Tasks.First(t => t.Id == taskId);
-        var startHead = repo.Head();
 
-        var existing = state.Ledger.Verdicts.FirstOrDefault(v => v.Task == taskId && v.Attempt == attempt);
+        using var runLock = repo.AcquireRunLock();
+        var liveLedger = repo.ReadLedger();
+        var existing = liveLedger.Verdicts.FirstOrDefault(v => v.Task == taskId && v.Attempt == attempt);
         if (existing is not null)
         {
             return existing;
         }
 
+        var startHead = repo.Head();
         ClearActiveSubagent(repo);
 
-        if (WorkflowHeadGuard.HasUnexpectedHeadMove(state.Ledger, taskId, startHead))
+        if (WorkflowHeadGuard.HasUnexpectedHeadMove(liveLedger, taskId, startHead))
         {
             return RecordVerdict(repo, new WorkflowVerdict(
                 taskId,
@@ -199,7 +201,7 @@ public sealed partial class WorkflowRunner(
                 DateTimeOffset.UtcNow));
         }
 
-        var issued = state.Ledger.Issued.FirstOrDefault(x => x.Task == taskId && x.Attempt == attempt);
+        var issued = liveLedger.Issued.FirstOrDefault(x => x.Task == taskId && x.Attempt == attempt);
         if (issued?.IndexHadStagedChanges == true)
         {
             return RecordVerdict(repo, new WorkflowVerdict(
