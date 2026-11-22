@@ -848,4 +848,85 @@ public sealed class DocumentMigrationTests
             }
         }
     }
+
+    // =========================================================================
+    // 5. Fail-closed migration tests (T10)
+    // =========================================================================
+
+    [Theory]
+    [InlineData("multiline-double-quoted", "version: 1\nnotes: \"first line\n  second line\"\nbase: main\nbranch: feat/x\n")]
+    [InlineData("multiline-single-quoted", "version: 1\nnotes: 'first line\n  second line'\nbase: main\n")]
+    [InlineData("anchor", "version: 1\nbase: &b main\nscope: demo\n")]
+    [InlineData("alias", "version: 1\nbase: *b\nscope: demo\n")]
+    [InlineData("tag", "version: 1\ncount: !!str 42\nscope: demo\n")]
+    [InlineData("sequence-literal-block", "version: 1\nitems:\n  - |\n    line one\n    line two\n")]
+    [InlineData("sequence-folded-block", "version: 1\nitems:\n  - >\n    line one\n    line two\n")]
+    [InlineData("nested-sequence", "version: 1\nmatrix:\n  - - a\n    - b\n")]
+    [InlineData("duplicate-keys", "version: 1\nbase: main\nbase: develop\n")]
+    [InlineData("leading-doc-separator", "---\nversion: 1\nscope: demo\nbase: main\n")]
+    [InlineData("unconsumed-after-flow-root", "{ version: 1 }\nbase: main\n")]
+    [InlineData("unconsumed-bad-indent", "version: 1\n  stray: value\nbase: main\n")]
+    [InlineData("non-flow-bracket-title", "version: 1\ntitle: [WIP] Fix\nbase: main\n")]
+    public void MigrateChangeYml_UnsupportedOrAmbiguousYaml_RefusesAndLeavesSourceUntouched(string label, string yaml)
+    {
+        using var tmp = new TempDir($"hoshin-t10-{label}-");
+        var changeYml = Path.Combine(tmp.Path, "change.yml");
+        var changeJsonc = Path.Combine(tmp.Path, "change.jsonc");
+        File.WriteAllText(changeYml, yaml);
+        var originalBytes = File.ReadAllBytes(changeYml);
+
+        // Dry-run reports refused.
+        var dry = DocumentMigrator.Default.MigratePaths([changeYml], write: false);
+        var dryItem = Assert.Single(dry.Files);
+        Assert.True(dryItem.Status == "refused", $"[{label}] dry-run expected refused, got {dryItem.Status} ({dryItem.Detail})");
+        Assert.False(string.IsNullOrWhiteSpace(dryItem.Detail));
+        Assert.False(File.Exists(changeJsonc));
+
+        // Write mode refuses, leaves source byte-identical, and writes no target.
+        var res = DocumentMigrator.Default.MigratePaths([changeYml], write: true);
+        var item = Assert.Single(res.Files);
+        Assert.True(item.Status == "refused", $"[{label}] write expected refused, got {item.Status} ({item.Detail})");
+        Assert.False(string.IsNullOrWhiteSpace(item.Detail));
+        Assert.True(File.Exists(changeYml), $"[{label}] source change.yml must still exist");
+        Assert.Equal(originalBytes, File.ReadAllBytes(changeYml));
+        Assert.False(File.Exists(changeJsonc), $"[{label}] change.jsonc must not be written");
+    }
+
+    [Fact]
+    public void YamlConverter_PlainScalarWithApostropheAndDoubleQuotes_StripsInlineCommentCleanly()
+    {
+        const string yaml = """
+            title: It's a "test" # note
+            system: demo
+            """;
+
+        var jsonc = YamlToJsoncConverter.Default.ConvertFrontMatter(yaml);
+        Assert.True(Jsonc.TryParse(jsonc, out var parsed, out var err), err);
+        Assert.NotNull(parsed);
+        Assert.Equal("It's a \"test\"", parsed!.Value.GetProperty("title").GetString());
+        Assert.Contains("// note", jsonc, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MigrateMarkdown_DuplicateKeyInFrontMatter_RefusesAndLeavesFileUntouched()
+    {
+        using var tmp = new TempDir("hoshin-t10-md-");
+        var intentPath = Path.Combine(tmp.Path, "intent.md");
+        const string md = """
+            ---
+            title: One
+            title: Two
+            system: demo
+            ---
+
+            # Intent: Dup
+            """;
+        File.WriteAllText(intentPath, md);
+        var originalBytes = File.ReadAllBytes(intentPath);
+
+        var res = DocumentMigrator.Default.MigratePaths([intentPath], write: true);
+        var item = Assert.Single(res.Files);
+        Assert.Equal("refused", item.Status);
+        Assert.Equal(originalBytes, File.ReadAllBytes(intentPath));
+    }
 }

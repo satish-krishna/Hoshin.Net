@@ -39,8 +39,11 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
     public string ConvertFrontMatter(string yamlText, bool forceLayout2 = false) =>
         ConvertBlock(yamlText, new YamlConversionOptions(DefaultStringKeys, ForceLayout2: forceLayout2));
 
-    public string ConvertChangeYaml(string yamlText) =>
-        ConvertBlock(yamlText, new YamlConversionOptions(DefaultStringKeys, ForceLayout2: false, RootLeadingCommentsOutside: true));
+    public string ConvertChangeYaml(string yamlText)
+    {
+        MigrationGuard.RejectDocumentSeparator(yamlText, "change.yml");
+        return ConvertBlock(yamlText, new YamlConversionOptions(DefaultStringKeys, ForceLayout2: false, RootLeadingCommentsOutside: true));
+    }
 
     public string ConvertBlock(string yamlText, YamlConversionOptions? options = null)
     {
@@ -121,10 +124,13 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
 
             if (trimmed.StartsWith('[') || trimmed.StartsWith('{'))
             {
-                var (valPart, comment) = SplitInlineComment(trimmed);
+                var lineNumber = _pos + 1;
+                var (valPart, _) = SplitInlineComment(trimmed);
                 _pos++;
-                var flow = ParseFlowValue(valPart, forceString: false);
+                var full = CollectMultilineFlow(valPart);
+                var flow = ParseFlowValue(full, forceString: false, lineNumber);
                 var trailing = CollectCommentsAndBlanks();
+                EnsureAllLinesConsumed();
                 if (flow is YamlMapping fm)
                 {
                     return fm with { LeadingComments = leading, TrailingComments = trailing };
@@ -141,16 +147,29 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             if (IsSequenceItem(trimmed))
             {
                 var seq = ParseBlockSequence(indent, forceString: false);
-                return seq with { LeadingComments = [.. leading, .. seq.LeadingComments] };
+                var trailing = CollectCommentsAndBlanks();
+                EnsureAllLinesConsumed();
+                return seq with { LeadingComments = [.. leading, .. seq.LeadingComments], TrailingComments = [.. seq.TrailingComments, .. trailing] };
             }
 
             var map = ParseBlockMapping(indent, forceString: false);
-            return map with { LeadingComments = [.. leading, .. map.LeadingComments] };
+            var mapTrailing = CollectCommentsAndBlanks();
+            EnsureAllLinesConsumed();
+            return map with { LeadingComments = [.. leading, .. map.LeadingComments], TrailingComments = [.. map.TrailingComments, .. mapTrailing] };
+        }
+
+        private void EnsureAllLinesConsumed()
+        {
+            if (_pos < lines.Count)
+            {
+                throw new FormatException($"YAML line {_pos + 1} was not consumed: {lines[_pos].Trim()}");
+            }
         }
 
         private YamlMapping ParseBlockMapping(int minIndent, bool forceString)
         {
             var entries = new List<YamlEntry>();
+            var seenKeys = new HashSet<string>(StringComparer.Ordinal);
             var pendingComments = new List<string>();
 
             while (_pos < lines.Count)
@@ -191,9 +210,15 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
                     throw new FormatException($"YAML line {_pos + 1} is not a key-value pair: {trimmed}");
                 }
 
+                var lineNumber = _pos + 1;
+                if (!seenKeys.Add(key))
+                {
+                    throw new FormatException($"YAML line {lineNumber}: duplicate key '{key}'");
+                }
+
                 _pos++;
                 var childForceString = forceString || stringKeys.Contains(key);
-                var (value, inlineComment) = ParseValueAfterColon(rest, indent, childForceString);
+                var (value, inlineComment) = ParseValueAfterColon(rest, indent, childForceString, lineNumber);
                 entries.Add(new YamlEntry(key, value, pendingComments, inlineComment));
                 pendingComments = [];
             }
@@ -237,43 +262,64 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
                 var afterDash = trimmed.Length == 1 ? "" : trimmed[2..];
                 var itemContentIndent = indent + 2;
                 _pos++;
+                var itemLineNumber = _pos;
 
-                if (string.IsNullOrWhiteSpace(afterDash) || afterDash.TrimStart().StartsWith('#'))
-                {
-                    var itemInline = afterDash.TrimStart().StartsWith('#') ? StripCommentHash(afterDash.TrimStart()) : null;
-                    var nested = ParseIndentedNode(indent, forceString);
-                    items.Add(new YamlSequenceItem(nested, pendingComments, itemInline));
-                    pendingComments = [];
-                    continue;
-                }
-
-                var afterTrimmed = afterDash.TrimStart();
-                var extraSpaces = afterDash.Length - afterTrimmed.Length;
-                var effectiveIndent = itemContentIndent + extraSpaces;
-
-                if (TrySplitKeyValue(afterTrimmed, out var key, out var rest))
-                {
-                    var childForceString = forceString || stringKeys.Contains(key);
-                    var (firstVal, firstInline) = ParseValueAfterColon(rest, effectiveIndent, childForceString);
-                    var mapEntries = new List<YamlEntry> { new(key, firstVal, [], firstInline) };
-                    var restMap = ParseBlockMapping(effectiveIndent, forceString);
-                    mapEntries.AddRange(restMap.Entries);
-                    items.Add(new YamlSequenceItem(new YamlMapping(mapEntries, [], restMap.TrailingComments), pendingComments, null));
-                    pendingComments = [];
-                }
-                else
-                {
-                    var (valPart, comment) = SplitInlineComment(afterTrimmed);
-                    var val = ParseInlineValue(valPart, effectiveIndent, forceString);
-                    items.Add(new YamlSequenceItem(val, pendingComments, comment));
-                    pendingComments = [];
-                }
+                items.Add(ParseSequenceItem(afterDash, indent, itemContentIndent, itemLineNumber, forceString, pendingComments));
+                pendingComments = [];
             }
 
             return new YamlSequence(items, IsFlow: false, [], pendingComments);
         }
 
-        private (YamlNode Value, string? InlineComment) ParseValueAfterColon(string rest, int keyIndent, bool forceString)
+        private YamlSequenceItem ParseSequenceItem(
+            string afterDash,
+            int seqIndent,
+            int itemContentIndent,
+            int itemLineNumber,
+            bool forceString,
+            List<string> pendingComments)
+        {
+            if (string.IsNullOrWhiteSpace(afterDash) || afterDash.TrimStart().StartsWith('#'))
+            {
+                var itemInline = afterDash.TrimStart().StartsWith('#') ? StripCommentHash(afterDash.TrimStart()) : null;
+                var nested = ParseIndentedNode(seqIndent, forceString);
+                return new YamlSequenceItem(nested, pendingComments, itemInline);
+            }
+
+            var afterTrimmed = afterDash.TrimStart();
+            var effectiveIndent = itemContentIndent + (afterDash.Length - afterTrimmed.Length);
+
+            if (IsSequenceItem(afterTrimmed))
+            {
+                throw new FormatException($"YAML line {itemLineNumber}: nested sequence (- - ...) is not supported");
+            }
+
+            if (TrySplitKeyValue(afterTrimmed, out var key, out var rest))
+            {
+                var childForceString = forceString || stringKeys.Contains(key);
+                var (firstVal, firstInline) = ParseValueAfterColon(rest, effectiveIndent, childForceString, itemLineNumber);
+                var mapEntries = new List<YamlEntry> { new(key, firstVal, [], firstInline) };
+                var restMap = ParseBlockMapping(effectiveIndent, forceString);
+                if (restMap.Entries.Any(e => e.Key == key))
+                {
+                    throw new FormatException($"YAML line {itemLineNumber}: duplicate key '{key}'");
+                }
+
+                mapEntries.AddRange(restMap.Entries);
+                return new YamlSequenceItem(new YamlMapping(mapEntries, [], restMap.TrailingComments), pendingComments, null);
+            }
+
+            var (valPart, comment) = SplitInlineComment(afterTrimmed);
+            if (BlockScalarHeaderRegex.IsMatch(valPart))
+            {
+                throw new FormatException($"YAML line {itemLineNumber}: block scalar inside sequence (- {valPart}) is not supported");
+            }
+
+            var val = ParseInlineValue(valPart, effectiveIndent, forceString, itemLineNumber);
+            return new YamlSequenceItem(val, pendingComments, comment);
+        }
+
+        private (YamlNode Value, string? InlineComment) ParseValueAfterColon(string rest, int keyIndent, bool forceString, int lineNumber)
         {
             var trimmed = rest.TrimStart();
             if (trimmed.Length == 0 || trimmed.StartsWith('#'))
@@ -284,13 +330,14 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             }
 
             var (valPart, comment) = SplitInlineComment(trimmed);
+            MigrationGuard.RejectUnsupportedIndicator(valPart, lineNumber);
             if (BlockScalarHeaderRegex.IsMatch(valPart))
             {
                 var text = ParseBlockScalar(valPart, keyIndent);
                 return (new YamlScalar(text, ScalarStyle.Block, ForceString: true), comment);
             }
 
-            var node = ParseInlineValue(valPart, keyIndent, forceString);
+            var node = ParseInlineValue(valPart, keyIndent, forceString, lineNumber);
             return (node, comment);
         }
 
@@ -348,8 +395,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             var nextTrimmed = nextLine.TrimStart();
             if (IsSequenceItem(nextTrimmed))
             {
-                var seq = ParseBlockSequence(nextIndent, forceString);
-                return seq with { LeadingComments = [.. leading, .. seq.LeadingComments] };
+                throw new FormatException($"YAML line {_pos + 1}: nested sequence is not supported");
             }
 
             if (TrySplitKeyValue(nextTrimmed, out _, out _))
@@ -358,26 +404,31 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
                 return map with { LeadingComments = [.. leading, .. map.LeadingComments] };
             }
 
+            var valLineNumber = _pos + 1;
             _pos++;
             var (valPart, _) = SplitInlineComment(nextTrimmed);
-            return ParseInlineValue(valPart, nextIndent, forceString);
+            return ParseInlineValue(valPart, nextIndent, forceString, valLineNumber);
         }
 
-        private YamlNode ParseInlineValue(string valPart, int keyIndent, bool forceString)
+        private YamlNode ParseInlineValue(string valPart, int keyIndent, bool forceString, int lineNumber)
         {
+            MigrationGuard.RejectUnsupportedIndicator(valPart, lineNumber);
+
             if (valPart.StartsWith('[') || valPart.StartsWith('{'))
             {
                 var full = CollectMultilineFlow(valPart);
-                return ParseFlowValue(full, forceString);
+                return ParseFlowValue(full, forceString, lineNumber);
             }
 
             if (valPart.StartsWith('"'))
             {
+                MigrationGuard.ValidateSingleLineQuotedScalar(valPart, lineNumber);
                 return new YamlScalar(UnquoteDouble(valPart), ScalarStyle.DoubleQuoted, ForceString: true);
             }
 
             if (valPart.StartsWith('\''))
             {
+                MigrationGuard.ValidateSingleLineQuotedScalar(valPart, lineNumber);
                 return new YamlScalar(UnquoteSingle(valPart), ScalarStyle.SingleQuoted, ForceString: true);
             }
 
@@ -483,14 +534,21 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             return depth <= 0;
         }
 
-        private YamlNode ParseFlowValue(string text, bool forceString)
+        private YamlNode ParseFlowValue(string text, bool forceString, int lineNumber)
         {
             var cursor = 0;
-            return ParseFlowNode(text, ref cursor, forceString);
+            var node = ParseFlowNode(text, ref cursor, forceString, lineNumber);
+            SkipWs(text, ref cursor);
+            if (cursor < text.Length)
+            {
+                throw new FormatException($"YAML line {lineNumber}: unexpected text after flow collection: {text}");
+            }
+
+            return node;
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: replaced in T11")]
-        private YamlNode ParseFlowNode(string text, ref int i, bool forceString)
+        private YamlNode ParseFlowNode(string text, ref int i, bool forceString, int lineNumber)
         {
             SkipWs(text, ref i);
             if (i >= text.Length)
@@ -502,26 +560,34 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             {
                 i++; // '['
                 var items = new List<YamlSequenceItem>();
+                var closed = false;
                 while (i < text.Length)
                 {
                     SkipWs(text, ref i);
-                    if (i >= text.Length || text[i] == ']')
+                    if (i >= text.Length)
                     {
-                        if (i < text.Length)
-                        {
-                            i++;
-                        }
-
                         break;
                     }
 
-                    var item = ParseFlowNode(text, ref i, forceString);
+                    if (text[i] == ']')
+                    {
+                        i++;
+                        closed = true;
+                        break;
+                    }
+
+                    var item = ParseFlowNode(text, ref i, forceString, lineNumber);
                     items.Add(new YamlSequenceItem(item, [], null));
                     SkipWs(text, ref i);
                     if (i < text.Length && text[i] == ',')
                     {
                         i++;
                     }
+                }
+
+                if (!closed)
+                {
+                    throw new FormatException($"YAML line {lineNumber}: unclosed flow sequence");
                 }
 
                 return new YamlSequence(items, IsFlow: true, [], []);
@@ -531,20 +597,29 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             {
                 i++; // '{'
                 var entries = new List<YamlEntry>();
+                var seenKeys = new HashSet<string>(StringComparer.Ordinal);
+                var closed = false;
                 while (i < text.Length)
                 {
                     SkipWs(text, ref i);
-                    if (i >= text.Length || text[i] == '}')
+                    if (i >= text.Length)
                     {
-                        if (i < text.Length)
-                        {
-                            i++;
-                        }
+                        break;
+                    }
 
+                    if (text[i] == '}')
+                    {
+                        i++;
+                        closed = true;
                         break;
                     }
 
                     var key = ParseFlowKey(text, ref i);
+                    if (!seenKeys.Add(key))
+                    {
+                        throw new FormatException($"YAML line {lineNumber}: duplicate key '{key}'");
+                    }
+
                     SkipWs(text, ref i);
                     if (i < text.Length && text[i] == ':')
                     {
@@ -552,7 +627,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
                     }
 
                     var childForce = forceString || stringKeys.Contains(key);
-                    var val = ParseFlowNode(text, ref i, childForce);
+                    var val = ParseFlowNode(text, ref i, childForce, lineNumber);
                     entries.Add(new YamlEntry(key, val, [], null));
                     SkipWs(text, ref i);
                     if (i < text.Length && text[i] == ',')
@@ -561,18 +636,25 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
                     }
                 }
 
+                if (!closed)
+                {
+                    throw new FormatException($"YAML line {lineNumber}: unclosed flow mapping");
+                }
+
                 return new YamlMapping(entries, [], []);
             }
 
             if (text[i] == '"')
             {
                 var raw = ReadFlowDoubleQuoted(text, ref i);
+                MigrationGuard.ValidateSingleLineQuotedScalar(raw, lineNumber);
                 return new YamlScalar(UnquoteDouble(raw), ScalarStyle.DoubleQuoted, ForceString: true);
             }
 
             if (text[i] == '\'')
             {
                 var raw = ReadFlowSingleQuoted(text, ref i);
+                MigrationGuard.ValidateSingleLineQuotedScalar(raw, lineNumber);
                 return new YamlScalar(UnquoteSingle(raw), ScalarStyle.SingleQuoted, ForceString: true);
             }
 
@@ -583,6 +665,7 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             }
 
             var scalar = text[start..i].Trim();
+            MigrationGuard.RejectUnsupportedIndicator(scalar, lineNumber);
             return new YamlScalar(scalar, ScalarStyle.Plain, forceString);
         }
 
@@ -814,68 +897,8 @@ public sealed class YamlToJsoncConverter : IYamlToJsoncConverter
             }
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: replaced in T11")]
-        private static (string Value, string? Comment) SplitInlineComment(string text)
-        {
-            var inSingle = false;
-            var inDouble = false;
-            var escape = false;
-
-            for (var i = 0; i < text.Length; i++)
-            {
-                var c = text[i];
-                if (escape)
-                {
-                    escape = false;
-                    continue;
-                }
-
-                if (inDouble)
-                {
-                    if (c == '\\')
-                    {
-                        escape = true;
-                    }
-                    else if (c == '"')
-                    {
-                        inDouble = false;
-                    }
-
-                    continue;
-                }
-
-                if (inSingle)
-                {
-                    if (c == '\'' && i + 1 < text.Length && text[i + 1] == '\'')
-                    {
-                        i++;
-                    }
-                    else if (c == '\'')
-                    {
-                        inSingle = false;
-                    }
-
-                    continue;
-                }
-
-                if (c == '"')
-                {
-                    inDouble = true;
-                }
-                else if (c == '\'')
-                {
-                    inSingle = true;
-                }
-                else if (c == '#' && (i == 0 || char.IsWhiteSpace(text[i - 1])))
-                {
-                    var val = text[..i].TrimEnd();
-                    var comment = StripCommentHash(text[i..]);
-                    return (val, comment);
-                }
-            }
-
-            return (text.TrimEnd(), null);
-        }
+        private static (string Value, string? Comment) SplitInlineComment(string text) =>
+            MigrationGuard.SplitInlineCommentSafe(text);
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: replaced in T11")]
         private static bool TrySplitKeyValue(string trimmed, out string key, out string rest)

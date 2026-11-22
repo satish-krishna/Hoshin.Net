@@ -94,7 +94,6 @@
                        "CA1502:src/Hoshin.Workflow/Migration/YamlToJsoncConverter.cs#EmitSequence",
                        "CA1502:src/Hoshin.Workflow/Migration/YamlToJsoncConverter.cs#ParseBlockScalar",
                        "CA1502:src/Hoshin.Workflow/Migration/YamlToJsoncConverter.cs#ParseFlowNode",
-                       "CA1502:src/Hoshin.Workflow/Migration/YamlToJsoncConverter.cs#static",
                        "CA1502:src/Hoshin.Workflow/Migration/YamlToJsoncConverter.cs#TrySplitKeyValue",
                        "CA1502:src/Hoshin.Workflow/Migration/YamlToJsoncConverter.cs#UnquoteDouble",
                        "CA1502:src/Hoshin.Workflow/Red/RedRecorder.cs#RecordAsync",

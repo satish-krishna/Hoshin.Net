@@ -164,11 +164,9 @@ public sealed class DocumentMigrator(IYamlToJsoncConverter? yamlConverter = null
             string converted;
             try
             {
-                converted = MigrateChangeYamlText(File.ReadAllText(file));
-                if (!Jsonc.TryParse(converted, out _, out var err))
-                {
-                    return new DocumentMigrationItem(file, target, "change", "refused", $"migrated change.jsonc is not valid JSONC: {err}");
-                }
+                var sourceYaml = File.ReadAllText(file);
+                converted = MigrateChangeYamlText(sourceYaml);
+                MigrationGuard.VerifyChangeYamlKeySet(sourceYaml, converted);
             }
             catch (Exception e)
             {
@@ -201,6 +199,8 @@ public sealed class DocumentMigrator(IYamlToJsoncConverter? yamlConverter = null
             {
                 return new DocumentMigrationItem(file, null, kindLabel, "current", null);
             }
+
+            MigrationGuard.VerifyMarkdownFrontMatterKeySet(original, migrated);
 
             if (!write)
             {
