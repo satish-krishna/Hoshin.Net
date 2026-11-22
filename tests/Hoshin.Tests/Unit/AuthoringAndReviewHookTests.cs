@@ -729,9 +729,8 @@ public sealed class AuthoringAndReviewHookTests
     public void Packager_EmitsOneLineSkillWrappersForAll10SkillsInBothBundles()
     {
         using var outDir = new TempDir("hoshin-pkg-");
-        IReadOnlyList<string> argv = OperatingSystem.IsWindows()
-            ? ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path]
-            : ["pwsh", "-NoProfile", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path];
+        IReadOnlyList<string> argv =
+            ["pwsh", "-NoProfile", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path];
         var res = ProcessCommandRunner.Default.Run(new CommandRequest(
             WorkingDirectory: RepoRoot,
             Argv: argv,
@@ -789,5 +788,23 @@ public sealed class AuthoringAndReviewHookTests
                 Assert.Equal(srcProc, File.ReadAllText(refProc));
             }
         }
+    }
+
+    [Fact]
+    public void Packager_WritesVersionFromParameterIntoPluginJson()
+    {
+        using var outDir = new TempDir("hoshin-pkg-ver-");
+        IReadOnlyList<string> argv =
+            ["pwsh", "-NoProfile", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path, "-Version", "9.8.7"];
+        var res = ProcessCommandRunner.Default.Run(new CommandRequest(
+            WorkingDirectory: RepoRoot,
+            Argv: argv,
+            Timeout: TimeSpan.FromMinutes(3)));
+        Assert.True(res.Ok, $"package.ps1 failed:\n{res.Stdout}\n{res.Stderr}");
+
+        var pluginJsonPath = Path.Combine(outDir.Path, "claude-code", ".claude-plugin", "plugin.json");
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(pluginJsonPath));
+        Assert.Equal("9.8.7", doc.RootElement.GetProperty("version").GetString());
+        Assert.True(File.Exists(Path.Combine(outDir.Path, "nuget", "Hoshin.Workflow.9.8.7.nupkg")));
     }
 }

@@ -33,7 +33,7 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
 2. Open a pull request.
 3. Merge only when CI is green on both Linux and Windows, by squash merge.
 
-`main` should be protected for everyone, administrators included: no direct pushes, no force pushes, and the CI and conventional-names checks required on a branch that is up to date with `main`. *(lands with T32 and T40)*
+`main` should be protected for everyone, administrators included: no direct pushes, no force pushes, and the CI and conventional-names checks required on a branch that is up to date with `main`. *(lands with T40)*
 
 ## 3. Design rules (SOLID)
 
@@ -137,7 +137,7 @@ These come from `AGENTS.md`, and they are tested where possible.
 - **T6. Isolation.** A test that needs a folder gets it from `TempDir` (`Unit/TestWorkspaceHelper.cs`) or `tempDir` (`BlackBox/helpers/temp.mjs`), which clean up after themselves. Tests never touch the developer's real repositories, home directory or global git config. A test that needs a git repository builds it with `TestGitFixture`.
 - **T7. No timing guesses.** Don't use `Thread.Sleep` to wait for something to happen. Wait on the condition with a timeout.
 - **T8. Frozen fixtures.** Files under `tests/Hoshin.Tests/Fixtures/` are never edited to make a test pass. A new real document gets a new fixture.
-- **T9. Both operating systems.** Tests pass on Linux and Windows. A test that can't run on one OS says why, in its skip reason. That is allowed only for genuinely OS-specific behavior, never as a way to get green. **[CI]** *(lands with T32)*
+- **T9. Both operating systems.** Tests pass on Linux and Windows. A test that can't run on one OS says why, in its skip reason. That is allowed only for genuinely OS-specific behavior, never as a way to get green. **[CI]**
 
 To run the tests:
 
@@ -160,7 +160,7 @@ dotnet test tests/Hoshin.Tests                                                  
 
 ## 9. Releases
 
-- The version lives in one place, `Directory.Build.props` (`VersionPrefix`). The packager writes it into `plugin.json`. *(lands with T32)*
+- The version lives in one place, `Directory.Build.props` (`VersionPrefix`). The packager writes it into `plugin.json`.
 - Bump it by semantic versioning, and add a `CHANGELOG.md` entry naming every new command, option and field exactly.
 - Run `packaging/package.ps1` and the full test suite on both operating systems before tagging.
 

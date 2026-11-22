@@ -123,7 +123,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 
 | ID | Priority | Title | Fixes | Needs | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| T32 | G | Cross-platform packager and CI (Linux + Windows) | §8.6 | — | open |
+| T32 | G | Cross-platform packager and CI (Linux + Windows) | §8.6 | — | done |
 | T33 | G | Warnings as errors, analyzers, complexity limit, `.editorconfig` | §8.6 | — | open |
 | T39 | G | Architecture tests with a shrinking baseline | CONTRIBUTING §3–§5 | — | open |
 | T40 | G | Conventional names check | CONTRIBUTING §1 | — | open |

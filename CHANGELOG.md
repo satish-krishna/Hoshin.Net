@@ -2,6 +2,11 @@
 
 All notable changes to **Hoshin.Net** are documented in this file.
 
+## [Unreleased]
+
+### Changed
+- **Cross-platform packager (`packaging/package.ps1`):** Uses `Join-Path` throughout, runs under `pwsh` on Linux and Windows, reads default version from `Directory.Build.props` (`VersionPrefix`), and stamps `-Version` into the generated Claude Code `plugin.json`.
+
 ## [2.0.0] - 2026-11-21
 
 ### Breaking Changes (`!`)

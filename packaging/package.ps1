@@ -9,13 +9,20 @@ Builds all Hoshin.Net v2.0.0 release artifacts under artifacts/:
 param(
     [string]$Configuration = "Release",
     [string]$OutputRoot = "",
-    [string]$Version = "2.0.0"
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    [xml]$props = Get-Content -Raw -Path (Join-Path $repoRoot "Directory.Build.props")
+    $Version = $props.Project.PropertyGroup.VersionPrefix.Trim()
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        throw "Could not read VersionPrefix from Directory.Build.props"
+    }
+}
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $repoRoot "artifacts"
 }
@@ -25,7 +32,7 @@ $portableLibDir = Join-Path $portableDir "lib"
 $portableSkillsDir = Join-Path $portableDir "skills"
 $nugetDir = Join-Path $OutputRoot "nuget"
 $claudeDir = Join-Path $OutputRoot "claude-code"
-$agyDir = Join-Path $OutputRoot "antigravity/.agents"
+$agyDir = Join-Path (Join-Path $OutputRoot "antigravity") ".agents"
 
 foreach ($dir in @($portableDir, $nugetDir, $claudeDir, $agyDir)) {
     if (Test-Path $dir) {
@@ -36,7 +43,7 @@ foreach ($dir in @($portableDir, $nugetDir, $claudeDir, $agyDir)) {
 New-Item -ItemType Directory -Force -Path $portableLibDir, $portableSkillsDir | Out-Null
 
 Write-Host "Publishing portable Hoshin.Cli ($Configuration, v$Version)..."
-& dotnet publish (Join-Path $repoRoot "src/Hoshin.Cli/Hoshin.Cli.csproj") `
+& dotnet publish (Join-Path (Join-Path (Join-Path $repoRoot "src") "Hoshin.Cli") "Hoshin.Cli.csproj") `
     -c $Configuration `
     -o $portableLibDir `
     --nologo `
@@ -55,10 +62,10 @@ foreach ($file in $requiredDlls) {
 }
 
 # Copy harness-neutral skills/ alongside portable lib/
-Copy-Item -Path (Join-Path $repoRoot "skills/*") -Destination $portableSkillsDir -Recurse -Force
+Copy-Item -Path (Join-Path (Join-Path $repoRoot "skills") "*") -Destination $portableSkillsDir -Recurse -Force
 
 Write-Host "Packing Hoshin.Workflow NuGet package ($Configuration, v$Version)..."
-& dotnet pack (Join-Path $repoRoot "src/Hoshin.Workflow/Hoshin.Workflow.csproj") `
+& dotnet pack (Join-Path (Join-Path (Join-Path $repoRoot "src") "Hoshin.Workflow") "Hoshin.Workflow.csproj") `
     -c $Configuration `
     -o $nugetDir `
     --nologo `
@@ -121,7 +128,7 @@ function Copy-BundleLibAndRoles {
     $rolesDir = Join-Path $TargetRoot "roles"
     New-Item -ItemType Directory -Force -Path $libDir, $rolesDir | Out-Null
     Copy-Item -Path (Join-Path $portableLibDir "*") -Destination $libDir -Recurse -Force
-    Copy-Item -Path (Join-Path $repoRoot "skills/*") -Destination $rolesDir -Recurse -Force
+    Copy-Item -Path (Join-Path (Join-Path $repoRoot "skills") "*") -Destination $rolesDir -Recurse -Force
 }
 
 function Write-SkillWrappers {
@@ -134,7 +141,7 @@ function Write-SkillWrappers {
         New-Item -ItemType Directory -Force -Path $refsDir | Out-Null
 
         # Copy the harness-neutral skill folder verbatim into references/.
-        $srcSkillDir = Join-Path $repoRoot "skills/$name"
+        $srcSkillDir = Join-Path (Join-Path $repoRoot "skills") $name
         Copy-Item -Path (Join-Path $srcSkillDir "*") -Destination $refsDir -Recurse -Force
 
         # Emit one-line SKILL.md wrapper (YAML front matter is required by Claude Code / Antigravity skill loaders).
@@ -145,13 +152,18 @@ function Write-SkillWrappers {
 
 # 1. Claude Code plugin bundle
 Write-Host "Generating Claude Code plugin bundle..."
-Copy-Item -Path (Join-Path $repoRoot "packaging/claude-code/*") -Destination $claudeDir -Recurse -Force
+Copy-Item -Path (Join-Path (Join-Path (Join-Path $repoRoot "packaging") "claude-code") "*") -Destination $claudeDir -Recurse -Force
+$pluginJsonPath = Join-Path (Join-Path $claudeDir ".claude-plugin") "plugin.json"
+$pluginManifest = Get-Content -Raw -Path $pluginJsonPath | ConvertFrom-Json
+$pluginManifest.version = $Version
+$pluginJson = ($pluginManifest | ConvertTo-Json -Depth 10) + "`n"
+[System.IO.File]::WriteAllText($pluginJsonPath, $pluginJson, [System.Text.UTF8Encoding]::new($false))
 Copy-BundleLibAndRoles -TargetRoot $claudeDir
 Write-SkillWrappers -SkillsTargetDir (Join-Path $claudeDir "skills")
 
 # 2. Google Antigravity (.agents/) bundle
 Write-Host "Generating Antigravity bundle..."
-Copy-Item -Path (Join-Path $repoRoot "packaging/antigravity/hooks.json") -Destination (Join-Path $agyDir "hooks.json") -Force
+Copy-Item -Path (Join-Path (Join-Path (Join-Path $repoRoot "packaging") "antigravity") "hooks.json") -Destination (Join-Path $agyDir "hooks.json") -Force
 Copy-BundleLibAndRoles -TargetRoot $agyDir
 Write-SkillWrappers -SkillsTargetDir (Join-Path $agyDir "skills")
 
