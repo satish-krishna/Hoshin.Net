@@ -127,49 +127,7 @@ public sealed class PlanReader(IJsonSchemaValidator? schemaValidator = null)
             else
             {
                 claimed.Add(block.Open);
-                if (!Jsonc.TryParse(block.Text, out var value, out var error))
-                {
-                    problems.Add(new Problem(file, block.Open + 1, $"task {h.Id} fields are not valid JSONC: {error}"));
-                }
-                else if (value is not { ValueKind: JsonValueKind.Object } f)
-                {
-                    problems.Add(new Problem(file, block.Open + 1, $"task {h.Id} fields are not a set of fields"));
-                }
-                else
-                {
-                    var errors = _schema.Validate(TaskSchemaName, f);
-                    foreach (var m in EmbeddedSchemaValidator.FormatMessages(errors, $"task {h.Id} fields", plural: true))
-                    {
-                        problems.Add(new Problem(file, block.Open + 1, m));
-                    }
-
-                    var id = Jsonc.String(f, "id");
-                    if (id is not null && id != h.Id)
-                    {
-                        problems.Add(new Problem(file, doc.KeyLine(block, "id"), $"heading says {h.Id}, fields say {id}"));
-                    }
-
-                    var repo = Jsonc.String(f, "repo");
-                    if (repo is not null)
-                    {
-                        if (allowedRepos is not null && !allowedRepos.Contains(repo))
-                        {
-                            problems.Add(new Problem(file, doc.KeyLine(block, "repo"), $"task {h.Id} names repository {repo}, not in system {system}"));
-                        }
-                    }
-
-                    task = task with
-                    {
-                        Repo = repo ?? "",
-                        DependsOn = Jsonc.Strings(f, "depends_on"),
-                        Uses = Jsonc.Strings(f, "uses"),
-                        Files = Jsonc.Strings(f, "files"),
-                        Covers = Jsonc.Strings(f, "covers"),
-                        Supports = Jsonc.Strings(f, "supports"),
-                        Test = Jsonc.Argv(f, "test"),
-                        Compile = Jsonc.Argv(f, "compile"),
-                    };
-                }
+                task = ApplyTaskFieldsBlock(doc, block, h.Id, file, problems, allowedRepos, system, task);
             }
 
             if (!task.Sections.Any(s => s.Title.Equals("tests", StringComparison.OrdinalIgnoreCase)))
@@ -182,6 +140,68 @@ public sealed class PlanReader(IJsonSchemaValidator? schemaValidator = null)
 
         return tasks;
     }
+
+    private ParsedTask ApplyTaskFieldsBlock(
+        Doc doc,
+        Block block,
+        string headingId,
+        string file,
+        List<Problem> problems,
+        IReadOnlyList<string>? allowedRepos,
+        string system,
+        ParsedTask task)
+    {
+        if (!Jsonc.TryParse(block.Text, out var value, out var error))
+        {
+            problems.Add(new Problem(file, block.Open + 1, $"task {headingId} fields are not valid JSONC: {error}"));
+            return task;
+        }
+
+        if (value is not { ValueKind: JsonValueKind.Object } f)
+        {
+            problems.Add(new Problem(file, block.Open + 1, $"task {headingId} fields are not a set of fields"));
+            return task;
+        }
+
+        var errors = _schema.Validate(TaskSchemaName, f);
+        foreach (var m in EmbeddedSchemaValidator.FormatMessages(errors, $"task {headingId} fields", plural: true))
+        {
+            problems.Add(new Problem(file, block.Open + 1, m));
+        }
+
+        var id = Jsonc.String(f, "id");
+        if (id is not null && id != headingId)
+        {
+            problems.Add(new Problem(file, doc.KeyLine(block, "id"), $"heading says {headingId}, fields say {id}"));
+        }
+
+        var repo = Jsonc.String(f, "repo");
+        if (repo is not null && allowedRepos is not null && !allowedRepos.Contains(repo))
+        {
+            problems.Add(new Problem(file, doc.KeyLine(block, "repo"), $"task {headingId} names repository {repo}, not in system {system}"));
+        }
+
+        return task with
+        {
+            Repo = repo ?? "",
+            DependsOn = Jsonc.Strings(f, "depends_on"),
+            Uses = Jsonc.Strings(f, "uses"),
+            Files = Jsonc.Strings(f, "files"),
+            Covers = Jsonc.Strings(f, "covers"),
+            Supports = Jsonc.Strings(f, "supports"),
+            Test = Jsonc.Argv(f, "test"),
+            Compile = Jsonc.Argv(f, "compile"),
+            Timeout = ReadOptionalPositiveInt(f, "timeout"),
+        };
+    }
+
+    private static int? ReadOptionalPositiveInt(JsonElement obj, string name) =>
+        obj.TryGetProperty(name, out var prop) &&
+        prop.ValueKind == JsonValueKind.Number &&
+        prop.TryGetInt32(out var value) &&
+        value >= 1
+            ? value
+            : null;
 
     private static List<TaskSection> ReadSections(Doc doc, int from, int end)
     {

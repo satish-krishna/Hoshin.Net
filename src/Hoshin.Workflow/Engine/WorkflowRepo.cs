@@ -153,13 +153,13 @@ public sealed class WorkflowRepo
     public WorkflowPlan? ReadPlan(PlanReader? planReader = null)
     {
         var reader = planReader ?? new PlanReader();
-        var (testPatterns, envAllow) = ReadMarkerBuildSettings();
+        var settings = MarkerBuildSettings.Read(Root);
         var planPath = Path.Combine(ChangeFolder, "plan.md");
         var changePath = Path.Combine(ChangeFolder, "change.jsonc");
 
         if (!File.Exists(planPath))
         {
-            return LoadPlanMetadataOnly(changePath, testPatterns, envAllow);
+            return LoadPlanMetadataOnly(changePath, settings);
         }
 
         var planDocStatus = DocumentStatus("plan.md");
@@ -171,14 +171,14 @@ public sealed class WorkflowRepo
         catch (CouldNotRunException) when (planDocStatus.Uncommitted || !planDocStatus.InHead)
         {
             // An uncommitted draft plan (e.g. bare JSONC front matter during WritePlan/Fix) is validated at Stop.
-            return LoadPlanMetadataOnly(changePath, testPatterns, envAllow);
+            return LoadPlanMetadataOnly(changePath, settings);
         }
 
         if (read.Problems.Count > 0)
         {
             if (planDocStatus.Uncommitted || !planDocStatus.InHead)
             {
-                return LoadPlanMetadataOnly(changePath, testPatterns, envAllow);
+                return LoadPlanMetadataOnly(changePath, settings);
             }
 
             throw new CouldNotRunException("plan.md has problems: " + string.Join("; ", read.Problems.Select(p => $"line {p.Line}: {p.Message}")));
@@ -206,7 +206,7 @@ public sealed class WorkflowRepo
         {
             if (t.Test is null && (planDocStatus.Uncommitted || !planDocStatus.InHead))
             {
-                return LoadPlanMetadataOnly(changePath, testPatterns, envAllow);
+                return LoadPlanMetadataOnly(changePath, settings);
             }
 
             tasks.Add(new WorkflowTask(
@@ -215,7 +215,8 @@ public sealed class WorkflowRepo
                 string.Join("\n\n", t.Sections.Select(s => s.Body)),
                 t.Test ?? throw new CouldNotRunException($"plan.md: {t.Id} has no test command"),
                 t.Compile,
-                t.Files));
+                t.Files,
+                t.Timeout));
         }
 
         var systemName = Jsonc.String(read.FrontMatter, "system") ?? scope;
@@ -228,11 +229,14 @@ public sealed class WorkflowRepo
             HasPlan: true,
             Branch: branch,
             WorkType: workType,
-            TestPatterns: testPatterns,
-            EnvAllow: envAllow);
+            TestPatterns: settings.TestPatterns,
+            EnvAllow: settings.EnvAllow,
+            TestTimeoutSeconds: settings.TestTimeoutSeconds,
+            CheckTimeoutSeconds: settings.CheckTimeoutSeconds,
+            MaxAttempts: settings.MaxAttempts);
     }
 
-    private WorkflowPlan? LoadPlanMetadataOnly(string changePath, List<string>? testPatterns, string[]? envAllow)
+    private WorkflowPlan? LoadPlanMetadataOnly(string changePath, MarkerBuildSettings settings)
     {
         if (!File.Exists(changePath))
         {
@@ -252,8 +256,11 @@ public sealed class WorkflowRepo
             HasPlan: false,
             Branch: Jsonc.String(only, "branch"),
             WorkType: Jsonc.String(only, "type") ?? "feat",
-            TestPatterns: testPatterns,
-            EnvAllow: envAllow);
+            TestPatterns: settings.TestPatterns,
+            EnvAllow: settings.EnvAllow,
+            TestTimeoutSeconds: settings.TestTimeoutSeconds,
+            CheckTimeoutSeconds: settings.CheckTimeoutSeconds,
+            MaxAttempts: settings.MaxAttempts);
     }
 
     public WorkflowDocState DocumentStatus(string fileName)
@@ -282,30 +289,6 @@ public sealed class WorkflowRepo
         {
             return null;
         }
-    }
-
-    private (List<string>? TestPatterns, string[]? EnvAllow) ReadMarkerBuildSettings()
-    {
-        var markerPath = Path.Combine(Root, MarkerConstants.FileName);
-        if (!File.Exists(markerPath) ||
-            !Jsonc.TryParse(File.ReadAllText(markerPath), out var raw, out _) ||
-            raw is not { ValueKind: JsonValueKind.Object } obj)
-        {
-            return (null, null);
-        }
-
-        var patterns = Jsonc.Strings(obj, "testPatterns");
-        string[]? envAllow = null;
-        if (obj.TryGetProperty("env", out var envProp) && envProp.ValueKind == JsonValueKind.Object)
-        {
-            var allow = Jsonc.Strings(envProp, "allow").Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
-            if (allow.Length > 0)
-            {
-                envAllow = allow;
-            }
-        }
-
-        return (patterns.Count > 0 ? patterns : null, envAllow);
     }
 
     private static JsonElement ParseJsoncObject(string path)

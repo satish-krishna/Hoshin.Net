@@ -9,7 +9,8 @@ public sealed record WorkflowTask(
     string Text,
     string[] Test,
     string[]? Compile = null,
-    IReadOnlyList<string>? Files = null);
+    IReadOnlyList<string>? Files = null,
+    int? TimeoutSeconds = null);
 
 /// <summary>The change's loaded workflow plan, test patterns, and blocking <c>build.finish</c> checks.</summary>
 public sealed record WorkflowPlan(
@@ -22,12 +23,23 @@ public sealed record WorkflowPlan(
     string? Branch = null,
     string WorkType = "feat",
     IReadOnlyList<string>? TestPatterns = null,
-    string[]? EnvAllow = null)
+    string[]? EnvAllow = null,
+    int TestTimeoutSeconds = 300,
+    int CheckTimeoutSeconds = 600,
+    int MaxAttempts = WorkflowEngine.MaxAttempts)
 {
     public string EffectiveBranch => string.IsNullOrWhiteSpace(Branch) ? $"hoshin/{Change}" : Branch;
 
     public IReadOnlyList<string> EffectiveTestPatterns =>
         TestPatterns is { Count: > 0 } ? TestPatterns : DefaultTestPatterns;
+
+    public TimeSpan EffectiveTaskTimeout(WorkflowTask task) =>
+        TimeSpan.FromSeconds(task.TimeoutSeconds is > 0 ? task.TimeoutSeconds.Value : (TestTimeoutSeconds > 0 ? TestTimeoutSeconds : 300));
+
+    public TimeSpan EffectiveCheckTimeout =>
+        TimeSpan.FromSeconds(CheckTimeoutSeconds > 0 ? CheckTimeoutSeconds : 600);
+
+    public int EffectiveMaxAttempts => MaxAttempts > 0 ? MaxAttempts : WorkflowEngine.MaxAttempts;
 
     public static readonly IReadOnlyList<string> DefaultTestPatterns =
         ["test/**", "tests/**", "*.test.*", "*Tests.cs", "*Test.cs"];

@@ -76,6 +76,7 @@
         "supports": { "$ref": "#/definitions/strings" },
         "test": { "anyOf": [{ "$ref": "#/definitions/strings" }, { "type": "null" }] },
         "compile": { "anyOf": [{ "$ref": "#/definitions/strings" }, { "type": "null" }] },
+        "timeout": { "type": "integer", "minimum": 1 },
         "sections": {
           "type": "array",
           "items": {

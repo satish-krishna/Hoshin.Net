@@ -255,28 +255,31 @@ public sealed partial class WorkflowRunner(
         }
 
         var taskEnv = AllowListedCommandRunner.CollectAdditionalEnvironment(plan.EnvAllow);
+        var taskTimeout = plan.EffectiveTaskTimeout(task);
 
         // Step 1: Verify Green on the full working tree before committing anything.
         if (task.Compile is { Length: > 0 })
         {
-            var compile = _runner.Run(repo.Root, task.Compile, TimeSpan.FromMinutes(5), taskEnv);
+            var compile = _runner.Run(repo.Root, task.Compile, taskTimeout, taskEnv);
             if (!compile.Ok)
             {
-                reasons.Add($"compile: `{string.Join(' ', task.Compile)}` failed: {Squash(compile.Tail(15))}");
+                var kind = compile.TimedOut ? $"timed out after {(int)taskTimeout.TotalSeconds}s" : "failed";
+                reasons.Add($"compile: `{string.Join(' ', task.Compile)}` {kind}: {Squash(compile.Tail(15))}");
                 return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, "not observed: working tree did not compile", reasons, DateTimeOffset.UtcNow));
             }
         }
 
-        var greenPre = _runner.Run(repo.Root, task.Test, TimeSpan.FromMinutes(5), taskEnv);
+        var greenPre = _runner.Run(repo.Root, task.Test, taskTimeout, taskEnv);
         if (!greenPre.Ok)
         {
-            reasons.Add($"green: `{string.Join(' ', task.Test)}` failed in the working tree: {Squash(greenPre.Tail(15))}");
+            var kind = greenPre.TimedOut ? $"timed out after {(int)taskTimeout.TotalSeconds}s" : "failed";
+            reasons.Add($"green: `{string.Join(' ', task.Test)}` {kind} in the working tree: {Squash(greenPre.Tail(15))}");
             return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, "not observed: green did not pass", reasons, DateTimeOffset.UtcNow));
         }
 
         // Step 2: Verify Red on a cached detached worktree containing ONLY testChanges on top of startHead.
         var prodPathsForRed = prodChanges.Select(c => c.Path).ToList();
-        var redCheck = ObserveRedOnCachedWorktree(repo, task, startHead, testChanges, prodPathsForRed, taskEnv);
+        var redCheck = ObserveRedOnCachedWorktree(repo, task, startHead, testChanges, prodPathsForRed, taskEnv, taskTimeout);
         redSummary = redCheck.Summary;
         if (!redCheck.IsValidRed)
         {
@@ -325,11 +328,12 @@ public sealed partial class WorkflowRunner(
         var headSha = repo.Head();
 
         // Step 4: Observe Green at committed HEAD.
-        var greenHead = _runner.Run(repo.Root, task.Test, TimeSpan.FromMinutes(5), taskEnv);
+        var greenHead = _runner.Run(repo.Root, task.Test, taskTimeout, taskEnv);
         if (!greenHead.Ok)
         {
             repo.Git("reset", "--mixed", "--quiet", startHead);
-            reasons.Add($"green: `{string.Join(' ', task.Test)}` failed at HEAD: {Squash(greenHead.Tail(15))}");
+            var kind = greenHead.TimedOut ? $"timed out after {(int)taskTimeout.TotalSeconds}s" : "failed";
+            reasons.Add($"green: `{string.Join(' ', task.Test)}` {kind} at HEAD: {Squash(greenHead.Tail(15))}");
             return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
         }
 
@@ -349,7 +353,7 @@ public sealed partial class WorkflowRunner(
             new Dictionary<string, string> { ["HOSHIN_BASELINE"] = "1" });
         foreach (var check in state.Plan.Checks)
         {
-            var run = _runner.Run(repo.Root, check, TimeSpan.FromMinutes(10), env);
+            var run = _runner.Run(repo.Root, check, state.Plan.EffectiveCheckTimeout, env);
             passed &= run.Ok;
             outputs.Add($"$ {string.Join(' ', check)} -> {run.ExitCode}\n{run.Tail(20)}");
         }
@@ -371,7 +375,7 @@ public sealed partial class WorkflowRunner(
 
         foreach (var check in state.Plan.Checks)
         {
-            var run = _runner.Run(repo.Root, check, TimeSpan.FromMinutes(10), env);
+            var run = _runner.Run(repo.Root, check, state.Plan.EffectiveCheckTimeout, env);
             passed &= run.Ok;
             outputs.Add($"$ {string.Join(' ', check)} -> {run.ExitCode}\n{run.Tail(20)}");
         }
@@ -812,7 +816,8 @@ public sealed partial class WorkflowRunner(
         string startHead,
         List<WorkingTreeChange> testChanges,
         IReadOnlyList<string> prodPaths,
-        IReadOnlyDictionary<string, string>? taskEnv)
+        IReadOnlyDictionary<string, string>? taskEnv,
+        TimeSpan taskTimeout)
     {
         var wtDir = repo.RedWorktreePath;
         var prepared = EnsureCachedWorktree(repo, wtDir, startHead);
@@ -840,7 +845,7 @@ public sealed partial class WorkflowRunner(
             }
         }
 
-        var redRun = _runner.Run(wtDir, task.Test, TimeSpan.FromMinutes(5), taskEnv);
+        var redRun = _runner.Run(wtDir, task.Test, taskTimeout, taskEnv);
         // Clean worktree back to startHead for reuse.
         WorkflowRepo.GitIn(_runner, wtDir, "reset", "--hard", "--quiet", startHead);
         WorkflowRepo.GitIn(_runner, wtDir, "clean", "-fd", "--quiet");

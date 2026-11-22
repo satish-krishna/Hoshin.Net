@@ -35,7 +35,7 @@ public static class MarkerReader
     private static readonly Regex DrivePrefix = new(@"^[A-Za-z]:", RegexOptions.Compiled);
     public static readonly Regex CommitScopeRegex = new(@"^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled);
 
-    private static readonly HashSet<string> MarkerFields = ["version", "layout", "systems", "hooks", "gateRetries", "env"];
+    private static readonly HashSet<string> MarkerFields = ["version", "layout", "systems", "hooks", "gateRetries", "env", "build"];
     private static readonly HashSet<string> SystemFields = ["repos", "apps", "commitScope", "naming"];
 
     public static string? MarkerFileIn(string folder, IReadOnlyList<string>? names = null)
@@ -108,6 +108,34 @@ public static class MarkerReader
         }
     }
 
+    private static void ValidateBuildConfig(JsonElement raw, List<string> problems)
+    {
+        if (!raw.TryGetProperty("build", out var buildProp))
+        {
+            return;
+        }
+
+        if (buildProp.ValueKind != JsonValueKind.Object)
+        {
+            problems.Add("build must be an object");
+            return;
+        }
+
+        foreach (var prop in buildProp.EnumerateObject())
+        {
+            if (prop.Name is not ("testTimeoutSeconds" or "checkTimeoutSeconds" or "maxAttempts"))
+            {
+                problems.Add($"build: unknown field {prop.Name}");
+                continue;
+            }
+
+            if (prop.Value.ValueKind != JsonValueKind.Number || !prop.Value.TryGetInt32(out var val) || val < 1)
+            {
+                problems.Add($"build.{prop.Name} must be a positive integer");
+            }
+        }
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static List<string> MarkerProblems(JsonElement raw)
     {
@@ -132,6 +160,7 @@ public static class MarkerReader
         }
 
         ValidateEnvConfig(raw, problems);
+        ValidateBuildConfig(raw, problems);
 
         foreach (var sysProp in systemsProp.EnumerateObject())
         {

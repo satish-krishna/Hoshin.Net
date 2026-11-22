@@ -45,7 +45,8 @@ public sealed record ParsedTask(
     string[]? Compile,
     List<TaskSection> Sections,
     string Text,
-    int Line);
+    int Line,
+    int? Timeout = null);
 
 public sealed record ParsedSharedDecision(string Question, string Owner, string Function);
 
@@ -204,6 +205,10 @@ public sealed record PlanReadResult(int Layout, JsonElement FrontMatter, ParsedP
             WriteStringArray(w, "supports", t.Supports);
             WriteNullableStringArray(w, "test", t.Test);
             WriteNullableStringArray(w, "compile", t.Compile);
+            if (t.Timeout is int timeoutSeconds)
+            {
+                w.WriteNumber("timeout", timeoutSeconds);
+            }
             w.WriteStartArray("sections");
             foreach (var s in t.Sections)
             {

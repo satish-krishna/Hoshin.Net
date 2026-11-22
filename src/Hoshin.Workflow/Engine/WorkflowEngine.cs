@@ -87,7 +87,7 @@ public static class WorkflowEngine
                 continue;
             }
 
-            if (verdicts.Count >= MaxAttempts)
+            if (verdicts.Count >= state.Plan.EffectiveMaxAttempts)
             {
                 return new Done(false, $"{task.Id} failed {verdicts.Count} attempts: {string.Join("; ", verdicts[^1].Reasons)}");
             }
