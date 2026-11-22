@@ -13,7 +13,13 @@ The IDs in brackets (S1, E2, L4, …) point back to the matching section of ANAL
 
 ## How to work through this file (instructions for the agent)
 
-1. **Take one task at a time**, in the order of the index below, unless the task says otherwise. One task (or one listed batch) per pull request. Name the branch after the task (`review/T01-guard-scope`). Reference the task ID in the commit and PR title.
+0. **[CONTRIBUTING.md](../../CONTRIBUTING.md) is mandatory for every task.** That covers Conventional Commits, test first, the SOLID design rules (§3), the code rules (§4), coverage, and document ownership. Every pull request fills in `.github/pull_request_template.md`, including the design checklist. "Done when" in each task below always also means:
+   - the change conforms to CONTRIBUTING.md;
+   - it adds no new architecture-baseline violation;
+   - it removes the baseline entries for any violation it fixed.
+
+   When a task adds behavior to a class that is already too large or has baselined violations (for example `WorkflowRunner`, `WorkflowRepo`, `HookOrchestrator`, `GuardCommand`), put the new logic in a new, focused, injected type rather than growing the class.
+1. **Take one task at a time**, in the order of the index below, unless the task says otherwise. **Start with the "Gate" tasks (G)**: they make the rules enforceable, so every later task is checked by CI. One task (or one listed batch) per pull request. Name the branch `<type>/t<nn>-<short-description>` (CONTRIBUTING.md §1), for example `fix/t01-guard-scope`, and reference the task ID in the PR description.
 2. **Never start a task marked `needs decision` until the decision below has an answer recorded under "Answer".** If it has none, skip the task and say so.
 3. **Test first.** Write the test in "Test first", run it, and confirm it fails for the reason described. Then change the code and confirm it passes. Don't weaken, skip or delete an existing test to get green. If an existing test asserts the old, wrong behavior, change it only when the task says so, and say why in the PR.
 4. **Run both suites before you finish:**
@@ -49,7 +55,7 @@ The options:
 - **(b)** Make System B self-sufficient and retire System A, apart from the CLI contract.
 - **(c)** Keep both, and document System B as single-repo only.
 
-Answer: _(pending)_
+**Answer: (a).** The recommended option, recorded 2026-11-22. The section "P1 — Unify the two systems" breaks this into tasks A1–A8. To change this answer, edit it here and re-plan A1–A8 before any of them starts.
 
 ### D2 — When does the guard apply?
 Today the static rules (no push, no PR, protected files) apply in **every repository on the machine** (S2). The options:
@@ -58,14 +64,14 @@ Today the static rules (no push, no PR, protected files) apply in **every reposi
 
 Either way, the guard must stay silent outside hoshin workspaces.
 
-Answer: _(pending)_
+**Answer: (a).** Adopted 2026-11-22: the guard applies only while a hoshin run is active for the calling session (the session in `run.json`, or its registered subagent). Every other session, in any repository, gets no guard output.
 
 ### D3 — How should `hoshin migrate` parse YAML?
 The hand-written converter loses data (L1–L3). The options:
 - **(a, recommended)** Move `migrate` into a new `Hoshin.Migration` assembly referenced only by `Hoshin.Cli`, and use YamlDotNet there. `Hoshin.Workflow` stays dependency-free.
 - **(b)** Keep the hand-written converter, but make it refuse every construct it doesn't fully support.
 
-Answer: _(pending)_
+**Answer: (a).** Adopted 2026-11-22: a new `Hoshin.Migration` assembly uses YamlDotNet, and `Hoshin.Workflow` keeps only Markdig and Gherkin. T10 (fail closed) still lands first, as a safety net.
 
 ### D4 — Publishing defaults
 - **Branch:** `hoshin/<change>` (today) or `change/<change>` (the original GRAMMAR).
@@ -74,22 +80,32 @@ Answer: _(pending)_
 
 Recommended: `change/<change>`, open a PR, and require the review gate.
 
-Answer: _(pending)_
+**Answer: as recommended.** Adopted 2026-11-22:
+- the default branch is `change/<change>` (`branch` in `change.jsonc` still overrides it);
+- publishing opens a PR against `base`, or reuses an open one;
+- publishing requires a committed review at the current head with no `high` findings.
 
 ### D5 — Tasks without testable behavior
 GRAMMAR allows plan tasks that have no test (config, docs) and tasks that only add a protecting test. System B refuses both: `WorkflowRepo.ReadPlan` throws, and `EvaluateAndCommitTask` demands both test and production changes. Allow them, with a different verdict path, or keep them refused and document it?
 
 Recommended: allow them, as the original does.
 
-Answer: _(pending)_
+**Answer: allow them.** Adopted 2026-11-22, following the original's rule (`hoshin/skills/plan/references/drafting.md`): "A task with no testable behavior (configuration, documentation) says so, has no `test` and no `compile`, and its 'done when' is the check." See T41.
 
 ---
 
 ## Index
 
+The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so they go first. **SOLID** marks tasks that fix existing design-rule violations. Those are required, not optional, and they are scheduled after the P0 fixes because the P0 fixes must not wait on refactoring.
+
 | ID | Priority | Title | Fixes | Needs | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| T01 | P0 | Scope the guard and hook logging to hoshin | S2, H8 | D2 | open |
+| T32 | G | Cross-platform packager and CI (Linux + Windows) | §8.6 | — | open |
+| T33 | G | Warnings as errors, analyzers, complexity limit, `.editorconfig` | §8.6 | — | open |
+| T39 | G | Architecture tests with a shrinking baseline | CONTRIBUTING §3–§5 | — | open |
+| T40 | G | Conventional names check | CONTRIBUTING §1 | — | open |
+| T42 | G | Coverage gate on changed lines | CONTRIBUTING §6 T3 | T32 | open |
+| T01 | P0 | Scope the guard and hook logging to the active run | S2, H8 | D2 ✔ | open |
 | T02 | P0 | Make approval and acceptance human-only | S1 | — | open |
 | T03 | P0 | Protect harness config and hoshin state from the agent | S4, S5 | — | open |
 | T04 | P0 | Close the trivial guard bypasses, and enforce "no agent commits" in the library | S3 | — | open |
@@ -99,7 +115,6 @@ Answer: _(pending)_
 | T08 | P0 | Commit only the task's own paths | E2, E11 | — | open |
 | T09 | P0 | Serialize evaluate-and-commit | E3 | — | open |
 | T10 | P0 | Make `migrate` fail closed | L1, L2, L3 | — | open |
-| T11 | P1 | Replace the YAML converter | L1–L3 | D3 | open |
 | T12 | P0 | `Jsonc.TryParse` accepts empty and comment-only text | L4 | — | open |
 | T13 | P0 | Rewrite `FrontMatterEdit.Set` on real JSONC tokens | L5 | — | open |
 | T14 | P1 | Harden `RedClassifier` | E4 | — | open |
@@ -109,7 +124,6 @@ Answer: _(pending)_
 | T18 | P1 | Make `ProcessCommandRunner` timeouts hold | L6 | — | open |
 | T19 | P1 | Stop `LedgerStore` wiping a corrupt ledger; add a lock | L7 | — | open |
 | T20 | P1 | `SpecReader` uses `Doc.Fences`; handle "Scenario Template" | L8, L12 | — | open |
-| T21 | P2 | Small reader and validator fixes (batch) | L11, L12 | — | open |
 | T22 | P1 | Claude Code `Stop` and `Result` act only for the run's session | S8 | — | open |
 | T23 | P1 | `setup`/`context` don't take over the run | H2 | — | open |
 | T24 | P1 | Judge only the dispatched implement subagent | H3 | — | open |
@@ -119,22 +133,107 @@ Answer: _(pending)_
 | T28 | P1 | Make timeouts and the attempt cap configurable | E10 | — | open |
 | T29 | P1 | Accept `testPatterns` in `.hoshin.json` | §7 | — | open |
 | T30 | P1 | The intent brief finds the system's context files | §6 | — | open |
-| T31 | P1 | Publishing: PR, review gate, branch default, diagnostics | E8 | D4 | open |
-| T32 | P2 | Cross-platform packager and CI | §8.6 | — | open |
-| T33 | P2 | Warnings as errors, analyzers, `.editorconfig` | §8.6 | — | open |
-| T34 | P2 | Remove `?? Default` fallbacks from constructors | §8.5 | after P0 | open |
-| T35 | P2 | Give commands narrow dependencies instead of `HoshinServices` | §8.4 | T34 | open |
-| T36 | P2 | One source for duplicated rules and texts | E13, §8.6 | — | open |
+| T31 | P1 | Publishing: PR, review gate, branch default, diagnostics | E8 | D4 ✔ | open |
+| T41 | P1 | Tasks with no testable behavior | §6 | D5 ✔ | open |
+| T11 | P1 | Replace the YAML converter (`Hoshin.Migration` + YamlDotNet) | L1–L3 | D3 ✔, T10 | open |
+| T34 | P1 · SOLID | Remove `?? Default` fallbacks; inject clock and file system | §8.5 (D1–D3) | T39 | open |
+| T35 | P1 · SOLID | Give commands narrow dependencies; split fat interfaces | §8.4 (I1, I2) | T34 | open |
+| T36 | P1 · SOLID | One owner for duplicated rules; enums for closed sets | E13 (O1, R1) | — | open |
+| T43 | P1 · SOLID | Split `WorkflowRunner`, `WorkflowRepo` and `HookOrchestrator` | §8.1 (S1, S3) | T34 | open |
+| A1 | P1 | Unify: `WorkflowRunner` uses `IGitClient` | §3.2 | D1 ✔, T35 | open |
+| A2 | P1 | Unify: one Red rule | §3.2 | A1, T14 | open |
+| A3 | P1 | Unify: one ledger (`LedgerStore`, per change and repo) | §3.2 | A1, T07, T19 | open |
+| A4 | P1 | Unify: `WorkflowState` from `ChangeStateService` | §3.2, §6 | A1 | open |
+| A5 | P1 | Unify: the runner fires lifecycle events and writes build logs | §6 | A3, A4 | open |
+| A6 | P1 | Unify: multi-repo builds | §6 | A5 | open |
+| A7 | P1 | Unify: start a change from `hook start` | H1 | A4 | open |
+| A8 | P1 | Unify: reject, reopen and light-track accept flows; delete the unused half | §6 | A5, A7 | open |
+| T21 | P2 | Small reader and validator fixes (batch) | L11, L12 | — | open |
 | T37 | P2 | Fix false and stale doc claims | §7 | — | open |
 | T38 | P2 | Recorded harness payload fixtures | §5.2, §9 | — | open |
-| EPIC-A | P1 | Unify System A and System B | §3.2, §6 | D1 | blocked |
 | EPIC-B | P1 | Restore the dropped skill guidance, templates and evals | §6 | — | open (needs a human reviewer) |
+
+---
+
+## G — Make the rules enforceable (do these first)
+
+### T32 · Cross-platform packager and CI (Linux + Windows)
+
+- **Do:**
+  1. Port `packaging/package.ps1` to run under PowerShell 7 (`pwsh`) on Linux, macOS and Windows: `Join-Path` everywhere, no `\` literals. Alternatively, rewrite it as a small .NET console tool under `tools/`.
+  2. Make `plugin.json`'s version come from `-Version` / `VersionPrefix`.
+  3. Change `Packager_*` to invoke `pwsh`.
+  4. Add `.github/workflows/ci.yml` with a matrix of `ubuntu-latest` and `windows-latest`. Steps: setup-dotnet 10, setup-node 22, `dotnet build -warnaserror`, `dotnet test`. Upload TRX results.
+- **Note:** until this lands, `Packager_*` fails on Linux. That is expected, and it is not a reason to filter it out. Land this task first.
+- **Done when:** CI is green on both operating systems, with the full suite including `Packager_*` and no test filter.
+
+### T33 · Warnings as errors, analyzers, complexity limit, `.editorconfig`
+
+- **Do:**
+  1. In `Directory.Build.props`, add `TreatWarningsAsErrors=true`, `AnalysisLevel=latest-recommended` and `EnforceCodeStyleInBuild=true`.
+  2. Add an `.editorconfig` matching the current style (4 spaces, file-scoped namespaces, `var`).
+  3. Enable CA1502 (cyclomatic complexity) with a `CodeMetricsConfig.txt` threshold of 15 (CONTRIBUTING.md S3).
+  4. Fix each new warning, or suppress it with `[SuppressMessage(..., Justification = "baselined: fix in T43")]` on the member. Each suppression is a baseline entry: list it in `tests/Hoshin.Tests/Architecture/baseline.json` too, so T39's test keeps the count from growing.
+  5. Replace per-call `new Regex(...)` in hot paths (`Doc.Split`, `FrontMatterEdit`, `KeyLine`, `FieldLine`) with `[GeneratedRegex]`.
+- **Done when:** `dotnet build` is clean with the new settings and the tests pass.
+
+### T39 · Architecture tests with a shrinking baseline
+
+- **Fixes:** makes CONTRIBUTING.md §3–§5 enforceable.
+- **Where:** new `tests/Hoshin.Tests/Architecture/` (`ArchitectureTests.cs`, `baseline.json`).
+- **Do:** add tests that inspect the built assemblies (reflection) and `src/**/*.cs` (text scan, comments and strings stripped). Each rule reports violations as stable keys (for example `D2:Hoshin.Workflow.Engine.WorkflowRunner..ctor(commandRunner)`). The rules:
+
+  | Rule | Check |
+  | :--- | :--- |
+  | **A1** | `Hoshin.Workflow` references only `Markdig`, `Gherkin`, their transitive packages, and `System.*`. It never references `Hoshin.Cli`. |
+  | **A2** | No type outside `Hoshin.Cli.Hooks` and `Hoshin.Cli.Commands` mentions Claude Code or Antigravity payload names (`hook_event_name`, `hookEventName`, `toolCall`, `invoke_subagent`, …). |
+  | **S2** | `Engine/WorkflowEngine.cs` and `Engine/RedClassifier.cs` don't use `System.IO`, `System.Diagnostics.Process`, `Environment`, or `DateTime(Offset).Now/UtcNow`. |
+  | **S3** | No `src/**/*.cs` file over 400 lines. |
+  | **I1** | No interface in `src/` with more than 10 members. |
+  | **I2** | No constructor in `Hoshin.Cli.Commands` takes `HoshinServices`. |
+  | **D1** | No `DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now` or `DateTimeOffset.UtcNow` outside the clock adapter. |
+  | **D2** | No public or internal constructor parameter whose type is an interface or a `Hoshin.*` class has a default value. |
+  | **D3** | No `?? new <Type>(` or `?? <Type>.Default` in `src/` outside `HoshinServices.cs`. Every `static Default` property is listed in an allow-list with a reason. |
+  | **D4** | No static field that is neither `readonly` nor `const`. |
+  | **C3** | No `catch {` or `catch (Exception…)` block whose body neither throws nor calls a logger or trace. |
+
+  Then:
+  1. Generate `baseline.json` from today's code.
+  2. The test fails if a violation is found that isn't in the baseline (the message names the rule and links to CONTRIBUTING.md).
+  3. The test also fails if a baseline entry no longer violates (the message says "remove it from the baseline").
+- **Test first:** for each rule, a fixture type or source snippet under `tests/Hoshin.Tests/Architecture/Samples/` (excluded from the scan of `src/`) that violates it, and a test asserting the rule reports it.
+- **Done when:**
+  - all rules run in CI;
+  - the baseline matches today's code exactly;
+  - CONTRIBUTING.md's "(lands with T39)" notes are removed;
+  - the baseline count per rule is printed in the test output, so its shrinking is visible.
+
+### T40 · Conventional names check
+
+- **Fixes:** CONTRIBUTING.md §1
+- **Do:**
+  1. Add `.github/workflows/conventional.yml`, ported from `satish-krishna/hoshin` (`.github/workflows/conventional.yml`).
+  2. Use the types from CONTRIBUTING.md §1, and pass the title and branch through `env`, never interpolated into the script.
+  3. Check the PR title against `^(feat|fix|docs|test|refactor|perf|build|ci|chore)\([a-z0-9]+(-[a-z0-9]+)*\)!?: \S.*$`, and the branch against `^(feat|fix|docs|test|refactor|perf|build|ci|chore)/[a-z0-9]+(-[a-z0-9]+)*$`.
+- **Done when:** the check runs on pull requests and is named `conventional names`, so it can be made required. Remove CONTRIBUTING.md's "(lands with T40)" note.
+
+### T42 · Coverage gate on changed lines
+
+- **Fixes:** CONTRIBUTING.md §6 T3
+- **Depends on:** T32
+- **Do:**
+  1. In CI (the Linux job), collect coverage with `dotnet-coverage collect -f cobertura -o coverage.cobertura.xml "dotnet test tests/Hoshin.Tests"`.
+     - `dotnet-coverage` also instruments the child `dotnet hoshin.dll` processes started by the black-box suites. Verify that: coverlet alone does not, and the CLI code would then look uncovered.
+  2. Gate with `diff-cover coverage.cobertura.xml --compare-branch=origin/main --fail-under=90 --include 'src/**'`.
+  3. Publish the HTML report as an artifact.
+- **Test first:** in a throwaway branch, add an uncovered line to `src/` and confirm the job fails. Add a line covered only by a black-box suite and confirm it counts as covered. Describe both checks in the PR.
+- **Done when:** the gate runs on every pull request that changes `src/`, and CONTRIBUTING.md's "(lands with T42)" note is removed.
 
 ---
 
 ## P0 — Safety and data integrity
 
-### T01 · Scope the guard and hook logging to hoshin  `security` `needs decision: D2`
+### T01 · Scope the guard and hook logging to the active run  `security`
 
 - **Fixes:** S2, H8
 - **Where:**
@@ -145,17 +244,21 @@ Answer: _(pending)_
 - **Problem:** `Evaluate` calls `StaticRefusal` before it looks at the repository. With the plugin installed, `git push origin main` and `gh pr create` are denied in a plain `git init` repo with no hoshin files. Every guard call or hook also creates `.git/hoshin/hooks.jsonl` in that repo.
 - **Do:**
   1. Work out the scope first: the payload's `cwd`, or the process cwd when `cwd` is missing.
-  2. Apply `StaticRefusal` only within the D2 scope:
-     - with (a): a run marker exists and `IsSessionInActiveRun` holds;
-     - with (b): a hoshin workspace is found upward from that cwd.
-  3. Outside the scope, return "allow" with no output, and write no trace.
+  2. Per D2 (a), apply `StaticRefusal` and the step rules only when:
+     - `run.json` exists in that repository's `<git-common-dir>/hoshin/`;
+     - it is within the 24-hour window;
+     - `IsSessionInActiveRun` holds for the event.
+
+     Because of T22, "in the run" means the run's session or its registered subagent.
+  3. Otherwise, return "allow" with no output. Don't create `.git/hoshin/`, and don't write a trace. Find the repository without creating anything.
   4. Log static denials too. Today they return `repo = null` and are never traced.
 - **Test first:**
   - New black-box test in `gate.test.mjs`. In a temp `git init` repo with no `.hoshin.json`, `.hoshin/` or `intent/`:
     - `guard` with `{hook_event_name: "PreToolUse", cwd: <repo>, tool_name: "Bash", tool_input: {command: "git push origin main"}}` prints nothing;
     - `<repo>/.git/hoshin` doesn't exist afterwards.
   - Same for `gh pr create`, and for an `Edit` of `<repo>/.hoshin.json`.
-- **Existing tests to adapt:** `gate.test.mjs` sends guard payloads with **no `cwd`**, and expects static denials. Give those payloads a `cwd` inside a fixture that is in scope under D2: a workspace with `.hoshin.json`, plus a run marker for that session if D2 = (a). The assertions themselves stay the same.
+  - In a hoshin workspace *with* an active run for session `s1`, `git push` from session `s2` prints nothing, and from `s1` is denied.
+- **Existing tests to adapt:** `gate.test.mjs` sends guard payloads with **no `cwd`**, and expects static denials. Give those payloads a `session_id` and a `cwd` inside a workspace fixture with an active run for that session: write `run.json` and `step.json` the way `WorkflowRunner.Issue` does, through a small helper in `BlackBox/helpers/`. The assertions themselves stay the same.
 - **Done when:** both new tests pass, all adapted `gate.test.mjs` cases still deny, and DESIGN.md §5 ("Session-Aware Guard Isolation") describes the scope.
 
 ### T02 · Make approval and acceptance human-only  `security`
@@ -376,19 +479,19 @@ Answer: _(pending)_
 
 ## P1 — Correctness
 
-### T11 · Replace the YAML converter  `needs decision: D3`
+### T11 · Replace the YAML converter (`Hoshin.Migration` + YamlDotNet)
 
 - **Fixes:** L1–L3, fully
-- **With D3 = (a):**
+- **Depends on:** T10.
+- **Do (D3 = (a)):**
   - Create `src/Hoshin.Migration` (referencing `Hoshin.Workflow` and YamlDotNet), and move `DocumentMigrator`, `IYamlToJsoncConverter` and the converter into it.
   - Implement the converter on YamlDotNet's representation model, with these rules:
     - keep key order;
     - keep comments where YamlDotNet exposes them, otherwise drop them and record a warning;
     - quote all-digit commit hashes.
   - `Hoshin.Cli` references the new project, and `Hoshin.Workflow.csproj` stays Markdig + Gherkin.
-- **With D3 = (b):** extend T10's refusals until every case in the differential test below either matches or is refused.
 - **Test first:** a differential test over the 34 samples used in the review (rebuild them from ANALYSIS §5.3: block scalars, flow collections, quoting, escapes, numbers, anchors, comments). For each, run the original plugin's parser (`hoshin/tools/vendor/yaml.mjs`, via `node`), then the .NET converter, then `JSON.parse`. Assert the results are deep-equal, or that .NET refused.
-- **Done when:** there are zero mismatches, and the AGENTS.md invariant 1 test (if any) still holds.
+- **Done when:** there are zero mismatches, and the T39 architecture test that pins `Hoshin.Workflow`'s references still passes.
 
 ### T14 · Harden `RedClassifier`
 
@@ -647,7 +750,7 @@ Answer: _(pending)_
 - **Test first:** with a fixture containing `intent/demo/context/app.md` and a change under `intent/demo/<change>/`, assert that `WorkflowBriefs.Intent(state)` contains `intent/demo/context/app.md`.
 - **Done when:** the test passes.
 
-### T31 · Publishing: PR, review gate, branch default, diagnostics  `needs decision: D4`
+### T31 · Publishing: PR, review gate, branch default, diagnostics
 
 - **Fixes:** E8
 - **Where:**
@@ -655,21 +758,226 @@ Answer: _(pending)_
   - `WorkflowEngine.Next` (the `NeedsApproval` → `Publish` path);
   - `WorkflowPlan.EffectiveBranch`;
   - `HookOrchestrator.Advance` (the `_runner.Publish(repo, state, p.Ref)` call).
-- **Do (per D4):**
-  1. Set the `EffectiveBranch` default.
-  2. Add a review gate to `Next`: if D4 requires one, `NeedsApproval` needs a `WorkflowReviewRun` at the current head with `HighCount == 0`. Otherwise return a step that names `review`.
-  3. Pass `openPullRequest` from config.
-  4. Surface push and PR failures (see T17).
-  5. Read the remote from `change.jsonc` or the branch's upstream, not a hard-coded `origin`.
+- **Do (D4 as answered):**
+  1. Make `EffectiveBranch` default to `change/<change>`. `change.jsonc` `branch` still overrides it.
+  2. **Review gate in `Next`.** This keeps ordering in the engine, per ANALYSIS §3.3. After checks pass at the current head, `Next` returns `ReviewDocument` unless the ledger has a `WorkflowReviewRun` for the current **code head** with `HighCount == 0`. With high findings, it returns `Done(false, "review <n> has <k> high findings")`, or a fix step once A8 adds one.
+
+     The **code head** is the latest commit that touches something outside `<change>/build/review.md`. That way, committing the review itself doesn't invalidate the review or the checks. Compute it in `WorkflowRepo`, and pass it in `WorkflowState` (`Next` stays pure).
+  3. Key `WorkflowReviewRun`, `WorkflowCheckRun` and `WorkflowApproval` by code head, not raw head.
+  4. Remove the orchestrator's own construction of `ReviewDocument`. `HookOrchestrator` now just runs what `Next` returns.
+  5. `Publish` opens a PR against `base`, or reuses an open one (`IPullRequestClient.OpenPullRequest` / `OpenNew`), and records its URL.
+  6. Surface push and PR failures to the engineer (see T17).
+  7. Read the remote from the branch's upstream, falling back to `origin`, instead of always using `origin`.
 - **Test first:**
-  - `Next` at `NeedsApproval` with no review returns the review step.
-  - With a review that has a high finding, it still does.
-  - A publish with PRs enabled calls `IPullRequestClient.OpenNew` once. Use a fake client.
+  - `Next` after green checks, with no review, returns `ReviewDocument`.
+  - With a review that has a high finding, it returns `Done(false, …)`.
+  - With a clean review, it returns `NeedsApproval`.
+  - Committing `build/review.md` after the review doesn't change the code head, so `Next` doesn't ask for checks or a review again.
+  - `Publish` calls `IPullRequestClient.OpenNew` once with `base` and `change/<change>` (fake client), and reuses an existing PR when `OpenPullRequest` returns one.
 - **Done when:** the tests pass, and DESIGN.md §3's state diagram and the README lifecycle diagram match.
+
+### T41 · Tasks with no testable behavior
+
+- **Fixes:** ANALYSIS §6 (parity), per D5
+- **Where:**
+  - `WorkflowRepo.ReadPlan`, which throws "has no test command";
+  - `WorkflowContracts.WorkflowTask` (`Test` is non-null);
+  - `WorkflowRunner.EvaluateAndCommitTask`;
+  - `WorkflowBriefs.Implement`.
+- **Problem:** the original allows "a task with no testable behavior (configuration, documentation)", which "has no `test` and no `compile`, and its 'done when' is the check". Hoshin.Net refuses to load such a plan. Even if it loaded, the runner would demand both test and production changes.
+- **Do:**
+  1. Make `WorkflowTask.Test` nullable.
+  2. Move the task's evaluation behind an `ITaskVerdictPolicy` with two implementations (CONTRIBUTING O2), rather than adding branches to `EvaluateAndCommitTask`:
+     - `RedGreenPolicy`: today's behavior.
+     - `NoTestPolicy`, for tasks with `test: null`:
+       - no Red or Green run;
+       - at least one changed path;
+       - none of the changes may be a test file (a test belongs to a task with a `test`);
+       - one commit, `<type>(<scope>): <title>` with the trailers;
+       - the verdict records `red: "skipped: no testable behavior"`.
+  3. The brief tells the subagent that the task has no test, and that the build-finish checks prove it.
+  4. `RunChecks` still runs after all tasks, so the checks are this task's "done when".
+- **Test first:**
+  - A plan with `T1` (`test: null`, changing `config/app.json`) loads.
+  - Evaluating it with one config change passes, with one commit and no test commit.
+  - With no changes, it fails with `work:`.
+  - With a test-file change, it fails with `order: a task with no test must not change test files`.
+- **Done when:** the tests pass, and DESIGN.md §4 and the plan section of CLIENTS.md (if it lists `test` as required) say a task's `test` may be null.
 
 ---
 
-## P2 — Engineering hygiene
+## P1 — SOLID conformance (required)
+
+These fix existing violations of CONTRIBUTING.md §3. They are not optional, and each one shrinks the T39 baseline.
+
+### T34 · Remove `?? Default` fallbacks; inject clock and file system
+
+- **Fixes:** §8.5; CONTRIBUTING D1–D4
+- **Depends on:** T39 (so the baseline shrinks visibly)
+- **Do:**
+  1. Make constructor dependencies required in `WorkflowRunner`, `HookOrchestrator`, `EventRunner`, `RedRecorder` and every class with `X? x = null` plus `x ?? X.Default` / `?? new X()`.
+  2. Make `WorkflowRepo.Find` and `ReadPlan` take their runner and `PlanReader`.
+  3. Delete `EventRunner.CreateDefaultSteps`; `HoshinServices` is the only composition root.
+  4. Add `TimeProvider`, and use it instead of `DateTimeOffset.UtcNow`, in the engine and runner.
+  5. Add a small `IFileSystem` (only the members actually used: read, write-atomic, exists, delete, enumerate), and use it in `WorkflowRepo`, `LedgerStore`, `FrontMatterEdit`, `ChangeRecordStore`, `MarkerReader` and `CrossChecker`. Turn the static classes among them into injected instances.
+  6. Remove the production read of the test-only `HOSHIN_GIT_COUNT_FILE` from `ProcessGitClient`. Count git calls in tests with a decorating `IGitClient` instead.
+  7. Keep the `static Default` properties only where a test or an external caller needs them. Grep the tests first.
+- **Test first:** none (a pure refactor). The whole suite must stay green, and the PR must not change behavior.
+- **Done when:** T39's D2, D3 and D4 baselines are empty, apart from documented NuGet-facing `Default` properties, and the suite is green.
+
+### T35 · Give commands narrow dependencies; split fat interfaces
+
+- **Fixes:** §8.4; CONTRIBUTING I1, I2
+- **Depends on:** T34
+- **Do:**
+  1. Change each `IHoshinCommand` constructor to take only the services it uses. For example, `CheckCommand(IDocumentCheckService checker)`; extract interfaces for the concrete services a command needs.
+  2. Have `HoshinServices` build lazily (`Lazy<T>`), or switch `Hoshin.Cli` to `Microsoft.Extensions.DependencyInjection`. That is allowed in the CLI, not in the library.
+  3. Split `IGitClient` (34 members) into role interfaces of no more than 10 members each, along the lines of `IGitQuery` (rev-parse, show, ls-tree, log), `IGitStatus` (dirty and changed paths), `IGitCommitter` (add, commit, reset), `IGitBranches` and `IGitWorktrees`. `ProcessGitClient` may implement all of them, and each consumer takes only the ones it calls.
+  4. Split `IWorkflowRunner` into `ITaskEvaluator`, `ICheckRunner`, `IApprovalRecorder`, `IPublisher` and `IDocumentCommitter`. `WorkflowRunner` may implement all of them at first.
+- **Done when:** no command takes `HoshinServices`, T39's I1/I2 baselines are empty, and the tests pass.
+
+### T36 · One owner for duplicated rules; enums for closed sets
+
+- **Fixes:** E13, §8.6; CONTRIBUTING O1, R1
+- **Do:**
+  1. Delete `WorkflowBriefs.DefaultImplementProcedure`, and use the embedded `skills/implement/procedure.md`. Fail loudly if the resource is missing.
+  2. Move the intent headings into one `IntentReader.RequiredHeadings` used by both the reader and the brief.
+  3. Move the protected-path rules into one `ProtectedPaths` class in `Hoshin.Workflow`, used by both `WorkflowRunner` and `GuardCommand`.
+  4. Move the tool-name lists into one `HarnessTools` class in `Hoshin.Cli/Hooks`, and generate the manifest matchers from it in `package.ps1`, or test that they match.
+  5. Replace the string step kinds (`CurrentStep.Kind`) and the document names (`"intent"|"spec"|"plan"`) with enums. Use `JsonStringEnumConverter` so the JSON stays the same.
+- **Test first:** a test asserting that the `matcher` values in both manifests equal the `HarnessTools` lists.
+- **Done when:** the tests pass.
+
+### T43 · Split `WorkflowRunner`, `WorkflowRepo` and `HookOrchestrator`
+
+- **Fixes:** ANALYSIS §8.1; CONTRIBUTING S1, S3
+- **Depends on:** T34. Do it after the P0 tasks that touch these classes have landed, to avoid conflicts.
+- **Do:** pure moves first, then cleanup, with no behavior change. Targets:
+
+  | Class | Split into |
+  | :--- | :--- |
+  | `WorkflowRepo` | `ChangeFolderResolver`; `WorkflowPlanLoader` (plan plus `change.jsonc`); `WorkflowLedgerStore` (read, write, lock); `TestPathClassifier` (globs, argv); a thin `WorkflowRepository` holding the paths. |
+  | `WorkflowRunner` | `TaskEvaluator` (Red/Green, behind T41's `ITaskVerdictPolicy`); `RedWorktree` (cached worktree preparation and overlay); `WorkingTreeSnapshot` (T08); `CheckRunner`; `Publisher`; `DocumentCommitter` (intent, spec, plan, review, fix, accept); `BareFrontMatterWrapper`. |
+  | `HookOrchestrator` | `SkillInvocationDetector`; `StartHandler`; `ResultHandler`; `StopHandler`; `TurnState` (stop counter, last start, pending context, under the run lock); a small `HookOrchestrator` that dispatches. |
+
+  Each new type sits behind an interface where another type depends on it, and is wired in `HoshinServices`.
+- **Test first:** none (a refactor). The full suite stays green, and you move the existing tests for each piece next to the piece.
+- **Done when:** no file in `src/` is over 400 lines except baselined ones not touched here, and T39's S3 baseline has lost these three entries.
+
+---
+
+## P1 — Unify the two systems (D1 = a)
+
+Goal: System B's engine and harness adapter, driven by System A's domain services, with one git layer, one ledger, one Red rule and one check configuration. Do A1–A8 in order. Each is one pull request of no more than about 500 changed lines; split further if needed, and record the split here.
+
+### A1 · `WorkflowRunner` uses `IGitClient`
+
+- **Depends on:** T35 (the role interfaces)
+- **Where:** `WorkflowRunner`, `WorkflowRepo.Git`/`GitIn`/`GitWithEnv`, and `HoshinServices`.
+- **Do:**
+  1. Route every git call made by the engine, the runner and the orchestrator through the git role interfaces from T35.
+  2. `WorkflowRepo` stops running processes.
+  3. `IAllowListedCommandRunner` remains only for task tests, compiles and checks.
+  4. Have `ProcessGitClient` use the allow-listed environment, plus the push allow-list (T17) for `push`. Repositories' own git hooks then don't receive model keys (S9).
+- **Test first:** a `TaskEvaluator` unit test with fake git interfaces asserts the exact git operations for a passing attempt (stage the test paths, commit, stage the production paths, commit), with no process started.
+- **Done when:** `grep -n '"git"' src/Hoshin.Workflow/Engine` finds no argv building, and the suite is green.
+
+### A2 · One Red rule
+
+- **Depends on:** A1, T14
+- **Where:** `Red/RedRecorder.cs` (`hoshin red record`) and `Engine/RedClassifier.cs`.
+- **Do:** `RedRecorder` classifies its run with `RedClassifier`, and maps the result onto the existing `outcome` values so CLIENTS.md keeps its fields:
+
+  | `RedKind` | `outcome` |
+  | :--- | :--- |
+  | `AssertionFailure`, `MissingSymbol` | `failed` (red observed) |
+  | `PassedUnexpectedly` | `passed` |
+  | `SyntaxError` | `could-not-compile` |
+  | `CouldNotRun`, `TimedOut` | `could-not-run` |
+
+  Delete the separate exit-code rule. This changes what `failed` means for a missing-symbol compile error, so add a `CHANGELOG.md` entry and a note in `docs/KATA_MIGRATION.md`.
+- **Test first:** one shared table of outputs, run through both `hoshin red record` (black-box) and `TaskEvaluator`, asserting the same verdict for every row.
+- **Done when:** the table test passes.
+
+### A3 · One ledger
+
+- **Depends on:** A1, T07, T19
+- **Do:**
+  1. Fold `WorkflowLedger`'s records into System A's `RepoLedger`, at `.git/hoshin/<system>/<change>/<repo>.json`, locked (T19). The records are: issued, verdicts, check runs, reviews, approvals, published, the active subagent.
+  2. Migrate a T07 per-change file once on first read.
+  3. Delete `WorkflowLedger` and its store.
+- **Test first:** after a hook-driven build of one task, `hoshin red show --json` and `hoshin status --json` (System A commands) report that task's verdict.
+- **Done when:** one ledger type remains.
+
+### A4 · `WorkflowState` from `ChangeStateService`
+
+- **Depends on:** A1
+- **Do:**
+  1. Build `WorkflowState` from `ChangeStateService` (documents with pins, readiness, progress) instead of `WorkflowRepo.DocumentStatus`.
+  2. Make `WorkflowEngine.Gate` refuse with `ReadinessMap`'s `SkillReadiness.Stop` reason when System A's `ready` would refuse. That covers stale pins, superseded plans, the light-track stop, and uncommitted acceptance.
+  3. Keep `Next` pure: it receives the computed readiness as values.
+- **Test first:** port three `state.test.mjs` refusals as `Gate` unit tests:
+  - a plan whose `source_spec_commit` no longer matches the spec;
+  - a superseded plan;
+  - the light-track stop.
+
+  Each `Gate` refusal must carry the same reason text as `hoshin state`.
+- **Done when:** the tests pass, and DESIGN.md §3 says gating comes from `ChangeState`.
+
+### A5 · The runner fires lifecycle events and writes build logs
+
+- **Depends on:** A3, A4
+- **Do:**
+  1. Replace `WorkflowRunner.RunBaseline` / `RunChecks` with `EventRunner` events, with checks from `HookConfigService` (finishing T05's direction):
+     - `build.start` (baseline);
+     - `task.done` after each passing verdict;
+     - `build.finish` (checks);
+     - `review.finish` after `CommitReview`;
+     - `change.done` for publishing, replacing `Publish` with `ChangeDoneStep`, which pushes every repository and opens PRs per GRAMMAR and D4.
+  2. Append a `build/<repo>.md` entry per task (the `build-log-entry.schema.json` shape) with the verdict's `red`, and commit it with the implementation.
+- **Test first:** a hook-driven build of a two-task change ends with:
+  - `hoshin read --json build/<repo>.md` showing two entries with `red: "observed"`;
+  - `hoshin checks --json` showing the `build.finish` events.
+- **Done when:** the tests pass, and DESIGN.md's diagrams show events instead of direct runner calls.
+
+### A6 · Multi-repo builds
+
+- **Depends on:** A5
+- **Do:**
+  1. Add `Repo` to `WorkflowTask`; plan tasks already carry `repo` in `PlanReader`.
+  2. Order tasks with `Changes/Schedule.cs`.
+  3. Evaluate each task in its repository's checkout (resolved through `WorkspaceResolver`/`AppService`), on that repository's change branch.
+  4. Keep the ledger per repository (A3).
+  5. `Next` returns the next task across repositories in schedule order.
+- **Test first:** a two-repository workspace fixture (`BlackBox/helpers/workspace.mjs` builds one), with `T1` in `app` and `T2` in `api`, gets commits in each repository's own history, and a build log per repository.
+- **Done when:** the test passes.
+
+### A7 · Start a change from `hook start`
+
+- **Depends on:** A4
+- **Fixes:** H1
+- **Do:** when `intent` (or `fix`) is invoked and no change exists for the workspace, start one through `EventRunner` `change.start` (`ChangeStartStep`), the way `hoshin change start` does, then issue `WriteDocument(intent)`. Take the change name from the command arguments (`/hoshin:intent <name>`) or derive it with `Workspace/Naming`. Never pick an existing change by sort order: remove the guess in `ResolveChangeFolder` (ANALYSIS E9), and when several changes are open and none is named, ask.
+- **Test first:**
+  - In an empty workspace, `/hoshin:intent add-login` creates `intent/<system>/<date>-add-login/change.jsonc` and the change branch, and injects the intent brief.
+  - With two open changes and no name, the hook asks which one, instead of picking.
+- **Done when:** the tests pass.
+
+### A8 · Reject, reopen and light-track accept flows; delete the unused half
+
+- **Depends on:** A5, A7
+- **Do:**
+  1. Port the original's reject, reopen and `fix` accept flows (GRAMMAR, the `state`/`ready` and `fix-state` sections) into `Next` and `Gate` as engine steps.
+  2. Then delete what is unused, and remove the T39 baseline entries that go with it:
+     - `WorkflowRepo.ReadChecksFromHooks`;
+     - the orchestrator's own step construction;
+     - `GateCommand`, if no manifest wires it;
+     - any remaining duplicate of a System A service.
+- **Test first:** one test per flow, taken from the matching black-box cases (`fix-state.test.mjs`, `state.test.mjs`), driven through the hooks.
+- **Done when:** ANALYSIS §3.2's table has one implementation per row, and DESIGN.md describes one system.
+
+---
+
+## P2 — Polish
 
 ### T21 · Small reader and validator fixes (batch)
 
@@ -681,58 +989,6 @@ Answer: _(pending)_
   4. `CrossChecker.IsSuperseded`: use the parsed `PlanReadResult.FrontMatter` rather than re-reading from disk.
   5. `ChangeRecordStore`: invalid JSONC throws `CouldNotRunException`, rather than falling back to `change/<folder>`.
 - **Test first:** one unit test per item.
-
-### T32 · Cross-platform packager and CI
-
-- **Do:**
-  1. Port `packaging/package.ps1` to run under PowerShell 7 (`pwsh`) on Linux, macOS and Windows: `Join-Path` everywhere, no `\` literals. Alternatively, rewrite it as a small .NET console tool under `tools/`.
-  2. Make `plugin.json`'s version come from `-Version` / `VersionPrefix`.
-  3. Change `Packager_*` to invoke `pwsh`.
-  4. Add `.github/workflows/ci.yml` with a matrix of `ubuntu-latest` and `windows-latest`. Steps: setup-dotnet 10, setup-node 22, `dotnet build -warnaserror`, `dotnet test`. Upload TRX results.
-- **Done when:** CI is green on both operating systems, with the full suite including `Packager_*`.
-
-### T33 · Warnings as errors, analyzers, `.editorconfig`
-
-- **Do:**
-  1. In `Directory.Build.props`, add `TreatWarningsAsErrors=true`, `AnalysisLevel=latest-recommended` and `EnforceCodeStyleInBuild=true`.
-  2. Add an `.editorconfig` matching the current style (4 spaces, file-scoped namespaces, `var`).
-  3. Fix or explicitly suppress each new warning. A suppression needs a justification comment.
-  4. Replace per-call `new Regex(...)` in hot paths (`Doc.Split`, `FrontMatterEdit`, `KeyLine`, `FieldLine`) with `[GeneratedRegex]`.
-- **Done when:** `dotnet build` is clean with the new settings and the tests pass.
-
-### T34 · Remove `?? Default` fallbacks from constructors
-
-- **Fixes:** §8.5
-- **Do:**
-  1. Make constructor dependencies required in `WorkflowRunner`, `HookOrchestrator`, `EventRunner`, `RedRecorder` and every class with `X? x = null` plus `x ?? X.Default` / `?? new X()`.
-  2. Make `WorkflowRepo.Find` and `ReadPlan` take their runner and `PlanReader`.
-  3. Delete `EventRunner.CreateDefaultSteps`; `HoshinServices` is the only composition root.
-  4. Add `TimeProvider`, and use it instead of `DateTimeOffset.UtcNow`, in the engine and runner.
-  5. Keep the `static Default` properties only where a test or an external caller needs them. Grep the tests first.
-- **Test first:** none (a pure refactor). The whole suite must stay green, and the PR must not change behavior.
-- **Done when:** `grep -rE '\?\? (new [A-Z]|[A-Za-z]+\.Default)' src` returns only justified, commented cases.
-
-### T35 · Give commands narrow dependencies instead of `HoshinServices`
-
-- **Fixes:** §8.4
-- **Depends on:** T34
-- **Do:**
-  1. Change each `IHoshinCommand` constructor to take only the services it uses. For example, `CheckCommand(IDocumentCheckService checker)`; extract interfaces for the concrete services a command needs.
-  2. Have `HoshinServices` build lazily (`Lazy<T>`), or switch `Hoshin.Cli` to `Microsoft.Extensions.DependencyInjection`. That is allowed in the CLI, not in the library.
-  3. Split `IWorkflowRunner` into `ITaskEvaluator`, `ICheckRunner`, `IApprovalRecorder`, `IPublisher` and `IDocumentCommitter`. `WorkflowRunner` may implement all of them at first.
-- **Done when:** no command takes `HoshinServices`, and the tests pass.
-
-### T36 · One source for duplicated rules and texts
-
-- **Fixes:** E13, §8.6
-- **Do:**
-  1. Delete `WorkflowBriefs.DefaultImplementProcedure`, and use the embedded `skills/implement/procedure.md`. Fail loudly if the resource is missing.
-  2. Move the intent headings into one `IntentReader.RequiredHeadings` used by both the reader and the brief.
-  3. Move the protected-path rules into one `ProtectedPaths` class in `Hoshin.Workflow`, used by both `WorkflowRunner` and `GuardCommand`.
-  4. Move the tool-name lists into one `HarnessTools` class in `Hoshin.Cli/Hooks`, and generate the manifest matchers from it in `package.ps1`, or test that they match.
-  5. Replace the string step kinds (`CurrentStep.Kind`) and the document names (`"intent"|"spec"|"plan"`) with enums. Use `JsonStringEnumConverter` so the JSON stays the same.
-- **Test first:** a test asserting that the `matcher` values in both manifests equal the `HarnessTools` lists.
-- **Done when:** the tests pass.
 
 ### T37 · Fix false and stale doc claims
 
@@ -751,19 +1007,7 @@ Answer: _(pending)_
 
 ---
 
-## Epics (not agent-sized yet)
-
-### EPIC-A · Unify System A and System B  `needs decision: D1`
-
-Once D1 is answered, break this epic into tasks of no more than about 500 changed lines each. The likely order, for D1 = (a):
-1. `WorkflowRunner` uses `IGitClient` instead of `WorkflowRepo.Git`.
-2. One Red rule (`RedClassifier`, after T14) used by both `hoshin red` and the runner.
-3. `WorkflowState` is built from `ChangeStateService`, so pins, superseded plans and the light track gate the skills.
-4. The runner emits lifecycle events through `EventRunner` (`build.start`, `task.done`, `build.finish`, `change.done`) and writes build logs.
-5. Multi-repo builds: add `repo` to `WorkflowTask`, and schedule tasks per repository.
-6. `change start` from `hook start` when no change exists (ANALYSIS H1).
-7. Reject, reopen and `fix --accept` flows.
-8. Delete the unused half: one ledger, one check configuration.
+## Epics
 
 ### EPIC-B · Restore the dropped skill guidance, templates and evals
 

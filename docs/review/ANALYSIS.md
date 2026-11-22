@@ -482,6 +482,8 @@ Missing, in priority order:
 
 ## 10. Recommended plan
 
+This is the summary. [TASKS.md](TASKS.md) is authoritative for order and scope. Since this review was first written, CI, the architecture tests and the SOLID fixes have been made mandatory ([CONTRIBUTING.md](../../CONTRIBUTING.md)). TASKS.md therefore runs the enforcement tasks first, and lists the SOLID fixes as required P1 work.
+
 **P0 — before anyone installs v2.0.0:**
 
 1. Scope the guard and all hooks to hoshin workspaces with an active run for the current session (S2, H8).
