@@ -7,7 +7,7 @@ import { tempDir } from './temp.mjs';
 export const REPO = 'mono';
 
 export function singleRepo({ apps = { api: 'apps/api', web: 'apps/web' }, marker = {} } = {}) {
-  const root = realpathSync(tempDir('hoshin-single-'));
+  const root = realpathSync.native(tempDir('hoshin-single-'));
   const workspace = join(root, 'ws');
   const path = join(workspace, REPO);
   const files = {};

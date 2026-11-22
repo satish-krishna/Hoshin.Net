@@ -54,7 +54,7 @@ const NAMES = {
 const folder = (change) => `intent/demo/${change}`;
 
 export function systemWorkspace({ finished, cleanOpen = 0 }) {
-  const ws = realpathSync(tempDir('hoshin-sys-'));
+  const ws = realpathSync.native(tempDir('hoshin-sys-'));
   const master = join(ws, 'master');
   const app = join(ws, 'app');
   const names = { ...NAMES };
