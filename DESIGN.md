@@ -44,7 +44,7 @@ flowchart TB
 
     subgraph Store["Repository & Local State"]
         GIT["Git History & Working Tree"]
-        LEDGER[".git/hoshin/<br/>workflow-ledger.json, step.json, run.json"]
+        LEDGER[".git/hoshin/<br/>changes/&lt;change&gt;/workflow-ledger.json, step.json, run.json"]
         WT[".git/hoshin/worktrees/red-check<br/>(Cached Detached Worktree)"]
     end
 
@@ -72,7 +72,7 @@ flowchart TB
 
 ## 3. Workflow State Machine (`WorkflowEngine.Next`)
 
-`WorkflowState` is reconstructed cleanly from git, the change's JSONC documents, and `.git/hoshin/workflow-ledger.json`. `WorkflowEngine.Next(WorkflowState)` is a pure function returning the single next `Step`:
+`WorkflowState` is reconstructed cleanly from git, the change's JSONC documents, and `.git/hoshin/changes/<change>/workflow-ledger.json`. `WorkflowEngine.Next(WorkflowState)` is a pure function returning the single next `Step`:
 
 ```mermaid
 stateDiagram-v2

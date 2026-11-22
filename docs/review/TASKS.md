@@ -134,7 +134,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T04 | P0 | Close the trivial guard bypasses, and enforce "no agent commits" in the library | S3 | — | done |
 | T05 | P0 | Read build checks from the base branch, not the working tree | S6 | — | done |
 | T06 | P0 | Protect the change folder and shell writes during a build | S7 | — | done |
-| T07 | P0 | Scope the workflow ledger to one change | E1 | — | open |
+| T07 | P0 | Scope the workflow ledger to one change | E1 | — | done |
 | T08 | P0 | Commit only the task's own paths | E2, E11 | — | open |
 | T09 | P0 | Serialize evaluate-and-commit | E3 | — | open |
 | T10 | P0 | Make `migrate` fail closed | L1, L2, L3 | — | open |

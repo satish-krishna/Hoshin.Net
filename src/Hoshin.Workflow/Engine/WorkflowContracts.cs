@@ -132,7 +132,7 @@ public sealed record WorkflowReviewRun(string Head, int ReviewNumber, int Findin
 /// <summary>An active async subagent recorded in the ledger so concurrent launches are refused and completion is judged once.</summary>
 public sealed record ActiveSubagent(string Task, int Attempt, string AgentId, DateTimeOffset LaunchedAt);
 
-/// <summary>Everything a workflow run has decided. Lives in <c>.git/hoshin/workflow-ledger.json</c>; no host owns a copy.</summary>
+/// <summary>Everything a workflow run has decided for a change. Lives in <c>.git/hoshin/changes/&lt;change&gt;/workflow-ledger.json</c>; no host owns a copy.</summary>
 public sealed class WorkflowLedger
 {
     public List<WorkflowIssued> Issued { get; set; } = [];
@@ -159,14 +159,16 @@ public sealed record CurrentStep(
     string? SessionId = null,
     string? ChangeFolder = null,
     IReadOnlyList<string>? TestPatterns = null,
-    IReadOnlyList<string>? TaskTestFiles = null);
+    IReadOnlyList<string>? TaskTestFiles = null,
+    string? Change = null);
 
 /// <summary>Active run marker stored in <c>.git/hoshin/run.json</c> identifying the owning session and harness.</summary>
 public sealed record RunMarker(
     DateTimeOffset Started,
     string? SessionId = null,
     string? Harness = null,
-    string? ChangeFolder = null);
+    string? ChangeFolder = null,
+    string? Change = null);
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(WorkflowLedger))]

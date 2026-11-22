@@ -28,7 +28,9 @@ public sealed class WorkflowRepo
 
     public string ChangeFolder { get; }
 
-    public string LedgerPath => Path.Combine(HoshinDir, "workflow-ledger.json");
+    public string ChangeKey => ChangeLedgerPaths.ResolveChangeKey(ChangeFolder);
+
+    public string LedgerPath => ChangeLedgerPaths.LedgerPath(HoshinDir, ChangeKey);
 
     public string StepPath => Path.Combine(HoshinDir, "step.json");
 
@@ -308,10 +310,13 @@ public sealed class WorkflowRepo
             : throw new CouldNotRunException($"{Path.GetFileName(path)} is not a set of fields");
     }
 
-    public WorkflowLedger ReadLedger() =>
-        File.Exists(LedgerPath)
+    public WorkflowLedger ReadLedger()
+    {
+        ChangeLedgerPaths.TryMigrateLegacyLedger(HoshinDir, LedgerPath, ReadRunMarker());
+        return File.Exists(LedgerPath)
             ? JsonSerializer.Deserialize(File.ReadAllText(LedgerPath), WorkflowJsonContext.Default.WorkflowLedger) ?? new()
             : new();
+    }
 
     public void WriteLedger(WorkflowLedger ledger) =>
         WriteAtomic(LedgerPath, JsonSerializer.Serialize(ledger, WorkflowJsonContext.Default.WorkflowLedger));
@@ -360,7 +365,7 @@ public sealed class WorkflowRepo
 
     private void WriteAtomic(string path, string text)
     {
-        Directory.CreateDirectory(HoshinDir);
+        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? HoshinDir);
         var tmp = $"{path}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
         File.WriteAllText(tmp, text);
         File.Move(tmp, path, overwrite: true);
