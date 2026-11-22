@@ -106,7 +106,13 @@ public sealed record Done(bool Success, string Outcome) : Step
 }
 
 /// <summary>Where an attempt started, so failed attempts stay clean and retries have a known baseline.</summary>
-public sealed record WorkflowIssued(string Task, int Attempt, string StartHead, DateTimeOffset At);
+public sealed record WorkflowIssued(
+    string Task,
+    int Attempt,
+    string StartHead,
+    DateTimeOffset At,
+    bool IndexHadStagedChanges = false,
+    Dictionary<string, string>? PreIssuePaths = null);
 
 /// <summary>The library's verdict on one agent attempt.</summary>
 public sealed record WorkflowVerdict(

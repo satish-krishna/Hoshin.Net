@@ -17,6 +17,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Base-branch build checks (T05):** `BaseBranchChecksReader` loads blocking `build.finish` checks exclusively from the base ref via `git show <base>:...` (combining `.hoshin.json`, `intent/<system>/hooks.json` via `HookConfigService`, and any committed per-change `hooks.jsonc`/`hooks.json`, with a uniform `blocking` default of `true`), preventing working-tree tampering.
 - **Change-folder & shell-redirect protection (T06):** Protected the active change folder during `Implement`/`Retry` in both `WorkflowRunner.IsProtectedPath` and `GuardCommand`, and added `ShellWriteTargets` to enforce Red-phase and single-document write locks on shell `>`, `>>`, and `tee` targets.
 - **Per-change workflow ledger (T07):** Scoped the workflow ledger to `.git/hoshin/changes/<change>/workflow-ledger.json` via `ChangeLedgerPaths` so task IDs across different changes never collide, with one-time migration of legacy `.git/hoshin/workflow-ledger.json` when `run.json` names a change.
+- **Task path isolation & NUL-delimited status parsing (T08):** `WorkingTreeSnapshot` captures pre-issue dirty/untracked file digests and staged-index state on `WorkflowIssued`, parses `git status --porcelain=v1 -z -uall`, refuses attempts when the index had staged changes before issue, excludes unchanged pre-issue files, commits with explicit `-- <paths>` pathspecs, and resets `--mixed` to `startHead` on any failure after staging begins.
 
 ## [2.0.0] - 2026-11-21
 

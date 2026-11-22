@@ -75,8 +75,17 @@ public sealed partial class WorkflowRunner(
             {
                 if (!ledger.Issued.Any(x => x.Task == agent.Task && x.Attempt == agent.Attempt))
                 {
-                    var taskStart = ledger.Issued.FirstOrDefault(x => x.Task == agent.Task)?.StartHead ?? repo.Head();
-                    ledger.Issued.Add(new WorkflowIssued(agent.Task, agent.Attempt, taskStart, DateTimeOffset.UtcNow));
+                    var firstForTask = ledger.Issued.FirstOrDefault(x => x.Task == agent.Task);
+                    var taskStart = firstForTask?.StartHead ?? repo.Head();
+                    var snapshot = WorkingTreeSnapshot.Capture(repo);
+                    var preIssuePaths = firstForTask?.PreIssuePaths ?? snapshot.PathDigests;
+                    ledger.Issued.Add(new WorkflowIssued(
+                        agent.Task,
+                        agent.Attempt,
+                        taskStart,
+                        DateTimeOffset.UtcNow,
+                        snapshot.IndexHadStagedChanges,
+                        preIssuePaths));
                 }
 
                 return 0;
@@ -190,7 +199,20 @@ public sealed partial class WorkflowRunner(
                 DateTimeOffset.UtcNow));
         }
 
-        var changed = GetWorkingTreeChanges(repo);
+        var issued = state.Ledger.Issued.FirstOrDefault(x => x.Task == taskId && x.Attempt == attempt);
+        if (issued?.IndexHadStagedChanges == true)
+        {
+            return RecordVerdict(repo, new WorkflowVerdict(
+                taskId,
+                attempt,
+                startHead,
+                false,
+                "not observed: index had staged changes",
+                [WorkingTreeSnapshot.StagedIndexRefusalReason],
+                DateTimeOffset.UtcNow));
+        }
+
+        var changed = WorkingTreeSnapshot.FilterTaskChanges(repo, WorkingTreeSnapshot.GetChanges(repo), issued?.PreIssuePaths);
         var reasons = new List<string>();
         var redSummary = "not observed: no test commit";
 
@@ -261,11 +283,12 @@ public sealed partial class WorkflowRunner(
 
         if (!StagePaths(repo, testPaths, out var stageTestErr))
         {
+            repo.Git("reset", "--mixed", "--quiet", startHead);
             reasons.Add($"git: could not stage test files: {stageTestErr}");
             return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
         }
 
-        var testCommit = repo.Git("commit", "-q", "-m", $"test({plan.Scope}): {task.Title}", "-m", trailers);
+        var testCommit = CommitPaths(repo, $"test({plan.Scope}): {task.Title}", trailers, testPaths);
         if (!testCommit.Ok)
         {
             repo.Git("reset", "--mixed", "--quiet", startHead);
@@ -283,7 +306,7 @@ public sealed partial class WorkflowRunner(
         }
 
         var workType = string.IsNullOrWhiteSpace(plan.WorkType) ? "feat" : plan.WorkType;
-        var prodCommit = repo.Git("commit", "-q", "-m", $"{workType}({plan.Scope}): {task.Title}", "-m", trailers);
+        var prodCommit = CommitPaths(repo, $"{workType}({plan.Scope}): {task.Title}", trailers, prodPaths);
         if (!prodCommit.Ok)
         {
             repo.Git("reset", "--mixed", "--quiet", startHead);
@@ -770,48 +793,6 @@ public sealed partial class WorkflowRunner(
         }
     }
 
-    private sealed record WorkingTreeChange(string Path, bool Deleted);
-
-    private static List<WorkingTreeChange> GetWorkingTreeChanges(WorkflowRepo repo)
-    {
-        var status = repo.Git("status", "--porcelain", "-uall");
-        var list = new List<WorkingTreeChange>();
-        if (!status.Ok || string.IsNullOrWhiteSpace(status.Output))
-        {
-            return list;
-        }
-
-        foreach (var raw in status.Output.Replace("\r\n", "\n").Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (raw.Length < 4)
-            {
-                continue;
-            }
-
-            var xy = raw[..2];
-            var pathPart = raw[3..].Trim();
-            if (pathPart.StartsWith('"') && pathPart.EndsWith('"') && pathPart.Length >= 2)
-            {
-                pathPart = pathPart[1..^1];
-            }
-
-            var arrow = pathPart.IndexOf(" -> ", StringComparison.Ordinal);
-            if (arrow >= 0)
-            {
-                var oldPath = pathPart[..arrow].Trim();
-                var newPath = pathPart[(arrow + 4)..].Trim();
-                list.Add(new WorkingTreeChange(oldPath.Replace('\\', '/'), Deleted: true));
-                list.Add(new WorkingTreeChange(newPath.Replace('\\', '/'), Deleted: false));
-                continue;
-            }
-
-            var deleted = xy[0] == 'D' || xy[1] == 'D';
-            list.Add(new WorkingTreeChange(pathPart.Replace('\\', '/'), deleted));
-        }
-
-        return list;
-    }
-
     private RedClassification ObserveRedOnCachedWorktree(
         WorkflowRepo repo,
         WorkflowTask task,
@@ -885,6 +866,13 @@ public sealed partial class WorkflowRunner(
         var res = repo.Git([.. args]);
         error = res.Ok ? "" : Squash(res.Tail(10));
         return res.Ok;
+    }
+
+    private static AllowListedCommandResult CommitPaths(WorkflowRepo repo, string subject, string trailers, string[] paths)
+    {
+        var args = new List<string> { "commit", "-q", "-m", subject, "-m", trailers, "--" };
+        args.AddRange(paths);
+        return repo.Git([.. args]);
     }
 
     private static bool IsProtectedPath(string relativePath, string repoRoot, string changeFolder)
