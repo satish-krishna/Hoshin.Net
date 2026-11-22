@@ -1,0 +1,71 @@
+{
+  "hooks": {
+    "UserPromptExpansion": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet \"${CLAUDE_PLUGIN_ROOT}/lib/hoshin.dll\" hook start --roles \"${CLAUDE_PLUGIN_ROOT}/roles\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet \"${CLAUDE_PLUGIN_ROOT}/lib/hoshin.dll\" guard",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet \"${CLAUDE_PLUGIN_ROOT}/lib/hoshin.dll\" hook start --roles \"${CLAUDE_PLUGIN_ROOT}/roles\"",
+            "timeout": 120
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet \"${CLAUDE_PLUGIN_ROOT}/lib/hoshin.dll\" hook result --roles \"${CLAUDE_PLUGIN_ROOT}/roles\"",
+            "timeout": 900
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet \"${CLAUDE_PLUGIN_ROOT}/lib/hoshin.dll\" hook subagent-stop --roles \"${CLAUDE_PLUGIN_ROOT}/roles\"",
+            "timeout": 900
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet \"${CLAUDE_PLUGIN_ROOT}/lib/hoshin.dll\" hook stop --roles \"${CLAUDE_PLUGIN_ROOT}/roles\"",
+            "timeout": 900
+          }
+        ]
+      }
+    ]
+  }
+}

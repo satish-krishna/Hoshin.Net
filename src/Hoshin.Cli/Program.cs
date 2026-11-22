@@ -30,6 +30,7 @@ public static class Program
             new CommitCommand(services),
             new GateCommand(services),
             new GuardCommand(),
+            new HookCommand(services),
             new BaselineCommand(services),
             new RedCommand(services),
         ];

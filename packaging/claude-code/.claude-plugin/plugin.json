@@ -1,0 +1,5 @@
+{
+  "name": "hoshin",
+  "version": "2.0.0",
+  "description": "Structured engineering workflow driven by deterministic .NET harness hooks."
+}

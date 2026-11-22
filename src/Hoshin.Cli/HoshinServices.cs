@@ -1,7 +1,9 @@
+using Hoshin.Cli.Hooks;
 using Hoshin.Workflow.Baseline;
 using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Events.Steps;
 using Hoshin.Workflow.Git;
@@ -53,6 +55,10 @@ public sealed class HoshinServices
     public RedVerdictService RedVerdict { get; }
     public BuildStartStep BuildStartStep { get; }
     public EventRunner EventRunner { get; }
+    public IAllowListedCommandRunner AllowListedRunner { get; }
+    public IWorkflowRunner WorkflowRunner { get; }
+    public HarnessAdapter HookAdapter { get; }
+    public HookOrchestrator HookOrchestrator { get; }
 
     public HoshinServices(
         IJsonSchemaValidator? schemaValidator = null,
@@ -113,5 +119,9 @@ public sealed class HoshinServices
             new ChangeDoneStep(Git, PullRequests, Progress, ReviewReader, Apps),
         };
         EventRunner = new EventRunner(Git, HookConfig, Ledger, HookScripts, HookProcess, steps);
+        AllowListedRunner = AllowListedCommandRunner.Default;
+        WorkflowRunner = new WorkflowRunner(AllowListedRunner, PullRequests, new IntentReader(), SpecReader, PlanReader);
+        HookAdapter = HarnessAdapter.Default;
+        HookOrchestrator = new HookOrchestrator(HookAdapter, WorkflowRunner);
     }
 }

@@ -1,0 +1,52 @@
+{
+  "hoshin": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "dotnet ./lib/hoshin.dll hook start --roles ./roles",
+        "timeout": 120
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "run_command|write_file|edit_file|write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet ./lib/hoshin.dll guard",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "read_file|view_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet ./lib/hoshin.dll hook start --roles ./roles",
+            "timeout": 120
+          }
+        ]
+      },
+      {
+        "matcher": "invoke_subagent|manage_task|manage_subagents",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "dotnet ./lib/hoshin.dll hook result --roles ./roles",
+            "timeout": 900
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "dotnet ./lib/hoshin.dll hook stop --roles ./roles",
+        "timeout": 900
+      }
+    ]
+  }
+}

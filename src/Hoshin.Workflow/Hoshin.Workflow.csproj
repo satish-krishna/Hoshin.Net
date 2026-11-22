@@ -13,6 +13,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Documents/Schemas/*.json" />
     <EmbeddedResource Include="Workspace/Templates/*.md" />
+    <EmbeddedResource Include="..\..\skills\**\*.md" LogicalName="Hoshin.Workflow.skills.%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>
