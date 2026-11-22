@@ -19,25 +19,48 @@ The IDs in brackets (S1, E2, L4, …) point back to the matching section of ANAL
    - it removes the baseline entries for any violation it fixed.
 
    When a task adds behavior to a class that is already too large or has baselined violations (for example `WorkflowRunner`, `WorkflowRepo`, `HookOrchestrator`, `GuardCommand`), put the new logic in a new, focused, injected type rather than growing the class.
-1. **Take one task at a time**, in the order of the index below, unless the task says otherwise. **Start with the "Gate" tasks (G)**: they make the rules enforceable, so every later task is checked by CI. One task (or one listed batch) per pull request. Name the branch `<type>/t<nn>-<short-description>` (CONTRIBUTING.md §1), for example `fix/t01-guard-scope`, and reference the task ID in the PR description.
+1. **Take one task at a time**, in the order of the index below, unless the task says otherwise. **Start with the "Gate" tasks (G)**: they make the rules enforceable, so CI checks every later task. Delivery is described in "Delivery: one pull request, one commit per task" below.
 2. **Never start a task marked `needs decision` until the decision below has an answer recorded under "Answer".** If it has none, skip the task and say so.
 3. **Test first.** Write the test in "Test first", run it, and confirm it fails for the reason described. Then change the code and confirm it passes. Don't weaken, skip or delete an existing test to get green. If an existing test asserts the old, wrong behavior, change it only when the task says so, and say why in the PR.
-4. **Run both suites before you finish:**
+4. **Every commit is green on its own,** so the history can be bisected:
    ```bash
-   dotnet build Hoshin.sln            # must stay at 0 warnings
-   dotnet test tests/Hoshin.Tests --filter "FullyQualifiedName!~BlackBoxConformanceTests"
-   dotnet test tests/Hoshin.Tests     # full, ~7 min; Packager_* needs Windows PowerShell until T32 lands
+   dotnet build Hoshin.sln            # 0 warnings, at every commit
+   dotnet test tests/Hoshin.Tests --filter "FullyQualifiedName!~BlackBoxConformanceTests"   # at every commit
+   dotnet test tests/Hoshin.Tests     # full (~7 min): at the last commit of each section (G, P0, P1, P2) and before marking the PR ready
    ```
+   Until T32 lands, `Packager_*` needs Windows PowerShell. That's why T32 is the first commit.
 5. **Keep the AGENTS.md invariants:**
    - `Hoshin.Workflow` references only Markdig and Gherkin.
    - Harness-specific code stays in `src/Hoshin.Cli/Hooks` and `src/Hoshin.Cli/Commands`.
    - `skills/*/procedure.md` files contain no CLI commands, YAML or harness tool names.
-6. **When behavior changes, update the docs in the same PR:**
+6. **When behavior changes, update the docs in the same commit as the task:**
    - `DESIGN.md` for architecture or hook behavior;
    - `CLIENTS.md` for CLI commands, options, fields or messages (enforced by `BlackBox/clients.test.mjs`);
    - `CHANGELOG.md` under an `Unreleased` heading.
-7. **Update the Status column** in the index when you finish a task (`done in #<PR>`), or when you find the task is wrong (`invalid: <reason>`). Don't silently expand a task's scope. If you find a new problem, add it at the end of the index as `T-new-<n>`.
+7. **Update the Status column** in the index *in the task's own commit*: `done` when you finish it, or `invalid: <reason>` when you find the task is wrong (that is a commit of its own, `docs(review): mark Tnn invalid`). Don't silently expand a task's scope. If you find a new problem, add it at the end of the index as `T-new-<n>`.
 8. **Stay within scope.** Symbols are named rather than line numbers wherever possible, so the task stays valid after edits. If a symbol isn't where the task says, search for it before concluding the task is stale.
+
+### Delivery: one pull request, one commit per task
+
+The whole program lands as **one pull request**, with **exactly one commit per task**. The engineer chose this.
+
+- **Branch:** `fix/review-findings`, from `main`, once the pull request that adds this file and CONTRIBUTING.md has merged.
+- **Pull request:** open it as a **draft** right after the first task's commit, and push after every task so CI runs on each step.
+  - **Title:** `fix(workflow)!: address review findings`. It is breaking: A2, T31 and others change client-visible behavior.
+  - **Description:** follows `.github/pull_request_template.md`. Its "Tasks" table lists every task with its commit subject and status, and is kept current on every push.
+  - **Ready for review:** mark it ready only when every task is `done` or `invalid`, apart from EPIC-B, which stays out of this PR (see below).
+- **Commits:** one per task, in index order. Don't squash several tasks together, and don't split a task across commits. If review asks for changes to a task, amend that task's commit so the rule still holds: `git commit --fixup <sha>`, then `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash origin/main` (non-interactive), then `git push --force-with-lease`. That is the only history rewrite allowed, and only on this branch. Each commit's message has:
+  - a Conventional header in the CONTRIBUTING.md §1 format;
+  - a body saying what changed and why;
+  - these trailers:
+    ```
+    Task: T01
+    Test-first: <test name> failed before the change: <one-line failure>
+    Docs: <owner documents updated, or "none">
+    ```
+  For example: `fix(guard): stay silent outside an active hoshin run`, with `Task: T01`.
+- **Merge:** by squash, as usual. The per-task commits exist for review: a reviewer can step through the branch one task at a time. So keep them clean until the merge, and never squash them on the branch.
+- **EPIC-B** (skill guidance, templates and evals) is judgment-heavy writing that needs a person, so it is **not** part of this pull request.
 
 ---
 
@@ -215,6 +238,8 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
   1. Add `.github/workflows/conventional.yml`, ported from `satish-krishna/hoshin` (`.github/workflows/conventional.yml`).
   2. Use the types from CONTRIBUTING.md §1, and pass the title and branch through `env`, never interpolated into the script.
   3. Check the PR title against `^(feat|fix|docs|test|refactor|perf|build|ci|chore)\([a-z0-9]+(-[a-z0-9]+)*\)!?: \S.*$`, and the branch against `^(feat|fix|docs|test|refactor|perf|build|ci|chore)/[a-z0-9]+(-[a-z0-9]+)*$`.
+  4. Also check the header of **every commit** in the pull request (`git log --format=%s origin/<base>..HEAD`) against the title pattern. Reviewers step through program pull requests commit by commit, so each header must say what its task did.
+  5. For a pull request whose branch is `fix/review-findings`, also require a `Task: <id>` trailer on every commit, naming an ID from `docs/review/TASKS.md`, with no ID used twice.
 - **Done when:** the check runs on pull requests and is named `conventional names`, so it can be made required. Remove CONTRIBUTING.md's "(lands with T40)" note.
 
 ### T42 · Coverage gate on changed lines
@@ -868,7 +893,7 @@ These fix existing violations of CONTRIBUTING.md §3. They are not optional, and
 
 ## P1 — Unify the two systems (D1 = a)
 
-Goal: System B's engine and harness adapter, driven by System A's domain services, with one git layer, one ledger, one Red rule and one check configuration. Do A1–A8 in order. Each is one pull request of no more than about 500 changed lines; split further if needed, and record the split here.
+Goal: System B's engine and harness adapter, driven by System A's domain services, with one git layer, one ledger, one Red rule and one check configuration. Do A1–A8 in order. Each is one commit of no more than about 500 changed lines. If one would be larger, split it into further tasks (A4a, A4b, …), and record the split here.
 
 ### A1 · `WorkflowRunner` uses `IGitClient`
 

@@ -1,10 +1,18 @@
 ## What and why
 
-<!-- One concern per pull request (CONTRIBUTING.md §1). Name the task from docs/review/TASKS.md if there is one, e.g. "T07". -->
+<!-- One concern per pull request (CONTRIBUTING.md §1). A program pull request (one commit per task) summarizes the program here and lists its tasks below. -->
+
+## Tasks (program pull requests only)
+
+<!-- For a pull request that delivers a task list (e.g. docs/review/TASKS.md) as one commit per task. Delete this section otherwise. Keep it current on every push. -->
+
+| Task | Commit subject | Status |
+| :--- | :--- | :--- |
+| T32 | `ci(packaging): run the packager and the full suite on Linux and Windows` | done |
 
 ## Test first
 
-<!-- Which test did you write first, and how did it fail before the change? (CONTRIBUTING.md §6, T1) Paste the failing assertion or its one-line summary. -->
+<!-- Which test did you write first, and how did it fail before the change? (CONTRIBUTING.md §6, T1) Paste the failing assertion or its one-line summary. In a program pull request, each commit's `Test-first:` trailer carries this instead; write "see commit trailers". -->
 
 ## Behavior and contract changes
 
