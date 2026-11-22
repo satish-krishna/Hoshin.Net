@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Hoshin.Workflow.Common;
 
 namespace Hoshin.Workflow.Engine;
 
@@ -198,15 +199,8 @@ public static class WorkflowBriefs
             : $"Follow the {role} role instructions provided in context.";
     }
 
-    public static string TruncateIfNeeded(string text)
-    {
-        if (text.Length <= MaxInjectedChars)
-        {
-            return text;
-        }
-
-        return text[..(MaxInjectedChars - 32)] + "\n\n[truncated to stay under 10,000 chars]";
-    }
+    public static string TruncateIfNeeded(string text, int maxChars = MaxInjectedChars) =>
+        TextTruncator.TruncateMiddle(text, maxChars);
 
     private static string StripAnyLeadingFrontMatter(string raw)
     {

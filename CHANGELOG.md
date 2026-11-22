@@ -34,6 +34,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Dispatched subagent nonce verification (T24):** Embedded a per-attempt dispatch nonce (`<!-- hoshin:<task>:attempt-<n>:<8 hex> -->`) in `CurrentStep.DispatchNonce` and `HookInstructions.For`, and updated `HookOrchestrator.HandleResult` to judge or register only subagents whose prompt contains the active nonce (ignoring Explore/research subagents without burning attempts).
 - **Async verdict & `NeedsApproval` reporting (T25):** `HookOrchestrator.HandleSubagentStop` now queues the verdict report into `.git/hoshin/pending-report.txt` under the run lock, and `HandleStop` drains and prepends it on the parent's next Stop, reporting `NeedsApproval` or `Done` once before allowing the following Stop cleanly.
 - **Scoped stop counters & continuation/question handling (T26):** Extracted run-locked `StopCounterStore` with separate per-scope counters (`build`, `write-<doc>`, `review`, `fix`), resetting consecutive block counts when `ContinuationActive` (`stop_hook_active`) is `false`, and letting `WriteDocument` yield cleanly when the assistant's last message ends with a question.
+- **Unicode-safe middle truncation for injected hook text (T27):** Added `TextTruncator` operating on `StringInfo` text-element boundaries with `[… N characters omitted …]` markers and assembled report/header, middle-truncated prompt body, and closing `END SUBAGENT PROMPT>>>` marker in one place inside `HookInstructions.For` so closing markers and surrogate pairs are never cut.
 
 ## [2.0.0] - 2026-11-21
 

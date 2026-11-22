@@ -118,7 +118,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             _runner.Issue(repo, state, fixStep, ev.SessionId);
             var fixArgs = ev.CommandArgs ?? slashArgs ?? "";
             var desc = fixArgs.Trim().Length > 0 ? $"\n\nThe engineer's fix request: {fixArgs.Trim()}" : "";
-            return EmitStartContext(ev, repo, HookInstructions.For(fixStep, ev.Harness) + desc, "fix: Fix");
+            return EmitStartContext(ev, repo, HookInstructions.For(fixStep, ev.Harness, suffix: desc), "fix: Fix");
         }
 
         if (invoked is "accept" or "done")
@@ -154,7 +154,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             ? $"\n\nThe product owner's idea, as they typed it: {args.Trim()}"
             : "";
 
-        return EmitStartContext(ev, repo, prefix + HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce) + idea, $"{invoked}: {step.Kind}");
+        return EmitStartContext(ev, repo, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: prefix, suffix: idea), $"{invoked}: {step.Kind}");
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
@@ -214,7 +214,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
 
         // Foreground subagent completed: judge attempt immediately and hand out next step.
         var (verdict, step) = JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId);
-        return (_adapter.ContextOutput(ev, ReportVerdict(current, verdict) + HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce)), $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
+        return (_adapter.ContextOutput(ev, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: ReportVerdict(current, verdict))), $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
     }
 
     public (string? Output, string Decision) HandleSubagentStop(NormalizedHookEvent ev, string? rolesRoot)
@@ -321,15 +321,15 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
                     return (_adapter.SystemMessageOutput(ev.Harness, $"hoshin: parked after {MaxStopBlocks} stops without taking the step ({step.Kind})."), $"parked after {blocks - 1} blocks");
                 }
 
-                return (_adapter.BlockStopOutput(ev.Harness, verdictReport + HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce)), $"block {blocks}: {step.Kind}");
+                return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: verdictReport)), $"block {blocks}: {step.Kind}");
 
             case NeedsApproval when hasReport:
-                return (_adapter.BlockStopOutput(ev.Harness, verdictReport + HookInstructions.For(step, ev.Harness)), "continue: report NeedsApproval");
+                return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report NeedsApproval");
 
             case Done:
                 if (hasReport)
                 {
-                    return (_adapter.BlockStopOutput(ev.Harness, verdictReport + HookInstructions.For(step, ev.Harness)), "continue: report Done");
+                    return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report Done");
                 }
 
                 ClearTurnFiles(repo);
