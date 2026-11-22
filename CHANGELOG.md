@@ -37,6 +37,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Unicode-safe middle truncation for injected hook text (T27):** Added `TextTruncator` operating on `StringInfo` text-element boundaries with `[… N characters omitted …]` markers and assembled report/header, middle-truncated prompt body, and closing `END SUBAGENT PROMPT>>>` marker in one place inside `HookInstructions.For` so closing markers and surrogate pairs are never cut.
 - **Configurable timeouts & attempt cap (T28):** Added optional per-task `timeout` (seconds) to `plan-task.schema.json`, `read-result.schema.json`, `PlanReader`, and `WorkflowTask`, plus `.hoshin.json` `build: { testTimeoutSeconds, checkTimeoutSeconds, maxAttempts }` read via `MarkerBuildSettings` into `WorkflowPlan` and honored by `WorkflowEngine.Next` and `WorkflowRunner`.
 - **Marker `testPatterns` validation (T29):** Accepted optional `testPatterns` (array of non-empty glob strings) in `MarkerReader.MarkerProblems` so `hoshin check .hoshin.json` aligns with `MarkerBuildSettings` and `DESIGN.md §4`.
+- **System context discovery in authoring briefs (T30):** Updated `WorkflowBriefs.Intent` (plus `Spec` and `Plan`) to resolve the real system name from `intent/<system>/<change>/`, list `intent/<system>/context/*.md` context files, and keep the `.hoshin/context*.md` fallback.
 
 ## [2.0.0] - 2026-11-21
 

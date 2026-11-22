@@ -67,12 +67,8 @@ public static class WorkflowBriefs
     public static string Intent(WorkflowState state)
     {
         var rel = RelativePath(state.RepoRoot, state.Intent.Path);
-        var context = Directory.Exists(state.ChangeFolder)
-            ? Directory.GetFiles(state.ChangeFolder, "context*.md")
-                .Select(f => RelativePath(state.RepoRoot, f))
-                .OrderBy(f => f, StringComparer.Ordinal)
-                .ToList()
-            : [];
+        var (systemName, contextDir) = ResolveSystem(state);
+        var context = FindContextFiles(state, contextDir);
 
         var b = new StringBuilder();
         b.AppendLine(CultureInfo.InvariantCulture, $"# The intent for change {state.Plan.Change}");
@@ -82,7 +78,7 @@ public static class WorkflowBriefs
         b.AppendLine("The file starts on line 1 with a fenced `jsonc` front matter block:");
         b.AppendLine();
         b.AppendLine("```jsonc");
-        b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"title\": \"<short title>\", \"system\": \"{state.Plan.Scope}\", \"author\": \"<name and role>\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\", \"scope\": \"{state.Plan.Scope}\" }}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"title\": \"<short title>\", \"system\": \"{systemName}\", \"author\": \"<name and role>\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\", \"scope\": \"{state.Plan.Scope}\" }}");
         b.AppendLine("```");
         b.AppendLine();
         b.AppendLine("Then include these headings in order, each with content: `# Intent: <title>`, `## Problem`, `## Proposed outcome`, `## Affected users and systems`, `## Constraints`, `## Decisions`, `## Open questions`.");
@@ -95,6 +91,7 @@ public static class WorkflowBriefs
     {
         var specRel = RelativePath(state.RepoRoot, state.Spec.Path);
         var intentRel = RelativePath(state.RepoRoot, state.Intent.Path);
+        var (systemName, _) = ResolveSystem(state);
         var b = new StringBuilder();
         b.AppendLine(CultureInfo.InvariantCulture, $"# The spec for change {state.Plan.Change}");
         b.AppendLine();
@@ -103,7 +100,7 @@ public static class WorkflowBriefs
         b.AppendLine("The file starts on line 1 with a fenced `jsonc` front matter block:");
         b.AppendLine();
         b.AppendLine("```jsonc");
-        b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"layout\": 2, \"title\": \"<intent title>\", \"system\": \"{state.Plan.Scope}\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\" }}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"layout\": 2, \"title\": \"<intent title>\", \"system\": \"{systemName}\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\" }}");
         b.AppendLine("```");
         b.AppendLine();
         b.AppendLine("Then `# Spec: <title>` and `## Requirements` with one fenced `gherkin` block: a `Feature:`, one `Rule:` per requirement tagged `@R<n>` and at least one `@from:<source>`, and scenarios tagged `@R<n>.<m>`.");
@@ -116,6 +113,7 @@ public static class WorkflowBriefs
     {
         var planRel = RelativePath(state.RepoRoot, state.PlanDoc.Path);
         var specRel = RelativePath(state.RepoRoot, state.Spec.Path);
+        var (systemName, _) = ResolveSystem(state);
         var b = new StringBuilder();
         b.AppendLine(CultureInfo.InvariantCulture, $"# The plan for change {state.Plan.Change}");
         b.AppendLine();
@@ -124,13 +122,49 @@ public static class WorkflowBriefs
         b.AppendLine("The file starts on line 1 with a fenced `jsonc` front matter block:");
         b.AppendLine();
         b.AppendLine("```jsonc");
-        b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"layout\": 2, \"system\": \"{state.Plan.Scope}\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\" }}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"layout\": 2, \"system\": \"{systemName}\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\" }}");
         b.AppendLine("```");
         b.AppendLine();
         b.AppendLine("Define `## Tasks` with `### T<n>: <name>` headings, each followed by a fenced `jsonc` fields block (`id`, `repo`, `depends_on`, `covers`, `test`) and `#### Change` / `#### Tests` sections.");
         b.AppendLine();
         b.AppendLine("Edit no other file and do not commit: the file is committed for you when you end your turn.");
         return b.ToString();
+    }
+
+    private static (string SystemName, string? ContextDir) ResolveSystem(WorkflowState state)
+    {
+        var rel = RelativePath(state.RepoRoot, state.ChangeFolder).Trim('/');
+        var parts = rel.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 3 &&
+            parts[0].Equals("intent", StringComparison.OrdinalIgnoreCase) &&
+            !parts[1].Equals("hooks", StringComparison.OrdinalIgnoreCase))
+        {
+            var system = parts[1];
+            var contextDir = string.IsNullOrEmpty(state.RepoRoot)
+                ? Path.Combine("intent", system, "context")
+                : Path.Combine(state.RepoRoot, "intent", system, "context");
+            return (system, contextDir);
+        }
+
+        return (state.Plan.Scope, null);
+    }
+
+    private static List<string> FindContextFiles(WorkflowState state, string? systemContextDir)
+    {
+        var files = new List<string>();
+        if (systemContextDir is not null && Directory.Exists(systemContextDir))
+        {
+            files.AddRange(Directory.GetFiles(systemContextDir, "*.md"));
+        }
+        else if (Directory.Exists(state.ChangeFolder))
+        {
+            files.AddRange(Directory.GetFiles(state.ChangeFolder, "context*.md"));
+        }
+
+        return files
+            .Select(f => RelativePath(state.RepoRoot, f))
+            .OrderBy(f => f, StringComparer.Ordinal)
+            .ToList();
     }
 
     public static string Review(WorkflowState state)
