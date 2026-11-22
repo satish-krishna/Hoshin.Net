@@ -3,6 +3,14 @@
   <PropertyGroup>
     <RootNamespace>Hoshin.Workflow</RootNamespace>
     <AssemblyName>Hoshin.Workflow</AssemblyName>
+    <PackageId>Hoshin.Workflow</PackageId>
+    <Authors>SatishKrishna Pilla</Authors>
+    <Description>Core .NET 10 workflow library for Hoshin.Net: JSONC document readers and validators, Layout 2 migration, state machine (WorkflowEngine.Next), detached worktree Red/Green runner, and embedded harness-neutral role procedures.</Description>
+    <PackageTags>hoshin;workflow;gherkin;jsonc;tdd;agents</PackageTags>
+    <RepositoryUrl>https://github.com/satish-krishna/Hoshin.Net</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>true</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,7 +21,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Documents/Schemas/*.json" />
     <EmbeddedResource Include="Workspace/Templates/*.md" />
-    <EmbeddedResource Include="..\..\skills\**\*.md" LogicalName="Hoshin.Workflow.skills.%(RecursiveDir)%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\skills\**\*.md" Link="skills\%(RecursiveDir)%(Filename)%(Extension)" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

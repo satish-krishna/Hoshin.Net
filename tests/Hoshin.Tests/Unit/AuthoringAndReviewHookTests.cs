@@ -735,7 +735,36 @@ public sealed class AuthoringAndReviewHookTests
             Timeout: TimeSpan.FromMinutes(3)));
         Assert.True(res.Ok, $"package.ps1 failed:\n{res.Stdout}\n{res.Stderr}");
 
+        // Verify portable CLI + skills bundle and Hoshin.Workflow NuGet package.
+        Assert.True(File.Exists(Path.Combine(outDir.Path, "portable", "lib", "hoshin.dll")));
+        Assert.True(File.Exists(Path.Combine(outDir.Path, "portable", "lib", "Hoshin.Workflow.dll")));
+        Assert.True(File.Exists(Path.Combine(outDir.Path, "portable", "lib", "Markdig.dll")));
+        Assert.True(File.Exists(Path.Combine(outDir.Path, "portable", "lib", "Gherkin.dll")));
+        Assert.True(File.Exists(Path.Combine(outDir.Path, "portable", "skills", "implement", "procedure.md")));
+
+        var nupkgPath = Path.Combine(outDir.Path, "nuget", "Hoshin.Workflow.2.0.0.nupkg");
+        Assert.True(File.Exists(nupkgPath), $"Missing NuGet package: {nupkgPath}");
+        using (var zip = System.IO.Compression.ZipFile.OpenRead(nupkgPath))
+        {
+            var nuspecEntry = zip.Entries.FirstOrDefault(e => e.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(nuspecEntry);
+            using var sr = new StreamReader(nuspecEntry!.Open());
+            var nuspec = sr.ReadToEnd();
+            Assert.Contains("id=\"Markdig\"", nuspec);
+            Assert.Contains("id=\"Gherkin\"", nuspec);
+            Assert.DoesNotContain("Claude", nuspec, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Antigravity", nuspec, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Yaml", nuspec, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Verify Hoshin.Workflow assembly embeds all 11 role/skill procedures.
+        var embeddedNames = typeof(WorkflowEngine).Assembly.GetManifestResourceNames();
         var tenSkills = new[] { "intent", "spec", "plan", "build", "review", "fix", "done", "accept", "setup", "context" };
+        foreach (var role in tenSkills.Append("implement"))
+        {
+            Assert.Contains(embeddedNames, n => n.EndsWith($".skills.{role}.procedure.md", StringComparison.OrdinalIgnoreCase));
+        }
+
         foreach (var bundleRoot in new[]
         {
             Path.Combine(outDir.Path, "claude-code", "skills"),

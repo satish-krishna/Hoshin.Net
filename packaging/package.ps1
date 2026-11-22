@@ -1,11 +1,15 @@
 <#
 .SYNOPSIS
-Builds the portable Hoshin.Net CLI bundle and generates both the Claude Code plugin bundle
-and the Google Antigravity (.agents/) bundle under artifacts/.
+Builds all Hoshin.Net v2.0.0 release artifacts under artifacts/:
+  - artifacts/portable/            Portable CLI DLL bundle + skills/ folder
+  - artifacts/nuget/               Hoshin.Workflow.<version>.nupkg (with embedded role texts)
+  - artifacts/claude-code/         Claude Code plugin bundle (.claude-plugin/, hooks/, lib/, roles/, skills/)
+  - artifacts/antigravity/.agents/ Google Antigravity bundle (hooks.json, lib/, roles/, skills/)
 #>
 param(
     [string]$Configuration = "Release",
-    [string]$OutputRoot = ""
+    [string]$OutputRoot = "",
+    [string]$Version = "2.0.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,32 +21,55 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 }
 
 $portableDir = Join-Path $OutputRoot "portable"
+$portableLibDir = Join-Path $portableDir "lib"
+$portableSkillsDir = Join-Path $portableDir "skills"
+$nugetDir = Join-Path $OutputRoot "nuget"
 $claudeDir = Join-Path $OutputRoot "claude-code"
 $agyDir = Join-Path $OutputRoot "antigravity\.agents"
 
-foreach ($dir in @($portableDir, $claudeDir, $agyDir)) {
+foreach ($dir in @($portableDir, $nugetDir, $claudeDir, $agyDir)) {
     if (Test-Path $dir) {
         Remove-Item -Recurse -Force $dir
     }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
+New-Item -ItemType Directory -Force -Path $portableLibDir, $portableSkillsDir | Out-Null
 
-Write-Host "Publishing portable Hoshin.Cli ($Configuration)..."
+Write-Host "Publishing portable Hoshin.Cli ($Configuration, v$Version)..."
 & dotnet publish (Join-Path $repoRoot "src\Hoshin.Cli\Hoshin.Cli.csproj") `
     -c $Configuration `
-    -o $portableDir `
+    -o $portableLibDir `
     --nologo `
-    -p:UseAppHost=false
+    -p:UseAppHost=false `
+    -p:Version=$Version
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }
 
 $requiredDlls = @("hoshin.dll", "Hoshin.Workflow.dll", "Markdig.dll", "Gherkin.dll", "hoshin.runtimeconfig.json", "hoshin.deps.json")
 foreach ($file in $requiredDlls) {
-    $full = Join-Path $portableDir $file
+    $full = Join-Path $portableLibDir $file
     if (-not (Test-Path $full)) {
         throw "Expected portable artifact missing: $full"
     }
+}
+
+# Copy harness-neutral skills/ alongside portable lib/
+Copy-Item -Path (Join-Path $repoRoot "skills\*") -Destination $portableSkillsDir -Recurse -Force
+
+Write-Host "Packing Hoshin.Workflow NuGet package ($Configuration, v$Version)..."
+& dotnet pack (Join-Path $repoRoot "src\Hoshin.Workflow\Hoshin.Workflow.csproj") `
+    -c $Configuration `
+    -o $nugetDir `
+    --nologo `
+    -p:Version=$Version
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet pack failed with exit code $LASTEXITCODE"
+}
+
+$expectedNupkg = Join-Path $nugetDir "Hoshin.Workflow.$Version.nupkg"
+if (-not (Test-Path $expectedNupkg)) {
+    throw "Expected NuGet package missing: $expectedNupkg"
 }
 
 $skillMeta = @(
@@ -93,7 +120,7 @@ function Copy-BundleLibAndRoles {
     $libDir = Join-Path $TargetRoot "lib"
     $rolesDir = Join-Path $TargetRoot "roles"
     New-Item -ItemType Directory -Force -Path $libDir, $rolesDir | Out-Null
-    Copy-Item -Path (Join-Path $portableDir "*") -Destination $libDir -Recurse -Force
+    Copy-Item -Path (Join-Path $portableLibDir "*") -Destination $libDir -Recurse -Force
     Copy-Item -Path (Join-Path $repoRoot "skills\*") -Destination $rolesDir -Recurse -Force
 }
 
@@ -128,7 +155,8 @@ Copy-Item -Path (Join-Path $repoRoot "packaging\antigravity\hooks.json") -Destin
 Copy-BundleLibAndRoles -TargetRoot $agyDir
 Write-SkillWrappers -SkillsTargetDir (Join-Path $agyDir "skills")
 
-Write-Host "Packaging complete:"
-Write-Host "  Portable:    $portableDir"
+Write-Host "Packaging complete (v$Version):"
+Write-Host "  Portable:    $portableDir (lib/ + skills/)"
+Write-Host "  NuGet:       $expectedNupkg"
 Write-Host "  Claude Code: $claudeDir"
 Write-Host "  Antigravity: $agyDir"
