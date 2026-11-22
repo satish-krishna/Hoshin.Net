@@ -18,10 +18,6 @@ public sealed partial class SpecReader
     private static readonly Regex TagInLine = new(@"(?<![\w@])@R([0-9]+(?:\.[0-9]+)?)(?!\w)", RegexOptions.Compiled);
     private static readonly Regex HasRuleTagLine = new(@"^\s*@R[0-9]", RegexOptions.Multiline | RegexOptions.Compiled);
     private static readonly Regex PlaceholderRegex = new(@"<([^<>\s][^<>]*)>", RegexOptions.Compiled);
-    private static readonly Regex FenceOpener = new(@"^\s*(`{3,}|~{3,})(.*)$", RegexOptions.Compiled);
-
-    [GeneratedRegex(@"^\s*(`{3,}|~{3,})\s*$")]
-    private static partial Regex FenceCloserRegex();
 
     [GeneratedRegex(@"^\(\d+:\d+\):\s*")]
     private static partial Regex GherkinLocationPrefixRegex();
@@ -36,7 +32,7 @@ public sealed partial class SpecReader
         FrontMatter.RefuseNewerLayout(fm.Layout, file);
 
         var problems = new List<Problem>();
-        var block = FindBlock(doc.Lines);
+        var block = FindBlock(doc);
         var requirements = new List<ParsedRequirement>();
 
         var missingVersion = !fm.HasLayoutField && block is not null && HasRuleTagLine.IsMatch(block.Text);
@@ -65,37 +61,16 @@ public sealed partial class SpecReader
         return new SpecReadResult(fm.Layout, fm.Data, new ParsedSpec(requirements), problems);
     }
 
-    private static GherkinBlock? FindBlock(string[] lines)
+    private static GherkinBlock? FindBlock(Doc doc)
     {
-        for (var open = 0; open < lines.Length; open++)
+        var fence = doc.Fences.FirstOrDefault(f => f.Info.Equals("gherkin", StringComparison.OrdinalIgnoreCase));
+        if (fence is null)
         {
-            var m = FenceOpener.Match(lines[open]);
-            if (!m.Success)
-            {
-                continue;
-            }
-
-            var fence = m.Groups[1].Value;
-            var info = m.Groups[2].Value.Trim();
-            if ((fence[0] == '`' && info.Contains('`')) || !info.Equals("gherkin", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var close = Array.FindIndex(lines, open + 1, l =>
-            {
-                var cm = FenceCloserRegex().Match(l);
-                return cm.Success && cm.Groups[1].Value[0] == fence[0] && cm.Groups[1].Value.Length >= fence.Length;
-            });
-            if (close < 0)
-            {
-                close = lines.Length;
-            }
-
-            return new GherkinBlock(string.Join('\n', lines[(open + 1)..close]), open + 1);
+            return null;
         }
 
-        return null;
+        var close = fence.Close < 0 ? doc.Lines.Length : fence.Close;
+        return new GherkinBlock(string.Join('\n', doc.Lines[(fence.Open + 1)..close]), fence.Open + 1);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
@@ -185,7 +160,7 @@ public sealed partial class SpecReader
                 List<List<string>>? examples = first?.TableHeader is null
                     ? null
                     : [first.TableHeader.Cells.Select(c => c.Value).ToList(), .. sc.Examples.SelectMany(ex => ex.TableBody.Select(r => r.Cells.Select(c => c.Value).ToList()))];
-                var isOutline = sc.Keyword.Trim() == "Scenario Outline";
+                var isOutline = sc.Examples.Any() || sc.Keyword.Trim() is "Scenario Outline" or "Scenario Template";
                 var steps = sc.Steps.Select(s => $"{s.Keyword.Trim()} {s.Text}").ToList();
                 var scenario = new ParsedScenario(scId, sc.Name, isOutline, steps, examples, At(sc.Location.Line));
                 requirement.Scenarios.Add(scenario);

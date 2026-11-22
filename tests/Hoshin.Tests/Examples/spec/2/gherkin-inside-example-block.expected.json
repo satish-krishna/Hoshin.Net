@@ -1,0 +1,30 @@
+{
+  "kind": "spec",
+  "layout": 2,
+  "document": {
+    "requirements": [
+      {
+        "id": "R1",
+        "title": "Real rule",
+        "from": [
+          "D1"
+        ],
+        "scenarios": [
+          {
+            "id": "R1.1",
+            "title": "Real scenario",
+            "outline": false,
+            "steps": [
+              "Given a thing",
+              "Then it works"
+            ],
+            "examples": null,
+            "line": 22
+          }
+        ],
+        "line": 20
+      }
+    ]
+  },
+  "problems": []
+}
