@@ -141,7 +141,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T12 | P0 | `Jsonc.TryParse` accepts empty and comment-only text | L4 | — | done |
 | T13 | P0 | Rewrite `FrontMatterEdit.Set` on real JSONC tokens | L5 | — | done |
 | T14 | P1 | Harden `RedClassifier` | E4 | — | done |
-| T15 | P1 | Fix test-path classification and give it unit tests | E5 | — | open |
+| T15 | P1 | Fix test-path classification and give it unit tests | E5 | — | done |
 | T16 | P1 | Resolve relative executables against the working directory | E6 | — | open |
 | T17 | P1 | Keep the environment that push, proxies and toolchains need | E7 | — | open |
 | T18 | P1 | Make `ProcessCommandRunner` timeouts hold | L6 | — | open |

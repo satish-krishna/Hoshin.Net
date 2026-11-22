@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Workspace;
@@ -364,96 +363,10 @@ public sealed class WorkflowRepo
     }
 
     /// <summary>Checks whether a repository-relative path matches any configured test glob pattern or explicit task test file.</summary>
-    public static bool IsTestPath(string relativePath, IReadOnlyList<string>? testPatterns = null, IReadOnlyList<string>? taskTestFiles = null)
-    {
-        var normalized = relativePath.Replace('\\', '/').TrimStart('/');
-        if (taskTestFiles is not null)
-        {
-            foreach (var f in taskTestFiles)
-            {
-                var candidate = f.Replace('\\', '/').TrimStart('/');
-                if (candidate.Length > 0 && string.Equals(normalized, candidate, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-        }
+    public static bool IsTestPath(string relativePath, IReadOnlyList<string>? testPatterns = null, IReadOnlyList<string>? taskTestFiles = null) =>
+        TestPathClassifier.IsTestPath(relativePath, testPatterns, taskTestFiles);
 
-        var patterns = testPatterns is { Count: > 0 } ? testPatterns : WorkflowPlan.DefaultTestPatterns;
-        foreach (var pattern in patterns)
-        {
-            if (MatchesGlob(normalized, pattern))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool MatchesGlob(string normalizedPath, string pattern)
-    {
-        var p = pattern.Replace('\\', '/').TrimStart('/');
-        var comparison = OperatingSystem.IsWindows() ? RegexOptions.IgnoreCase : RegexOptions.None;
-
-        // Fast common patterns and general glob translation.
-        if (p.EndsWith("/**", StringComparison.Ordinal))
-        {
-            var prefix = p[..^3];
-            return normalizedPath.StartsWith(prefix + "/", OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) ||
-                   normalizedPath.Contains("/" + prefix + "/", OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-        }
-
-        // Convert glob `*`, `**`, `?` into regex matching either the full path or any basename when pattern has no '/'.
-        var sb = new System.Text.StringBuilder();
-        sb.Append(p.Contains('/') ? "^" : "(?:^|/)");
-        for (var i = 0; i < p.Length; i++)
-        {
-            if (p[i] == '*' && i + 1 < p.Length && p[i + 1] == '*')
-            {
-                sb.Append(".*");
-                i++;
-                if (i + 1 < p.Length && p[i + 1] == '/')
-                {
-                    sb.Append("/?");
-                    i++;
-                }
-            }
-            else if (p[i] == '*')
-            {
-                sb.Append("[^/]*");
-            }
-            else if (p[i] == '?')
-            {
-                sb.Append("[^/]");
-            }
-            else
-            {
-                sb.Append(Regex.Escape(p[i].ToString()));
-            }
-        }
-
-        sb.Append('$');
-        return Regex.IsMatch(normalizedPath, sb.ToString(), comparison);
-    }
-
-    /// <summary>Extracts any file-like paths referenced inside a task's <c>test</c> argv (e.g. <c>node --test test/t1.test.mjs</c>).</summary>
-    public static List<string> ExtractTestFilesFromArgv(string[] argv)
-    {
-        var files = new List<string>();
-        foreach (var token in argv.Skip(1))
-        {
-            if (token.StartsWith('-'))
-            {
-                continue;
-            }
-
-            if (token.Contains('/') || token.Contains('\\') || token.Contains('.'))
-            {
-                files.Add(token.Replace('\\', '/').TrimStart('.').TrimStart('/'));
-            }
-        }
-
-        return files;
-    }
+    /// <summary>Extracts verified test file paths referenced inside a task's <c>test</c> argv (e.g. <c>node --test test/t1.test.mjs</c>).</summary>
+    public static List<string> ExtractTestFilesFromArgv(string[] argv, string? repoRoot = null, IReadOnlyList<string>? testPatterns = null) =>
+        TestPathClassifier.ExtractTestFilesFromArgv(argv, repoRoot, testPatterns);
 }

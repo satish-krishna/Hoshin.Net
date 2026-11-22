@@ -420,7 +420,6 @@
                        "S3:src/Hoshin.Workflow/Changes/ChangeState.cs",
                        "S3:src/Hoshin.Workflow/Changes/Committer.cs",
                        "S3:src/Hoshin.Workflow/Changes/FixState.cs",
-                       "S3:src/Hoshin.Workflow/Engine/WorkflowRepo.cs",
                        "S3:src/Hoshin.Workflow/Engine/WorkflowRunner.cs",
                        "S3:src/Hoshin.Workflow/Events/HookConfig.cs",
                        "S3:src/Hoshin.Workflow/Events/Steps/ChangeDoneStep.cs",

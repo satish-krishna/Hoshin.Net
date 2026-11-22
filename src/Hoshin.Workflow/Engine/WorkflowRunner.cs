@@ -69,7 +69,7 @@ public sealed partial class WorkflowRunner(
         {
             var agent = step is Implement i ? i.Agent : ((Retry)step).Agent;
             var task = state.Plan.Tasks.FirstOrDefault(t => t.Id == agent.Task);
-            var taskTestFiles = task is null ? null : WorkflowRepo.ExtractTestFilesFromArgv(task.Test);
+            var taskTestFiles = task is null ? null : WorkflowRepo.ExtractTestFilesFromArgv(task.Test, repo.Root, state.Plan.EffectiveTestPatterns);
 
             repo.WithLedger(ledger =>
             {
@@ -232,7 +232,7 @@ public sealed partial class WorkflowRunner(
             return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
         }
 
-        var taskTestFiles = WorkflowRepo.ExtractTestFilesFromArgv(task.Test);
+        var taskTestFiles = WorkflowRepo.ExtractTestFilesFromArgv(task.Test, repo.Root, plan.EffectiveTestPatterns);
         var testChanges = changed.Where(c => WorkflowRepo.IsTestPath(c.Path, plan.EffectiveTestPatterns, taskTestFiles)).ToList();
         var prodChanges = changed.Where(c => !WorkflowRepo.IsTestPath(c.Path, plan.EffectiveTestPatterns, taskTestFiles)).ToList();
 
