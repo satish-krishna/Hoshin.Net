@@ -15,16 +15,16 @@ namespace Hoshin.Cli.Commands;
 /// </summary>
 public sealed class GuardCommand : IHoshinCommand
 {
-    private const string GitPrefix = @"\bgit\s+(?:(?:-C|-c)\s+\S+\s+|--?[\w-]+(?:=\S+)?\s+)*";
+    private const string GitPrefix = @"\bgit\s+(?:(?:(?:-C|-c|--git-dir|--work-tree|--namespace)(?:=\S+|\s+\S+)|--?[\w-]+(?:=\S+)?)\s+)*";
     private static readonly TimeSpan StaleStepWindow = TimeSpan.FromHours(24);
     private static readonly StringComparison PathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     private static readonly (Regex Pattern, string What)[] Protected =
     [
-        (new Regex(@"(^|[\\/\s'""=])\.hoshin\.json\b", RegexOptions.Compiled), "the marker, .hoshin.json, which holds the hooks for every system"),
-        (new Regex(@"(^|[\\/\s'""=])intent[\\/]hooks([\\/]|\b)", RegexOptions.Compiled), "the global hook scripts in intent/hooks/"),
-        (new Regex(@"(^|[\\/\s'""=])intent[\\/][^\\/\s'""]+[\\/]hooks(\.json\b|[\\/])", RegexOptions.Compiled), "a system's hooks (intent/<system>/hooks.json or hooks/)"),
-        (new Regex(@"(^|[\\/\s'""=])intent[\\/][^\\/\s'""]+[\\/][^\\/\s'""]+[\\/]change\.(jsonc|yml)\b", RegexOptions.Compiled), "a change's record, change.jsonc, which only the hoshin program writes"),
+        (new Regex(@"(^|[\\/\s'""=>|])\.hoshin\.json\b", RegexOptions.Compiled), "the marker, .hoshin.json, which holds the hooks for every system"),
+        (new Regex(@"(^|[\\/\s'""=>|])intent[\\/]hooks([\\/]|\b)", RegexOptions.Compiled), "the global hook scripts in intent/hooks/"),
+        (new Regex(@"(^|[\\/\s'""=>|])intent[\\/][^\\/\s'""]+[\\/]hooks(\.json\b|[\\/])", RegexOptions.Compiled), "a system's hooks (intent/<system>/hooks.json or hooks/)"),
+        (new Regex(@"(^|[\\/\s'""=>|])intent[\\/][^\\/\s'""]+[\\/][^\\/\s'""]+[\\/]change\.(jsonc|yml)\b", RegexOptions.Compiled), "a change's record, change.jsonc, which only the hoshin program writes"),
         (new Regex(@"[\\/]hoshin[\\/][^\s'""]*\.jsonl?\b", RegexOptions.Compiled), "the hoshin ledger, build records and check events in the git folder"),
     ];
 
@@ -35,9 +35,10 @@ public sealed class GuardCommand : IHoshinCommand
     private static readonly (Regex Pattern, string Why)[] Rules =
     [
         (new Regex(GitPrefix + @"push\b", RegexOptions.Compiled), "Pushing happens only in the change.done event, after its checks: run the hoshin done skill."),
+        (new Regex(@"\bgit\b[^|;&\n]*(?:-c\s+['""]?alias\.|\bconfig\b[^|;&\n]*\balias\.)", RegexOptions.Compiled | RegexOptions.IgnoreCase), "Git aliases cannot be defined or invoked inline during a hoshin run."),
         (new Regex(@"\bgh\s+pr\s+(create|merge|edit|close|reopen|ready|review|comment)\b", RegexOptions.Compiled), "Pull requests are opened only by the change.done event, after its checks: run the hoshin done skill."),
         (new Regex(@"\bgh\s+api\b[^|;&\n]*(-X|--method)\s*['""]?(POST|PUT|PATCH|DELETE)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase), "GitHub is changed only by the change.done event: run the hoshin done skill."),
-        (new Regex(@"\bgit\b[^|;&\n]*\s--no-verify\b|" + GitPrefix + @"(?:commit|merge|am)\b(?:\s+-[a-zA-Z]+)*\s+-[a-zA-Z]*n\b|core\.hooksPath", RegexOptions.Compiled), "A repository's own git hooks always run: commit without --no-verify, and fix what they report."),
+        (new Regex(@"\bgit\b[^|;&\n]*\s--no-verify\b|" + GitPrefix + @"(?:commit|merge|am)\b[^|;&\n]*\s+-[a-zA-Z]*n\b|core\.hooksPath", RegexOptions.Compiled), "A repository's own git hooks always run: commit without --no-verify, and fix what they report."),
         (new Regex(@"\bbaseline\s+(approve|retake)\b", RegexOptions.Compiled), "Only the engineer approves a check that already fails on the base, or retakes a baseline: show them the command and stop."),
     ];
 
@@ -176,7 +177,7 @@ public sealed class GuardCommand : IHoshinCommand
     {
         if (ev.IsShellTool)
         {
-            var command = ev.CommandLine ?? "";
+            var command = GuardShellNormalizer.Normalize(ev.CommandLine ?? "");
             if (ActiveRunGitMutation.IsMatch(command))
             {
                 return "Edit only the working tree during a build; do not run git add, commit, reset, or push by hand—the workflow commits verified test and implementation steps for you.";
@@ -257,7 +258,7 @@ public sealed class GuardCommand : IHoshinCommand
     {
         if (ev.IsShellTool)
         {
-            var command = ev.CommandLine ?? "";
+            var command = GuardShellNormalizer.Normalize(ev.CommandLine ?? "");
             if (ActiveRunGitMutation.IsMatch(command) || (ProtectedRunDirs.IsMatch(command) && Writes.IsMatch(command)))
             {
                 return $"While the {label} is written nothing is committed or moved by hand; it is committed for you when you end your turn.";
@@ -311,7 +312,7 @@ public sealed class GuardCommand : IHoshinCommand
             return null;
         }
 
-        var command = ev.CommandLine ?? "";
+        var command = GuardShellNormalizer.Normalize(ev.CommandLine ?? "");
         var tamperShell = GuardTamperingProtection.CheckShellCommand(command, Writes, repo);
         if (tamperShell is not null)
         {

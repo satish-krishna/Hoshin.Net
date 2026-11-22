@@ -13,6 +13,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Active-run guard & trace scoping (T01):** `hoshin guard` and `hooks.jsonl` tracing now apply strictly to repositories with an active, non-stale `.git/hoshin/run.json` matching the calling session (or its active subagent), stay silent without creating `.git/hoshin/` outside active runs, and log static denials when active.
 - **Human-only approval and acceptance (T02):** Generated `SKILL.md` wrappers for `accept` and `done` emit `disable-model-invocation: true`, and `HookOrchestrator` rejects model-sourced `accept`/`done` invocations (`PostToolUse(Skill)` or `SKILL.md` reads) without changing state.
 - **Harness config & hoshin state protection (T03):** `GuardTamperingProtection` denies writes to `.claude/settings*.json`, `.claude/hooks/`, `.git/hooks/`, `<git-common-dir>/hoshin`, and shell write commands targeting git/hoshin state tokens; `HookOrchestrator.HandleStop` blocks if `run.json` is deleted mid-run while an unfinished ledger exists.
+- **Guard bypass hardening & library HEAD enforcement (T04):** Normalized shell commands (stripping empty quotes and line continuations), extended `GitPrefix` (`--git-dir`, `--work-tree`, `--namespace`, `-C`), blocked inline/configured git aliases and `git commit ... -n`, matched `>`/`>>`/`|` prefixes on protected paths, and enforced `WorkflowHeadGuard` in `EvaluateAndCommitTask` so manual commits outside the workflow fail the attempt without committing.
 
 ## [2.0.0] - 2026-11-21
 

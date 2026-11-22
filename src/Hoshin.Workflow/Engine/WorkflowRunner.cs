@@ -178,6 +178,18 @@ public sealed partial class WorkflowRunner(
 
         ClearActiveSubagent(repo);
 
+        if (WorkflowHeadGuard.HasUnexpectedHeadMove(state.Ledger, taskId, startHead))
+        {
+            return RecordVerdict(repo, new WorkflowVerdict(
+                taskId,
+                attempt,
+                startHead,
+                false,
+                "not observed: HEAD moved outside the workflow",
+                [WorkflowHeadGuard.UnexpectedHeadMoveReason],
+                DateTimeOffset.UtcNow));
+        }
+
         var changed = GetWorkingTreeChanges(repo);
         var reasons = new List<string>();
         var redSummary = "not observed: no test commit";
