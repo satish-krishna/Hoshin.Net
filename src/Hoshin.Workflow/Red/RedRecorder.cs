@@ -136,9 +136,15 @@ public sealed class RedRecorder(
 
         var record = new RedRecord(task, head, entry.Compile, entry.Test, outcome, ran.ExitCode, ran.Output, DateTimeOffset.UtcNow.ToString("O"));
         var folder = _ledger.LedgerFolder(ctx.Master, ctx.System, ctx.Change);
-        var ledger = _ledger.Read(folder, ctx.Repo) ?? LedgerStore.Empty(ctx.System, ctx.Change, ctx.Repo, ctx.RepoPath);
-        var updatedReds = new List<RedRecord>(ledger.Reds ?? []) { record };
-        _ledger.Write(folder, ledger with { Reds = updatedReds });
+        _ledger.Update(
+            folder,
+            ctx.Repo,
+            () => LedgerStore.Empty(ctx.System, ctx.Change, ctx.Repo, ctx.RepoPath),
+            ledger =>
+            {
+                var updatedReds = new List<RedRecord>(ledger.Reds ?? []) { record };
+                return ledger with { Reds = updatedReds };
+            });
         return new RedRecordResult(record, []);
     }
 

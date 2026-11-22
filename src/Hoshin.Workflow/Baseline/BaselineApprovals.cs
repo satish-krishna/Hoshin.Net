@@ -62,17 +62,23 @@ public sealed class BaselineApprovals(LedgerStore? ledgerStore = null, string? p
         }
 
         var folder = _ledger.LedgerFolder(ctx.Master, ctx.System, ctx.Change);
-        var ledger = _ledger.Read(folder, ctx.Repo) ?? LedgerStore.Empty(ctx.System, ctx.Change, ctx.Repo, ctx.RepoPath);
-        if (ApprovedHooks(ledger, entry.Base).Contains(hook))
-        {
-            return [];
-        }
+        _ledger.Update(
+            folder,
+            ctx.Repo,
+            () => LedgerStore.Empty(ctx.System, ctx.Change, ctx.Repo, ctx.RepoPath),
+            ledger =>
+            {
+                if (ApprovedHooks(ledger, entry.Base).Contains(hook))
+                {
+                    return ledger;
+                }
 
-        var updatedApprovals = new List<BaselineApproval>(ledger.Approvals ?? [])
-        {
-            new(hook, entry.Base, DateTimeOffset.UtcNow.ToString("O")),
-        };
-        _ledger.Write(folder, ledger with { Approvals = updatedApprovals });
+                var updatedApprovals = new List<BaselineApproval>(ledger.Approvals ?? [])
+                {
+                    new(hook, entry.Base, DateTimeOffset.UtcNow.ToString("O")),
+                };
+                return ledger with { Approvals = updatedApprovals };
+            });
         return [];
     }
 }

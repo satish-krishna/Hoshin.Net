@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Events;
@@ -83,11 +84,12 @@ public sealed class LedgerStore(IGitClient? git = null)
 
         try
         {
-            return JsonSerializer.Deserialize<RepoLedger>(File.ReadAllText(file), JsonOptions);
+            var parsed = JsonSerializer.Deserialize<RepoLedger>(File.ReadAllText(file), JsonOptions);
+            return parsed ?? throw new CouldNotRunException($"{file} is not valid JSON: file contains null");
         }
-        catch
+        catch (JsonException e)
         {
-            return null;
+            throw new CouldNotRunException($"{file} is not valid JSON: {e.Message.Split('\n')[0]}");
         }
     }
 
@@ -117,9 +119,26 @@ public sealed class LedgerStore(IGitClient? git = null)
     {
         Directory.CreateDirectory(folder);
         var file = Path.Combine(folder, $"{ledger.Repo}.json");
-        var temp = $"{file}.{Environment.ProcessId}.tmp";
+        var temp = $"{file}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(ledger, JsonOptions) + "\n");
         File.Move(temp, file, overwrite: true);
+    }
+
+    public RepoLedger Update(string folder, string repo, Func<RepoLedger, RepoLedger> transform) =>
+        Update(
+            folder,
+            repo,
+            () => throw new CouldNotRunException($"{Path.Combine(folder, $"{repo}.json")} does not exist"),
+            transform);
+
+    public RepoLedger Update(string folder, string repo, Func<RepoLedger> createDefault, Func<RepoLedger, RepoLedger> transform)
+    {
+        Directory.CreateDirectory(folder);
+        using var gate = FileLock.Acquire(Path.Combine(folder, $"{repo}.lock"), TimeSpan.FromSeconds(10));
+        var current = Read(folder, repo) ?? createDefault();
+        var updated = transform(current);
+        Write(folder, updated);
+        return updated;
     }
 
     public static RepoLedger Empty(string system, string change, string repo, string path) =>

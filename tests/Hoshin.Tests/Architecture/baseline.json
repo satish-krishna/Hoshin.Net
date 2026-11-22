@@ -28,7 +28,6 @@
                        "C3:src/Hoshin.Workflow/Events/HookConfig.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Events/HookConfig.cs#catch-2",
                        "C3:src/Hoshin.Workflow/Events/HookScripts.cs#catch-1",
-                       "C3:src/Hoshin.Workflow/Events/Ledger.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Events/Steps/BuildStartStep.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Git/PathHelpers.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Git/PathHelpers.cs#catch-2",

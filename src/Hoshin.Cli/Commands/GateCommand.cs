@@ -96,13 +96,19 @@ public sealed class GateCommand(HoshinServices services) : IHoshinCommand
             return (null, $"hoshin: hook {finish.Failed.Id} still fails on {active.Repo} after {count} attempts to fix it; the build stops here and the engineer decides what happens next.");
         }
 
-        var updatedBlocks = new Dictionary<string, int>(ledger.GateBlocks, StringComparer.Ordinal) { [blockKey] = count + 1 };
-        services.Ledger.Write(ledgers, ledger with { GateBlocks = updatedBlocks });
+        var updatedCount = count + 1;
+        services.Ledger.Update(ledgers, active.Repo, current =>
+        {
+            var liveCount = current.GateBlocks.GetValueOrDefault(blockKey, 0);
+            updatedCount = liveCount + 1;
+            var updatedBlocks = new Dictionary<string, int>(current.GateBlocks, StringComparer.Ordinal) { [blockKey] = updatedCount };
+            return current with { GateBlocks = updatedBlocks };
+        });
 
         var hookOut = finish.Hooks.FirstOrDefault(h => h.Id == finish.Failed.Id)?.Output ?? "";
         var output = string.Join('\n', hookOut.Replace("\r\n", "\n").Split('\n').TakeLast(TailLines));
         var problems = finish.Problems.Count > 0 ? $"\n\nWhat failed:\n{string.Join('\n', finish.Problems)}" : "";
-        return ($"The check {finish.Failed.Id} failed on {active.Repo} at {shortHead} (attempt {count + 1} of {gateRetries}). Find and fix the fault it reports in the repository, commit the fix following the commit rules, then run build.finish again:\n{run}{problems}\n\nThe end of its output:\n{output}", null);
+        return ($"The check {finish.Failed.Id} failed on {active.Repo} at {shortHead} (attempt {updatedCount} of {gateRetries}). Find and fix the fault it reports in the repository, commit the fix following the commit rules, then run build.finish again:\n{run}{problems}\n\nThe end of its output:\n{output}", null);
     }
 
     private static string? ReadCwdFromStdin()

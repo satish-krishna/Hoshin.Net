@@ -122,8 +122,11 @@ public sealed class EventRunner
                 updated.Problems,
                 failedSummary,
                 detailsOrNull);
-            var fresh = _ledger.Read(folder, ctx.Repo) ?? ledger;
-            _ledger.Write(folder, LedgerStore.AppendRun(fresh with { Path = ctx.RepoPath }, entry));
+            _ledger.Update(
+                folder,
+                ctx.Repo,
+                () => LedgerStore.Empty(ctx.System, ctx.Change, ctx.Repo, ctx.RepoPath),
+                fresh => LedgerStore.AppendRun(fresh with { Path = ctx.RepoPath }, entry));
             return updated;
         }
 
