@@ -122,7 +122,7 @@ These come from `AGENTS.md`, and they are tested where possible.
 
 - **T1. Test first.** Write the test, run it, and see it fail for the reason the change addresses. Then write the code. A bug fix starts with a test that reproduces the bug. **[review]**: the pull request says which test failed first.
 - **T2. Never weaken a test to get green.** Don't skip, ignore, filter out, loosen or delete a test to make a change pass. A test may change only when the behavior it asserts is deliberately changing, and the pull request says so. **[review]**
-- **T3. Coverage of what you change.** At least **90%** of the lines a change adds or modifies in `src/` must run in a test. Branch coverage is reported, not gated. Don't hide lines from coverage (`[ExcludeFromCodeCoverage]` is allowed only on generated code). **[CI]** *(lands with T42)*
+- **T3. Coverage of what you change.** At least **90%** of the lines a change adds or modifies in `src/` must run in a test. Branch coverage is reported, not gated. Don't hide lines from coverage (`[ExcludeFromCodeCoverage]` is allowed only on generated code). **[CI]**
 - **T4. Pick the right kind of test:**
 
   | Kind | Location | Use for |

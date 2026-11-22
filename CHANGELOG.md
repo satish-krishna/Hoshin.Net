@@ -9,6 +9,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Strict analyzer & complexity build gate:** Enabled `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild`, `.editorconfig`, and `CA1502` (cyclomatic complexity ≤ 15 via `CodeMetricsConfig.txt`); replaced per-call hot-path regexes with `[GeneratedRegex]`.
 - **Architecture & SOLID test suite (`tests/Hoshin.Tests/Architecture/`):** Automated checks for rules A1, A2, S2, S3, CA1502, I1, I2, D1–D4, and C3 with a shrinking `baseline.json`.
 - **Conventional names workflow (`.github/workflows/conventional.yml`):** Validates PR title, branch name, every commit header, and unique `Task: <id>` trailers from `docs/review/TASKS.md` on `fix/review-findings`.
+- **Changed-line coverage gate (`.github/workflows/ci.yml`):** Collects full-suite coverage (including child `dotnet hoshin.dll` black-box processes) with `dotnet-coverage`, enforces ≥ 90% changed-line coverage on `src/**` via `diff-cover`, and uploads the HTML report artifact.
 
 ## [2.0.0] - 2026-11-21
 

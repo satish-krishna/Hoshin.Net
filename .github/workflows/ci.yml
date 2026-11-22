@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       run_ci: ${{ steps.filter.outputs.run_ci }}
+      src_changed: ${{ steps.filter.outputs.src_changed }}
     steps:
       - uses: actions/checkout@v4
         if: github.event_name == 'pull_request'
@@ -34,6 +35,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "src_changed=false" >> "$GITHUB_OUTPUT"
             echo "Push event — running full CI."
             exit 0
           fi
@@ -46,13 +48,18 @@ jobs:
 
           if [ -z "$changed" ]; then
             echo "run_ci=true" >> "$GITHUB_OUTPUT"
+            echo "src_changed=false" >> "$GITHUB_OUTPUT"
             echo "No diff detected — defaulting to full CI."
             exit 0
           fi
 
           run_ci="false"
+          src_changed="false"
           while IFS= read -r file; do
             [ -z "$file" ] && continue
+            if [[ "$file" =~ ^src/ ]]; then
+              src_changed="true"
+            fi
             if [[ "$file" =~ ^LICENSE(\..*)?$ ]] \
               || [[ "$file" =~ ^(README|DESIGN|AGENTS|CHANGELOG)\.md$ ]] \
               || [[ "$file" =~ ^docs/ ]] \
@@ -64,6 +71,7 @@ jobs:
           done <<< "$changed"
 
           echo "run_ci=$run_ci" >> "$GITHUB_OUTPUT"
+          echo "src_changed=$src_changed" >> "$GITHUB_OUTPUT"
           if [ "$run_ci" == "false" ]; then
             echo "Docs/metadata-only PR — skipping build, tests, conformance, and packaging."
           fi
@@ -137,6 +145,57 @@ jobs:
           path: tests/Hoshin.Tests/TestResults/*.trx
           if-no-files-found: ignore
 
+  coverage:
+    name: changed-line coverage (ubuntu-latest)
+    needs: [changes]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.src_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dotnet-coverage and diff-cover
+        run: |
+          dotnet tool install --global dotnet-coverage
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+          python -m pip install --upgrade pip diff-cover
+
+      - name: Build solution (Debug for accurate PDB sequence points)
+        run: dotnet build Hoshin.sln --configuration Debug
+
+      - name: Collect full suite coverage (unit + black-box child processes)
+        run: dotnet-coverage collect -f cobertura -o coverage.cobertura.xml "dotnet test tests/Hoshin.Tests/Hoshin.Tests.csproj --configuration Debug --no-build"
+
+      - name: Gate changed lines in src/ at >= 90%
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          diff-cover coverage.cobertura.xml --compare-branch="origin/$BASE_REF" --fail-under=90 --include 'src/**' --html-report coverage-diff.html
+
+      - name: Upload changed-line coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: changed-line-coverage-report
+          path: |
+            coverage-diff.html
+            coverage.cobertura.xml
+          if-no-files-found: ignore
+
   package:
     name: package release bundles
     needs: [changes, build-and-unit]
@@ -162,16 +221,19 @@ jobs:
 
   ci-gate:
     name: ci gate
-    needs: [changes, build-and-unit, blackbox-conformance, package]
+    needs: [changes, build-and-unit, blackbox-conformance, coverage, package]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate CI gate
         env:
+          EVENT_NAME: ${{ github.event_name }}
           CHANGES_RESULT: ${{ needs.changes.result }}
           RUN_CI: ${{ needs.changes.outputs.run_ci }}
+          SRC_CHANGED: ${{ needs.changes.outputs.src_changed }}
           BUILD_RESULT: ${{ needs.build-and-unit.result }}
           BLACKBOX_RESULT: ${{ needs.blackbox-conformance.result }}
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
           PACKAGE_RESULT: ${{ needs.package.result }}
         run: |
           if [ "$CHANGES_RESULT" != "success" ]; then
@@ -196,4 +258,9 @@ jobs:
               status=1
             fi
           done
+
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$SRC_CHANGED" = "true" ] && [ "$COVERAGE_RESULT" != "success" ]; then
+            echo "::error::Required job 'coverage' did not succeed (result: $COVERAGE_RESULT)."
+            status=1
+          fi
           exit $status
