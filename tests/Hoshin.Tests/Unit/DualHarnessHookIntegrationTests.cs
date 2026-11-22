@@ -264,12 +264,24 @@ public sealed class DualHarnessHookIntegrationTests
         Assert.Equal("", stopAtApproval);
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
 
-        // 9. Second session invokes /hoshin:accept -> records approval & publishes to origin!
-        var (_, acceptOut, _) = RunHook(toy.RepoDir, "hook start", new
+        // 9. Second session (claude-s2) invokes /hoshin:accept -> ignored, no state change!
+        var (_, otherAcceptOut, _) = RunHook(toy.RepoDir, "hook start", new
         {
             hook_event_name = "UserPromptExpansion",
             cwd = toy.RepoDir,
             session_id = "claude-s2",
+            command_name = "hoshin:accept",
+            prompt = "/hoshin:accept",
+        });
+        Assert.Equal("", otherAcceptOut);
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+
+        // 10. Original owning session (claude-s1) invokes /hoshin:accept -> records approval & publishes to origin!
+        var (_, acceptOut, _) = RunHook(toy.RepoDir, "hook start", new
+        {
+            hook_event_name = "UserPromptExpansion",
+            cwd = toy.RepoDir,
+            session_id = "claude-s1",
             command_name = "hoshin:accept",
             prompt = "/hoshin:accept",
         });
@@ -406,6 +418,7 @@ public sealed class DualHarnessHookIntegrationTests
                 conversationId = "agy-parent-1",
                 cwd = toy.RepoDir,
                 toolCall = new { id = $"call-{task}", name = "invoke_subagent", args = new { TypeName = "self", Role = $"Build {task}", Prompt = "..." } },
+                toolResponse = new { conversationId = $"agy-sub-{task}" },
             });
             Assert.Equal("{}", launched);
 
@@ -489,11 +502,23 @@ public sealed class DualHarnessHookIntegrationTests
         });
         Assert.Equal("{}", doneStop);
 
-        // 6. Session 2: /accept approves and publishes branch to origin.
-        var (_, acceptOut, _) = RunHook(toy.RepoDir, "hook start", new
+        // 6. Unrelated session 2 gets {} with no state change; owning session 1 /accept approves and publishes to origin.
+        var (_, otherAcceptOut, _) = RunHook(toy.RepoDir, "hook start", new
         {
             hookEventName = "PreInvocation",
             conversationId = "agy-parent-2",
+            cwd = toy.RepoDir,
+            workspacePaths = new[] { toy.RepoDir },
+            invocationNum = 0,
+            lastUserInput = "/accept",
+        });
+        Assert.Equal("{}", otherAcceptOut);
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+
+        var (_, acceptOut, _) = RunHook(toy.RepoDir, "hook start", new
+        {
+            hookEventName = "PreInvocation",
+            conversationId = "agy-parent-1",
             cwd = toy.RepoDir,
             workspacePaths = new[] { toy.RepoDir },
             invocationNum = 0,

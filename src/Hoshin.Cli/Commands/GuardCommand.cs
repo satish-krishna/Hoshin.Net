@@ -16,7 +16,6 @@ namespace Hoshin.Cli.Commands;
 public sealed class GuardCommand : IHoshinCommand
 {
     private const string GitPrefix = @"\bgit\s+(?:(?:(?:-C|-c|--git-dir|--work-tree|--namespace)(?:=\S+|\s+\S+)|--?[\w-]+(?:=\S+)?)\s+)*";
-    private static readonly TimeSpan StaleStepWindow = TimeSpan.FromHours(24);
 
     private static readonly (Regex Pattern, string What)[] Protected =
     [
@@ -100,9 +99,7 @@ public sealed class GuardCommand : IHoshinCommand
             return (null, null);
         }
 
-        var marker = repo.ReadRunMarker();
-        var step = repo.ReadStep();
-        if (marker is null || !IsSessionInActiveRun(ev, marker, step))
+        if (!HookSessionScope.IsRunSession(repo, ev, DateTimeOffset.UtcNow, out _, out var step))
         {
             return (null, null);
         }
@@ -139,37 +136,6 @@ public sealed class GuardCommand : IHoshinCommand
         };
 
         return (repo, stepReason);
-    }
-
-    private static bool IsSessionInActiveRun(NormalizedHookEvent ev, RunMarker marker, CurrentStep? step)
-    {
-        var anchor = step?.At ?? marker.Started;
-        if (DateTimeOffset.UtcNow - anchor > StaleStepWindow)
-        {
-            return false;
-        }
-
-        // If the run has no session ID recorded, apply only when the event also has none.
-        if (string.IsNullOrEmpty(marker.SessionId))
-        {
-            return string.IsNullOrEmpty(ev.SessionId);
-        }
-
-        // Exact match with the owning workflow session.
-        if (!string.IsNullOrEmpty(ev.SessionId) && string.Equals(marker.SessionId, ev.SessionId, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        // Active subagent launched for the current build task (e.g. Antigravity subagent has its own conversationId,
-        // Claude Code subagent carries agent_id).
-        if (step is { Kind: "Implement" or "Retry" } && (!string.IsNullOrEmpty(step.AgentId) || !string.IsNullOrEmpty(ev.SubagentCallerId)))
-        {
-            return true;
-        }
-
-        // Unrelated or unidentifiable session: stay silent and do not lock it out.
-        return false;
     }
 
     private static string? CheckDuringBuildStep(NormalizedHookEvent ev, WorkflowRepo repo, CurrentStep step)

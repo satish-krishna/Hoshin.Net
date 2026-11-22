@@ -26,9 +26,16 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), "no repo");
         }
 
-        if (ev.IsAntigravity && IsActiveSubagentSession(repo, ev))
+        if (File.Exists(repo.RunMarkerPath))
         {
-            return (_adapter.EmptyOutput(ev.Harness), "subagent ignored");
+            var existingMarker = repo.ReadRunMarker();
+            var existingStep = repo.ReadStep();
+            if (existingStep is { Kind: "Implement" or "Retry" or "NeedsApproval" } &&
+                HookSessionScope.IsActiveNonStale(existingMarker, existingStep, DateTimeOffset.UtcNow) &&
+                !HookSessionScope.IsParentRunSession(existingMarker!, ev))
+            {
+                return (_adapter.EmptyOutput(ev.Harness), "different session owns active build run");
+            }
         }
 
         // Antigravity PostToolUse cannot inject context directly; PreInvocation drains queued context.
@@ -159,12 +166,12 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), "no run");
         }
 
-        if (ev.IsAntigravity && IsActiveSubagentSession(repo, ev))
+        if (!HookSessionScope.IsRunSession(repo, ev, DateTimeOffset.UtcNow, out var marker, out var current) ||
+            !HookSessionScope.IsParentRunSession(marker!, ev))
         {
-            return (_adapter.EmptyOutput(ev.Harness), "subagent ignored");
+            return (_adapter.EmptyOutput(ev.Harness), "not the run session");
         }
 
-        var current = repo.ReadStep();
         if (current is not { Kind: "Implement" or "Retry", Task: not null })
         {
             return (_adapter.EmptyOutput(ev.Harness), $"step is {current?.Kind ?? "none"}");
@@ -212,7 +219,11 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), "no run");
         }
 
-        var current = repo.ReadStep();
+        if (!HookSessionScope.IsRunSession(repo, ev, DateTimeOffset.UtcNow, out _, out var current))
+        {
+            return (_adapter.EmptyOutput(ev.Harness), "not the run session");
+        }
+
         var active = repo.ReadLedger().ActiveSubagent;
         var expectedId = current?.AgentId ?? active?.AgentId;
         var stoppedId = ev.StoppedAgentId ?? ev.SessionId;
@@ -246,13 +257,13 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), "no run");
         }
 
-        // Subagents stopping must never trigger parent orchestration or be blocked.
-        if (ev.IsAntigravity && IsSubagentSession(repo, ev))
+        // Only the run's owning parent session participates in Stop orchestration (unrelated sessions and subagents stay silent).
+        if (!HookSessionScope.IsRunSession(repo, ev, DateTimeOffset.UtcNow, out var marker, out var current) ||
+            !HookSessionScope.IsParentRunSession(marker!, ev))
         {
-            return (_adapter.EmptyOutput(ev.Harness), "allow: subagent stop");
+            return (_adapter.EmptyOutput(ev.Harness), "allow: not the run parent session");
         }
 
-        var current = repo.ReadStep();
         var active = repo.ReadLedger().ActiveSubagent;
         var trackedAgentId = current?.AgentId ?? active?.AgentId;
 
@@ -501,22 +512,6 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return null;
         }
     }
-
-    private static bool IsSubagentSession(WorkflowRepo repo, NormalizedHookEvent ev)
-    {
-        if (ev.SessionId is null)
-        {
-            return false;
-        }
-
-        var marker = repo.ReadRunMarker();
-        return marker?.SessionId is not null && !string.Equals(marker.SessionId, ev.SessionId, StringComparison.Ordinal);
-    }
-
-    private static bool IsActiveSubagentSession(WorkflowRepo repo, NormalizedHookEvent ev) =>
-        IsSubagentSession(repo, ev) &&
-        repo.ReadStep() is { Kind: "Implement" or "Retry" } step &&
-        (step.AgentId is not null || repo.ReadLedger().ActiveSubagent is not null);
 
     private static void QueuePendingContext(WorkflowRepo repo, string text)
     {
