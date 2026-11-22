@@ -144,7 +144,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T15 | P1 | Fix test-path classification and give it unit tests | E5 | — | done |
 | T16 | P1 | Resolve relative executables against the working directory | E6 | — | done |
 | T17 | P1 | Keep the environment that push, proxies and toolchains need | E7 | — | done |
-| T18 | P1 | Make `ProcessCommandRunner` timeouts hold | L6 | — | open |
+| T18 | P1 | Make `ProcessCommandRunner` timeouts hold | L6 | — | done |
 | T19 | P1 | Stop `LedgerStore` wiping a corrupt ledger; add a lock | L7 | — | open |
 | T20 | P1 | `SpecReader` uses `Doc.Fences`; handle "Scenario Template" | L8, L12 | — | open |
 | T22 | P1 | Claude Code `Stop` and `Result` act only for the run's session | S8 | — | open |
