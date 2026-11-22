@@ -239,7 +239,7 @@ sequenceDiagram
 
 ### Session-Aware Guard Isolation
 
-`GuardCommand` reads only `.git/hoshin/run.json` and `.git/hoshin/step.json` (with a 24-hour staleness window). Step-specific restrictions (blocking manual `git commit`, enforcing Red-phase test-first, locking edits to a single authoring document) apply only when the incoming `session_id`/`conversationId` matches `run.json` or belongs to an active subagent (`step.AgentId` or `agent_id`). Unrelated sessions are never locked out by an interrupted workflow run.
+`GuardCommand` scopes every rule — static protections (`git push`, `gh pr`, protected hook configs, `baseline approve/retake`) and step-specific rules (no manual `git commit`, Red-phase test-first, single-document lock) — strictly to repositories with an active, non-stale `.git/hoshin/run.json` (24-hour window) whose owning `session_id`/`conversationId` matches the incoming event or its registered active subagent. Outside an active run (including any plain git repository or unrelated session), `hoshin guard` and `hoshin hook` stay silent, create no `.git/hoshin/` directory, and write no `hooks.jsonl` trace. Static denials inside an active run are traced to `hooks.jsonl`.
 
 ## 6. Document Formats, Validation & Migration
 

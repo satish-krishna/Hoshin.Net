@@ -77,7 +77,10 @@ public sealed class GuardCommand : IHoshinCommand
                 ? adapter.AllowOutput(ev.Harness)
                 : adapter.DenyOutput(ev.Harness, why);
             HarnessAdapter.WriteStdoutUtf8(output);
-            HarnessAdapter.AppendTrace(repo, "guard", ev, output, why is null ? "allow" : $"deny: {why}", clock);
+            if (repo is not null)
+            {
+                HarnessAdapter.AppendTrace(repo, "guard", ev, output, why is null ? "allow" : $"deny: {why}", clock);
+            }
         }
         catch (Exception e)
         {
@@ -89,38 +92,34 @@ public sealed class GuardCommand : IHoshinCommand
 
     public static (WorkflowRepo? Repo, string? Reason) Evaluate(NormalizedHookEvent ev)
     {
-        // 1. Static rules (apply even when no active run marker exists, preserving GRAMMAR.md / gate.test.mjs contract).
-        var staticReason = StaticRefusal(ev);
-        if (staticReason is not null)
-        {
-            return (null, $"hoshin: {staticReason}");
-        }
-
-        // 2. Fast-path step-aware & session-aware checks: read only run.json + step.json, never WorkflowState.
-        if (string.IsNullOrWhiteSpace(ev.Cwd))
+        // 1. Scope first (D2): guard applies only inside a repository with an active, non-stale hoshin run for this session.
+        var cwd = string.IsNullOrWhiteSpace(ev.Cwd) ? Directory.GetCurrentDirectory() : ev.Cwd;
+        var repo = WorkflowRepo.Find(cwd);
+        if (repo is null || !File.Exists(repo.RunMarkerPath))
         {
             return (null, null);
         }
 
-        var repo = WorkflowRepo.Find(ev.Cwd);
-        if (repo is null || !File.Exists(repo.RunMarkerPath))
-        {
-            return (repo, null);
-        }
-
         var marker = repo.ReadRunMarker();
         var step = repo.ReadStep();
-        if (marker is null || step is null)
+        if (marker is null || !IsSessionInActiveRun(ev, marker, step))
+        {
+            return (null, null);
+        }
+
+        // 2. Static rules apply to every tool call in the active run and are traced against repo.
+        var staticReason = StaticRefusal(ev);
+        if (staticReason is not null)
+        {
+            return (repo, $"hoshin: {staticReason}");
+        }
+
+        if (step is null)
         {
             return (repo, null);
         }
 
-        // Session isolation & staleness check: never lock out unrelated or newer non-workflow sessions.
-        if (!IsSessionInActiveRun(ev, marker, step))
-        {
-            return (repo, null);
-        }
-
+        // 3. Fast-path step-aware rules from step.json without recomputing WorkflowState.
         var stepReason = step switch
         {
             { Kind: "WriteDocument" or "AwaitAccept", Task: { } document } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, $"{document}.md")], document),
@@ -135,39 +134,41 @@ public sealed class GuardCommand : IHoshinCommand
                     Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "plan.md"),
                 ],
                 "fix"),
-            _ => CheckDuringBuildStep(ev, repo, step),
+            { Kind: "Implement" or "Retry" } => CheckDuringBuildStep(ev, repo, step),
+            _ => null,
         };
 
         return (repo, stepReason);
     }
 
-    private static bool IsSessionInActiveRun(NormalizedHookEvent ev, RunMarker marker, CurrentStep step)
+    private static bool IsSessionInActiveRun(NormalizedHookEvent ev, RunMarker marker, CurrentStep? step)
     {
-        if (DateTimeOffset.UtcNow - step.At > StaleStepWindow)
+        var anchor = step?.At ?? marker.Started;
+        if (DateTimeOffset.UtcNow - anchor > StaleStepWindow)
         {
             return false;
         }
 
-        // If neither the run nor the event recorded a session ID, apply to the active run.
-        if (string.IsNullOrEmpty(marker.SessionId) || string.IsNullOrEmpty(ev.SessionId))
+        // If the run has no session ID recorded, apply only when the event also has none.
+        if (string.IsNullOrEmpty(marker.SessionId))
         {
-            return true;
+            return string.IsNullOrEmpty(ev.SessionId);
         }
 
         // Exact match with the owning workflow session.
-        if (string.Equals(marker.SessionId, ev.SessionId, StringComparison.Ordinal))
+        if (!string.IsNullOrEmpty(ev.SessionId) && string.Equals(marker.SessionId, ev.SessionId, StringComparison.Ordinal))
         {
             return true;
         }
 
         // Active subagent launched for the current build task (e.g. Antigravity subagent has its own conversationId,
         // Claude Code subagent carries agent_id).
-        if (step.Kind is "Implement" or "Retry" && (!string.IsNullOrEmpty(step.AgentId) || !string.IsNullOrEmpty(ev.SubagentCallerId)))
+        if (step is { Kind: "Implement" or "Retry" } && (!string.IsNullOrEmpty(step.AgentId) || !string.IsNullOrEmpty(ev.SubagentCallerId)))
         {
             return true;
         }
 
-        // Unrelated session: do not lock it out.
+        // Unrelated or unidentifiable session: stay silent and do not lock it out.
         return false;
     }
 

@@ -128,7 +128,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T39 | G | Architecture tests with a shrinking baseline | CONTRIBUTING §3–§5 | — | done |
 | T40 | G | Conventional names check | CONTRIBUTING §1 | — | done |
 | T42 | G | Coverage gate on changed lines | CONTRIBUTING §6 T3 | T32 | done |
-| T01 | P0 | Scope the guard and hook logging to the active run | S2, H8 | D2 ✔ | open |
+| T01 | P0 | Scope the guard and hook logging to the active run | S2, H8 | D2 ✔ | done |
 | T02 | P0 | Make approval and acceptance human-only | S1 | — | open |
 | T03 | P0 | Protect harness config and hoshin state from the agent | S4, S5 | — | open |
 | T04 | P0 | Close the trivial guard bypasses, and enforce "no agent commits" in the library | S3 | — | open |

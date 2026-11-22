@@ -2,9 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildLog, CHANGE, commit, dotnet, env, git, nodeHook, program, run, workspace } from './helpers/workspace.mjs';
+import { buildLog, CHANGE, commit, dotnet, env, git, nodeHook, program, repo, run, workspace } from './helpers/workspace.mjs';
+import { tempDir } from './helpers/temp.mjs';
+import { writeActiveRun } from './helpers/run-state.mjs';
 
 function hook(command, input) {
   const r = spawnSync(dotnet, [program, command], { input: JSON.stringify(input), encoding: 'utf8', env });
@@ -12,7 +14,13 @@ function hook(command, input) {
   return r.stdout.trim() === '' ? null : JSON.parse(r.stdout);
 }
 const gate = (cwd) => hook('gate', { hook_event_name: 'Stop', cwd, stop_hook_active: false });
-const guard = (tool_name, tool_input) => hook('guard', { hook_event_name: 'PreToolUse', tool_name, tool_input })?.hookSpecificOutput ?? null;
+const guardRaw = (payload) => hook('guard', { hook_event_name: 'PreToolUse', ...payload })?.hookSpecificOutput ?? null;
+function activeGuard() {
+  const { app } = workspace({ built: true });
+  const hoshinDir = writeActiveRun(app, { sessionId: 's1' });
+  const guard = (tool_name, tool_input) => guardRaw({ cwd: app, session_id: 's1', tool_name, tool_input });
+  return { app, hoshinDir, guard };
+}
 const finish = (app, ...more) => run(app, ['run', 'build.finish', '--json', '--change', CHANGE, ...more]);
 const startBuild = (app, master) => run(app, ['run', 'build.start', '--json', '--change', CHANGE, '--master', master]);
 
@@ -93,7 +101,39 @@ test('the gate ignores a repository that has moved off the change branch', () =>
   assert.equal(gate(app), null);
 });
 
+test('the guard stays silent and writes no state in a plain git repo with no active hoshin run', () => {
+  const dir = repo(join(tempDir('hoshin-plain-'), 'plain'));
+  const hoshinDir = join(dir, '.git', 'hoshin');
+
+  assert.equal(guardRaw({ cwd: dir, session_id: 's1', tool_name: 'Bash', tool_input: { command: 'git push origin main' } }), null);
+  assert.equal(existsSync(hoshinDir), false, '.git/hoshin must not be created after git push in a plain repo');
+
+  assert.equal(guardRaw({ cwd: dir, session_id: 's1', tool_name: 'Bash', tool_input: { command: 'gh pr create --title x --body y' } }), null);
+  assert.equal(existsSync(hoshinDir), false, '.git/hoshin must not be created after gh pr create in a plain repo');
+
+  assert.equal(guardRaw({ cwd: dir, session_id: 's1', tool_name: 'Edit', tool_input: { file_path: join(dir, '.hoshin.json') } }), null);
+  assert.equal(existsSync(hoshinDir), false, '.git/hoshin must not be created after Edit .hoshin.json in a plain repo');
+});
+
+test('the guard applies only to the active run session and logs static denials', () => {
+  const { app, hoshinDir } = activeGuard();
+
+  assert.equal(
+    guardRaw({ cwd: app, session_id: 's2', tool_name: 'Bash', tool_input: { command: 'git push origin main' } }),
+    null,
+    'unrelated session s2 must not be denied',
+  );
+
+  const denied = guardRaw({ cwd: app, session_id: 's1', tool_name: 'Bash', tool_input: { command: 'git push origin main' } });
+  assert.equal(denied?.permissionDecision, 'deny');
+
+  const logPath = join(hoshinDir, 'hooks.jsonl');
+  assert.equal(existsSync(logPath), true, 'static denial must be traced in hooks.jsonl');
+  assert.match(readFileSync(logPath, 'utf8'), /deny: hoshin: Pushing happens only/);
+});
+
 test('the guard refuses edits to the hook configuration and the change record, and allows other files', () => {
+  const { guard } = activeGuard();
   for (const path of ['/w/master/.hoshin.json', '/w/master/intent/hooks/check.sh', '/w/master/intent/demo/hooks.json', '/w/master/intent/demo/hooks/lint.mjs', `/w/master/intent/demo/${CHANGE}/change.jsonc`, `/w/master/intent/demo/${CHANGE}/change.yml`, '/w/master/.git/hoshin/demo/c/app.json', '/w/master/.git/hoshin/demo/c/checks.jsonl', 'C:\\w\\master\\intent\\demo\\hooks.json']) {
     assert.equal(guard('Edit', { file_path: path })?.permissionDecision, 'deny', path);
   }
@@ -103,6 +143,7 @@ test('the guard refuses edits to the hook configuration and the change record, a
 });
 
 test('the guard refuses pushing, GitHub writes, skipping git hooks, and shell writes to protected files', () => {
+  const { guard } = activeGuard();
   for (const command of [
     'git push -u origin feat/x',
     'git -C /w/app push',
@@ -147,6 +188,7 @@ test('the program path the gate prints is the one invoked', () => {
 });
 
 test('the guard keeps baseline approve and retake for the engineer, and allows baseline show', () => {
+  const { guard } = activeGuard();
   const why = 'hoshin: Only the engineer approves a check that already fails on the base, or retakes a baseline: show them the command and stop.';
   for (const command of [
     'dotnet /p/hoshin.dll baseline approve --json --change c --repo app --hook boot',

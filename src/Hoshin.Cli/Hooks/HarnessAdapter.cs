@@ -185,7 +185,7 @@ public sealed class HarnessAdapter : IHookAdapter
 
     public static void AppendTrace(WorkflowRepo? repo, string command, NormalizedHookEvent ev, string? output, string decision, Stopwatch clock)
     {
-        if (repo is null)
+        if (repo is null || !File.Exists(repo.RunMarkerPath))
         {
             return;
         }

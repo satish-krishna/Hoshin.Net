@@ -10,6 +10,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **Architecture & SOLID test suite (`tests/Hoshin.Tests/Architecture/`):** Automated checks for rules A1, A2, S2, S3, CA1502, I1, I2, D1–D4, and C3 with a shrinking `baseline.json`.
 - **Conventional names workflow (`.github/workflows/conventional.yml`):** Validates PR title, branch name, every commit header, and unique `Task: <id>` trailers from `docs/review/TASKS.md` on `fix/review-findings`.
 - **Changed-line coverage gate (`.github/workflows/ci.yml`):** Collects full-suite coverage (including child `dotnet hoshin.dll` black-box processes) with `dotnet-coverage`, enforces ≥ 90% changed-line coverage on `src/**` via `diff-cover`, and uploads the HTML report artifact.
+- **Active-run guard & trace scoping (T01):** `hoshin guard` and `hooks.jsonl` tracing now apply strictly to repositories with an active, non-stale `.git/hoshin/run.json` matching the calling session (or its active subagent), stay silent without creating `.git/hoshin/` outside active runs, and log static denials when active.
 
 ## [2.0.0] - 2026-11-21
 
