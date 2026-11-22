@@ -17,7 +17,7 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
 - **Scopes:** `engine`, `hooks`, `guard`, `cli`, `documents`, `changes`, `events`, `git`, `migration`, `workspace`, `skills`, `packaging`, `tests`, `docs` and `ci`. Use the narrowest scope that fits, and `workflow` when a change spans several of the library's scopes.
 - **Branches** are named `<type>/<short-description>` in lowercase kebab case, for example `fix/guard-scope`. Work from `docs/review/TASKS.md` adds the task ID: `fix/t01-guard-scope`.
 - **Commits** are `<type>(<scope>): <subject>`, for example `fix(guard): stay silent outside hoshin workspaces`.
-- **Pull request titles** use the commit format. The repository merges by squash only, and the squash commit takes the title. **[CI]** *(lands with T40)*
+- **Pull request titles** use the commit format. The repository merges by squash only, and the squash commit takes the title. **[CI]**
 - **Pull request descriptions** fill in every section of `.github/pull_request_template.md`, including the design checklist. **[review]**
 - **One concern per pull request:** one bug or one feature. Refactoring that the change needs goes in a separate commit in the same pull request, before the behavior change, so each can be reviewed alone. **[review]**
 - **Program pull requests** are the exception: a planned set of tasks, such as `docs/review/TASKS.md`, lands as one pull request with **exactly one commit per task**. The rules for those:
@@ -25,7 +25,7 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
   - every commit builds with 0 warnings and passes the fast test suite on its own;
   - the branch keeps the per-task commits so review can go one task at a time, and the pull request is then squash-merged like any other.
 
-  `docs/review/TASKS.md` ("Delivery") has the details. **[CI]** *(lands with T40)*
+  `docs/review/TASKS.md` ("Delivery") has the details. **[CI]**
 
 ## 2. How work reaches `main`
 
@@ -33,7 +33,7 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
 2. Open a pull request.
 3. Merge only when CI is green on both Linux and Windows, by squash merge.
 
-`main` should be protected for everyone, administrators included: no direct pushes, no force pushes, and the CI and conventional-names checks required on a branch that is up to date with `main`. *(lands with T40)*
+`main` should be protected for everyone, administrators included: no direct pushes, no force pushes, and the CI and conventional-names checks required on a branch that is up to date with `main`.
 
 ## 3. Design rules (SOLID)
 
