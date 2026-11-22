@@ -33,7 +33,8 @@ public sealed record NormalizedHookEvent(
     bool? FullyIdle,
     bool ContinuationActive,
     string? ToolError,
-    JsonElement RawInput)
+    JsonElement RawInput,
+    string? SubagentPrompt = null)
 {
     public bool IsAntigravity => Harness == HookHarness.Antigravity;
 
@@ -123,6 +124,7 @@ public sealed class HarnessAdapter : IHookAdapter
         var fullyIdle = Bool(root, "fullyIdle");
         var continuationActive = Flag(root, "continuationActive") || Flag(root, "stop_hook_active");
         var toolError = Str(root, "error");
+        var subagentPrompt = ToolInputAny(root, "prompt", "Prompt");
 
         return new NormalizedHookEvent(
             harness,
@@ -145,7 +147,8 @@ public sealed class HarnessAdapter : IHookAdapter
             fullyIdle,
             continuationActive,
             toolError,
-            root);
+            root,
+            subagentPrompt);
     }
 
     public string? EmptyOutput(HookHarness harness) => harness == HookHarness.Antigravity ? "{}" : null;

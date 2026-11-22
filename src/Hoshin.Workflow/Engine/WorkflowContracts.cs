@@ -172,7 +172,8 @@ public sealed record CurrentStep(
     string? ChangeFolder = null,
     IReadOnlyList<string>? TestPatterns = null,
     IReadOnlyList<string>? TaskTestFiles = null,
-    string? Change = null);
+    string? Change = null,
+    string? DispatchNonce = null);
 
 /// <summary>Active run marker stored in <c>.git/hoshin/run.json</c> identifying the owning session and harness.</summary>
 public sealed record RunMarker(

@@ -95,9 +95,12 @@ public sealed partial class WorkflowRunner(
             var previous = repo.ReadStep();
             var same = previous is not null && previous.Task == agent.Task && previous.Attempt == agent.Attempt;
             var activeSession = sessionId ?? previous?.SessionId ?? repo.ReadRunMarker()?.SessionId;
+            var nonce = same && !string.IsNullOrEmpty(previous!.DispatchNonce)
+                ? previous.DispatchNonce
+                : $"<!-- hoshin:{agent.Task}:attempt-{agent.Attempt}:{Guid.NewGuid().ToString("N")[..8]} -->";
             var nextStep = same
-                ? previous! with { SessionId = activeSession, ChangeFolder = repo.ChangeFolder, TestPatterns = state.Plan.EffectiveTestPatterns, TaskTestFiles = taskTestFiles }
-                : new CurrentStep(step.Kind, agent.Task, agent.Attempt, start, DateTimeOffset.UtcNow, AgentId: null, SessionId: activeSession, ChangeFolder: repo.ChangeFolder, TestPatterns: state.Plan.EffectiveTestPatterns, TaskTestFiles: taskTestFiles);
+                ? previous! with { SessionId = activeSession, ChangeFolder = repo.ChangeFolder, TestPatterns = state.Plan.EffectiveTestPatterns, TaskTestFiles = taskTestFiles, DispatchNonce = nonce }
+                : new CurrentStep(step.Kind, agent.Task, agent.Attempt, start, DateTimeOffset.UtcNow, AgentId: null, SessionId: activeSession, ChangeFolder: repo.ChangeFolder, TestPatterns: state.Plan.EffectiveTestPatterns, TaskTestFiles: taskTestFiles, DispatchNonce: nonce);
             repo.WriteStep(nextStep);
         }
         else

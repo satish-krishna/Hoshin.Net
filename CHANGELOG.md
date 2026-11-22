@@ -31,6 +31,7 @@ All notable changes to **Hoshin.Net** are documented in this file.
 - **`SpecReader` fence & `Scenario Template` fixes (T20):** Updated `SpecReader.FindBlock` to select the first top-level `gherkin` fence from `Doc.Fences` (ignoring nested `gherkin` snippets inside outer fenced examples) and detected outlines by `Examples` presence or `Scenario Outline`/`Scenario Template` keywords.
 - **Session-scoped hook & guard isolation (T22):** Extracted shared `HookSessionScope.IsRunSession` so `HookOrchestrator` (`HandleStart`, `HandleResult`, `HandleSubagentStop`, `HandleStop`) and `GuardCommand` act strictly for the owning run session or its registered active subagent, treating missing `session_id` and unrelated sessions/agents as outside the run.
 - **Non-intrusive `setup`/`context` hooks (T23):** Moved the `setup`/`context` early return in `HookOrchestrator.HandleStart` above active-run checks, `ReadState`, `WriteRunMarker`, `ResetStops`, and step writes so `setup`/`context` work in repositories without a change plan and never take over an active run.
+- **Dispatched subagent nonce verification (T24):** Embedded a per-attempt dispatch nonce (`<!-- hoshin:<task>:attempt-<n>:<8 hex> -->`) in `CurrentStep.DispatchNonce` and `HookInstructions.For`, and updated `HookOrchestrator.HandleResult` to judge or register only subagents whose prompt contains the active nonce (ignoring Explore/research subagents without burning attempts).
 
 ## [2.0.0] - 2026-11-21
 

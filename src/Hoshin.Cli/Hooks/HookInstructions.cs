@@ -13,10 +13,10 @@ public static class HookInstructions
     public const string BeginMarker = "<<<BEGIN SUBAGENT PROMPT";
     public const string EndMarker = "END SUBAGENT PROMPT>>>";
 
-    public static string For(Step step, HookHarness harness) => WorkflowBriefs.TruncateIfNeeded(step switch
+    public static string For(Step step, HookHarness harness, string? dispatchNonce = null) => WorkflowBriefs.TruncateIfNeeded(step switch
     {
-        Implement i => Dispatch(i.Agent, harness),
-        Retry r => Dispatch(r.Agent, harness),
+        Implement i => Dispatch(i.Agent, harness, dispatchNonce),
+        Retry r => Dispatch(r.Agent, harness, dispatchNonce),
         NeedsApproval n => $"Every task is built test first and the repository's checks pass at {WorkflowEngine.Short(n.Head)}. Tell the engineer the change is ready for approval, and that `{SkillCommand("accept", harness)}` approves it. Then end your turn.",
         WriteDocument w => w.Brief,
         ReviewDocument rv => rv.Brief,
@@ -30,7 +30,7 @@ public static class HookInstructions
     public static string SkillCommand(string skill, HookHarness harness) =>
         harness == HookHarness.Antigravity ? $"/{skill}" : $"/{PluginName}:{skill}";
 
-    private static string Dispatch(AgentTask agent, HookHarness harness)
+    private static string Dispatch(AgentTask agent, HookHarness harness, string? dispatchNonce)
     {
         var b = new StringBuilder();
         b.AppendLine(CultureInfo.InvariantCulture, $"Next step: build task {agent.Task}, attempt {agent.Attempt} of {WorkflowEngine.MaxAttempts}.");
@@ -48,6 +48,11 @@ public static class HookInstructions
 
         b.AppendLine();
         b.AppendLine(BeginMarker);
+        if (!string.IsNullOrWhiteSpace(dispatchNonce))
+        {
+            b.AppendLine(dispatchNonce);
+        }
+
         b.Append(agent.Prompt);
         b.AppendLine(EndMarker);
         return b.ToString();

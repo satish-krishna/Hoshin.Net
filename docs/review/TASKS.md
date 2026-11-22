@@ -149,7 +149,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T20 | P1 | `SpecReader` uses `Doc.Fences`; handle "Scenario Template" | L8, L12 | — | done |
 | T22 | P1 | Claude Code `Stop` and `Result` act only for the run's session | S8 | — | done |
 | T23 | P1 | `setup`/`context` don't take over the run | H2 | — | done |
-| T24 | P1 | Judge only the dispatched implement subagent | H3 | — | open |
+| T24 | P1 | Judge only the dispatched implement subagent | H3 | — | done |
 | T25 | P1 | Report verdicts and `NeedsApproval` in the Claude async flow | H5 | — | open |
 | T26 | P1 | Separate stop counters; honor `stop_hook_active` | H6 | — | open |
 | T27 | P1 | Truncate injected text without losing the closing marker | H7 | — | open |

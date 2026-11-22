@@ -221,6 +221,7 @@ public sealed class DualHarnessHookIntegrationTests
             cwd = toy.RepoDir,
             session_id = "claude-s1",
             tool_name = "Agent",
+            tool_input = new { prompt = toy.Repo.ReadStep()!.DispatchNonce },
         });
         var retryCtx = ClaudeContext(retryOut);
         Assert.Contains("T1 attempt 1 is not accepted", retryCtx);
@@ -235,6 +236,7 @@ public sealed class DualHarnessHookIntegrationTests
             cwd = toy.RepoDir,
             session_id = "claude-s1",
             tool_name = "Agent",
+            tool_input = new { prompt = toy.Repo.ReadStep()!.DispatchNonce },
         });
         var t1OkCtx = ClaudeContext(t1OkOut);
         Assert.Contains("T1 attempt 2 is accepted", t1OkCtx);
@@ -248,6 +250,7 @@ public sealed class DualHarnessHookIntegrationTests
             cwd = toy.RepoDir,
             session_id = "claude-s1",
             tool_name = "Agent",
+            tool_input = new { prompt = toy.Repo.ReadStep()!.DispatchNonce },
         });
         var t2OkCtx = ClaudeContext(t2OkOut);
         Assert.Contains("T2 attempt 1 is accepted", t2OkCtx);
@@ -307,12 +310,14 @@ public sealed class DualHarnessHookIntegrationTests
         });
 
         // Async launch records agentId in ledger and tells orchestrator to wait.
+        var t1Nonce = toy.Repo.ReadStep()!.DispatchNonce;
         var (_, launchedOut, _) = RunHook(toy.RepoDir, "hook result", new
         {
             hook_event_name = "PostToolUse",
             cwd = toy.RepoDir,
             session_id = "claude-async",
             tool_name = "Agent",
+            tool_input = new { prompt = t1Nonce },
             tool_response = new { isAsync = true, status = "async_launched", agentId = "agent-1" },
         });
         Assert.Contains("is running in the background (agent-1)", ClaudeContext(launchedOut));
@@ -325,6 +330,7 @@ public sealed class DualHarnessHookIntegrationTests
             cwd = toy.RepoDir,
             session_id = "claude-async",
             tool_name = "Agent",
+            tool_input = new { prompt = t1Nonce },
             tool_response = new { isAsync = true, status = "async_launched", agentId = "agent-2" },
         });
         Assert.Contains("already building T1", ClaudeContext(dupOut));
@@ -417,7 +423,7 @@ public sealed class DualHarnessHookIntegrationTests
                 hookEventName = "PostToolUse",
                 conversationId = "agy-parent-1",
                 cwd = toy.RepoDir,
-                toolCall = new { id = $"call-{task}", name = "invoke_subagent", args = new { TypeName = "self", Role = $"Build {task}", Prompt = "..." } },
+                toolCall = new { id = $"call-{task}", name = "invoke_subagent", args = new { TypeName = "self", Role = $"Build {task}", Prompt = toy.Repo.ReadStep()!.DispatchNonce } },
                 toolResponse = new { conversationId = $"agy-sub-{task}" },
             });
             Assert.Equal("{}", launched);

@@ -155,7 +155,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             ? $"\n\nThe product owner's idea, as they typed it: {args.Trim()}"
             : "";
 
-        return EmitStartContext(ev, repo, prefix + HookInstructions.For(step, ev.Harness) + idea, $"{invoked}: {step.Kind}");
+        return EmitStartContext(ev, repo, prefix + HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce) + idea, $"{invoked}: {step.Kind}");
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
@@ -178,13 +178,19 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), $"step is {current?.Kind ?? "none"}");
         }
 
+        if (ev.IsAntigravity && ev.IsTaskManageTool)
+        {
+            return (_adapter.EmptyOutput(ev.Harness), $"observed {ev.ToolName}");
+        }
+
+        if (!string.IsNullOrEmpty(current.DispatchNonce) &&
+            (string.IsNullOrEmpty(ev.SubagentPrompt) || !ev.SubagentPrompt.Contains(current.DispatchNonce, StringComparison.Ordinal)))
+        {
+            return (_adapter.EmptyOutput(ev.Harness), "subagent prompt missing dispatch nonce");
+        }
+
         if (ev.IsAntigravity)
         {
-            if (ev.IsTaskManageTool)
-            {
-                return (_adapter.EmptyOutput(ev.Harness), $"observed {ev.ToolName}");
-            }
-
             var agyId = ev.LaunchedAgentId ?? $"agy-{current.Task}-{current.Attempt}";
             if (!_runner.TryRegisterActiveSubagent(repo, current.Task, current.Attempt, agyId, out var existing))
             {
@@ -209,7 +215,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
 
         // Foreground subagent completed: judge attempt immediately and hand out next step.
         var (verdict, step) = JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId);
-        return (_adapter.ContextOutput(ev, ReportVerdict(current, verdict) + HookInstructions.For(step, ev.Harness)), $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
+        return (_adapter.ContextOutput(ev, ReportVerdict(current, verdict) + HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce)), $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
     }
 
     public (string? Output, string Decision) HandleSubagentStop(NormalizedHookEvent ev, string? rolesRoot)
@@ -315,7 +321,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
                     return (_adapter.SystemMessageOutput(ev.Harness, $"hoshin: parked after {MaxStopBlocks} stops without taking the step ({step.Kind})."), $"parked after {blocks - 1} blocks");
                 }
 
-                return (_adapter.BlockStopOutput(ev.Harness, verdictReport + HookInstructions.For(step, ev.Harness)), $"block {blocks}: {step.Kind}");
+                return (_adapter.BlockStopOutput(ev.Harness, verdictReport + HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce)), $"block {blocks}: {step.Kind}");
 
             case NeedsApproval when justJudged && ev.IsAntigravity:
                 return (_adapter.BlockStopOutput(ev.Harness, verdictReport + HookInstructions.For(step, ev.Harness)), "continue: report NeedsApproval");
