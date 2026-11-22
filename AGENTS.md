@@ -36,6 +36,11 @@ dotnet test tests/Hoshin.Tests/Hoshin.Tests.csproj
 powershell -NoProfile -ExecutionPolicy Bypass -File packaging/package.ps1
 ```
 
+## Git & Pull Request Workflow
+
+- **Never commit or push directly to `main`.** Always branch off the latest `origin/main` using a lowercase kebab-case branch name: `<type>/<short-description>` (where `<type>` is one of `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`).
+- **Pull requests & squash merge only:** Open a PR against `main` with a Conventional Commit title `<type>(<scope>): <subject>` (checked by `.github/workflows/conventional.yml`). All PRs are **squash merged** into `main` once CI passes.
+
 ## Coding & Contribution Conventions
 
 - Target `.NET 10` (`net10.0`), `LangVersion=latest`, nullable reference types enabled, `RollForward=Major`.

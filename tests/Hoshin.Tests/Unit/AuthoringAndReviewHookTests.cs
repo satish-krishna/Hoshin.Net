@@ -729,9 +729,12 @@ public sealed class AuthoringAndReviewHookTests
     public void Packager_EmitsOneLineSkillWrappersForAll10SkillsInBothBundles()
     {
         using var outDir = new TempDir("hoshin-pkg-");
+        IReadOnlyList<string> argv = OperatingSystem.IsWindows()
+            ? ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path]
+            : ["pwsh", "-NoProfile", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path];
         var res = ProcessCommandRunner.Default.Run(new CommandRequest(
             WorkingDirectory: RepoRoot,
-            Argv: ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path],
+            Argv: argv,
             Timeout: TimeSpan.FromMinutes(3)));
         Assert.True(res.Ok, $"package.ps1 failed:\n{res.Stdout}\n{res.Stderr}");
 
