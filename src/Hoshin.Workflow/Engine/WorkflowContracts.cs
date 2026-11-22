@@ -28,7 +28,7 @@ public sealed record WorkflowPlan(
     int CheckTimeoutSeconds = 600,
     int MaxAttempts = WorkflowEngine.MaxAttempts)
 {
-    public string EffectiveBranch => string.IsNullOrWhiteSpace(Branch) ? $"hoshin/{Change}" : Branch;
+    public string EffectiveBranch => string.IsNullOrWhiteSpace(Branch) ? $"change/{Change}" : Branch;
 
     public IReadOnlyList<string> EffectiveTestPatterns =>
         TestPatterns is { Count: > 0 } ? TestPatterns : DefaultTestPatterns;

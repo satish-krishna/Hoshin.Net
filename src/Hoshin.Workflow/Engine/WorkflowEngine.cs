@@ -13,8 +13,11 @@ public sealed record WorkflowState(
     string? SkillsRoot,
     WorkflowDocState Intent,
     WorkflowDocState Spec,
-    WorkflowDocState PlanDoc)
+    WorkflowDocState PlanDoc,
+    string? CodeHead = null)
 {
+    public string EffectiveCodeHead => string.IsNullOrWhiteSpace(CodeHead) ? Head : CodeHead;
+
     public static WorkflowState? Read(WorkflowRepo repo, string? skillsRoot = null)
     {
         var plan = repo.ReadPlan();
@@ -32,7 +35,8 @@ public sealed record WorkflowState(
             skillsRoot,
             repo.DocumentStatus("intent.md"),
             repo.DocumentStatus("spec.md"),
-            repo.DocumentStatus("plan.md"));
+            repo.DocumentStatus("plan.md"),
+            repo.CodeHead());
     }
 
     public WorkflowDocState Document(string name) => name switch
@@ -46,7 +50,7 @@ public sealed record WorkflowState(
 
 /// <summary>
 /// The single pure state machine for the entire change lifecycle:
-/// <c>WriteIntent → AwaitAccept(intent) → WriteSpec → AwaitAccept(spec) → WritePlan → AwaitAccept(plan) → Implement/Retry → RunChecks → NeedsApproval → Publish → Done</c>.
+/// <c>WriteIntent → AwaitAccept(intent) → WriteSpec → AwaitAccept(spec) → WritePlan → AwaitAccept(plan) → Implement/Retry → RunChecks → Review → NeedsApproval → Publish → Done</c>.
 /// All step ordering, retry caps, and skill gate rules live strictly here.
 /// </summary>
 public static class WorkflowEngine
@@ -98,32 +102,47 @@ public static class WorkflowEngine
                 : new Retry(WorkflowBriefs.Implement(state, task, attempt, verdicts[^1].Reasons), verdicts[^1].Reasons);
         }
 
-        var check = state.Ledger.Checks.LastOrDefault(c => c.Head == state.Head);
+        var codeHead = state.EffectiveCodeHead;
+        var check = state.Ledger.Checks.LastOrDefault(c => c.Head == codeHead);
         if (check is null)
         {
-            return new RunChecks(state.Head);
+            return new RunChecks(codeHead);
         }
 
         if (!check.Passed)
         {
-            return new Done(false, $"checks failed at {Short(state.Head)}");
+            return new Done(false, $"checks failed at {Short(codeHead)}");
         }
 
-        var approval = state.Ledger.Approvals.LastOrDefault(a => a.Head == state.Head);
+        var review = state.Ledger.Reviews.LastOrDefault(r => r.Head == codeHead);
+        if (review is null)
+        {
+            return new ReviewDocument(Path.Combine(state.ChangeFolder, "build", "review.md"), codeHead, WorkflowBriefs.Review(state));
+        }
+
+        if (review.HighCount > 0)
+        {
+            return new Done(false, $"review {review.ReviewNumber} has {review.HighCount} high findings");
+        }
+
+        var approval = state.Ledger.Approvals.LastOrDefault(a => a.Head == codeHead);
         if (approval is null)
         {
-            return new NeedsApproval(state.Head, $"every task passed and the checks are green at {Short(state.Head)}");
+            return new NeedsApproval(codeHead, $"every task passed, checks are green, and review {review.ReviewNumber} has no high findings at {Short(codeHead)}");
         }
 
         if (!approval.Approved)
         {
-            return new Done(false, $"rejected at {Short(state.Head)}: {approval.Note}");
+            return new Done(false, $"rejected at {Short(codeHead)}: {approval.Note}");
         }
 
         var targetRef = $"refs/heads/{state.Plan.EffectiveBranch}";
-        return state.Ledger.Published.Any(p => p.Head == state.Head)
-            ? new Done(true, $"published {Short(state.Head)} to {targetRef}")
-            : new Publish(state.Head, targetRef);
+        var published = state.Ledger.Published.LastOrDefault(p => p.Head == codeHead || p.Head == state.Head);
+        return published is not null
+            ? new Done(true, string.IsNullOrEmpty(published.PullRequestUrl)
+                ? $"published {Short(codeHead)} to {targetRef}"
+                : $"published {Short(codeHead)} to {targetRef} ({published.PullRequestUrl})")
+            : new Publish(codeHead, targetRef);
     }
 
     private static Step? NextAuthoring(WorkflowState state)

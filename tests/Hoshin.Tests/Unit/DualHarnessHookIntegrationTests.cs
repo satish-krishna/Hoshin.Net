@@ -41,7 +41,6 @@ public sealed class DualHarnessHookIntegrationTests
                     {
                       "version": 1,
                       "change": "greet-polish",
-                      "branch": "hoshin/greet-polish",
                       "type": "feat",
                       "scope": "greet",
                       "base": "main"
@@ -242,7 +241,7 @@ public sealed class DualHarnessHookIntegrationTests
         Assert.Contains("T1 attempt 2 is accepted", t1OkCtx);
         Assert.Contains("build task T2, attempt 1", t1OkCtx);
 
-        // 7. Complete T2 -> automatically runs build.finish checks and transitions to NeedsApproval.
+        // 7. Complete T2 -> automatically runs build.finish checks and transitions to ReviewDocument.
         toy.WriteTaskWork("T2");
         var (_, t2OkOut, _) = RunHook(toy.RepoDir, "hook result", new
         {
@@ -254,8 +253,17 @@ public sealed class DualHarnessHookIntegrationTests
         });
         var t2OkCtx = ClaudeContext(t2OkOut);
         Assert.Contains("T2 attempt 1 is accepted", t2OkCtx);
-        Assert.Contains("ready for approval", t2OkCtx);
-        Assert.Contains("/hoshin:accept", t2OkCtx);
+        Assert.Contains("build/review.md", t2OkCtx);
+
+        // 7b. Write clean review -> Stop commits review and advances to NeedsApproval.
+        WriteCleanReview(toy);
+        var (_, reviewStopOut, _) = RunHook(toy.RepoDir, "hook stop", new
+        {
+            hook_event_name = "Stop",
+            cwd = toy.RepoDir,
+            session_id = "claude-s1",
+        });
+        Assert.Contains("review is committed", JsonDocument.Parse(reviewStopOut).RootElement.GetProperty("reason").GetString()!);
 
         // 8. Stop at NeedsApproval lets session end cleanly.
         var (_, stopAtApproval, _) = RunHook(toy.RepoDir, "hook stop", new
@@ -289,7 +297,7 @@ public sealed class DualHarnessHookIntegrationTests
             prompt = "/hoshin:accept",
         });
         Assert.Contains("The change is done: published", ClaudeContext(acceptOut));
-        var remoteSha = TestGitFixture.Git(toy.Temp.Path, "--git-dir", toy.RemoteDir, "rev-parse", "refs/heads/hoshin/greet-polish");
+        var remoteSha = TestGitFixture.Git(toy.Temp.Path, "--git-dir", toy.RemoteDir, "rev-parse", "refs/heads/change/greet-polish");
         Assert.Equal(toy.Repo.Head(), remoteSha);
     }
 
@@ -391,22 +399,31 @@ public sealed class DualHarnessHookIntegrationTests
             agent_id = "agent-t2",
         });
 
-        var (_, approvalStop, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, reviewStop, _) = RunHook(toy.RepoDir, "hook stop", new
         {
             hook_event_name = "Stop",
             cwd = toy.RepoDir,
             session_id = "claude-async",
             background_tasks = Array.Empty<object>(),
         });
-        Assert.False(string.IsNullOrWhiteSpace(approvalStop), "Expected parent Stop to report T2 verdict and NeedsApproval once");
-        var approvalDoc = JsonDocument.Parse(approvalStop).RootElement;
-        Assert.Equal("block", approvalDoc.GetProperty("decision").GetString());
-        var approvalReason = approvalDoc.GetProperty("reason").GetString()!;
-        Assert.Contains("T2 attempt 1 is accepted", approvalReason);
-        Assert.Contains("ready for approval", approvalReason);
-        Assert.Contains("/hoshin:accept", approvalReason);
+        Assert.False(string.IsNullOrWhiteSpace(reviewStop), "Expected parent Stop to report T2 verdict and Review once");
+        var reviewDoc = JsonDocument.Parse(reviewStop).RootElement;
+        Assert.Equal("block", reviewDoc.GetProperty("decision").GetString());
+        var reviewReason = reviewDoc.GetProperty("reason").GetString()!;
+        Assert.Contains("T2 attempt 1 is accepted", reviewReason);
+        Assert.Contains("build/review.md", reviewReason);
 
-        // Following Stop at NeedsApproval allows cleanly.
+        // Commit clean review -> advances to NeedsApproval, and following Stop allows cleanly.
+        WriteCleanReview(toy);
+        var (_, committedReviewStop, _) = RunHook(toy.RepoDir, "hook stop", new
+        {
+            hook_event_name = "Stop",
+            cwd = toy.RepoDir,
+            session_id = "claude-async",
+            background_tasks = Array.Empty<object>(),
+        });
+        Assert.Contains("review is committed", JsonDocument.Parse(committedReviewStop).RootElement.GetProperty("reason").GetString()!);
+
         var (_, secondApprovalStop, _) = RunHook(toy.RepoDir, "hook stop", new
         {
             hook_event_name = "Stop",
@@ -540,10 +557,20 @@ public sealed class DualHarnessHookIntegrationTests
             Assert.Contains($"{task} attempt 1 is accepted", reason);
             if (task == "T2")
             {
-                Assert.Contains("ready for approval", reason);
-                Assert.Contains("/accept", reason);
+                Assert.Contains("build/review.md", reason);
             }
         }
+
+        // 4b. Write clean review -> parent Stop commits review and advances to NeedsApproval.
+        WriteCleanReview(toy);
+        var (_, reviewStopAgy, _) = RunHook(toy.RepoDir, "hook stop", new
+        {
+            hookEventName = "Stop",
+            conversationId = "agy-parent-1",
+            cwd = toy.RepoDir,
+            fullyIdle = true,
+        });
+        Assert.Contains("review is committed", JsonDocument.Parse(reviewStopAgy).RootElement.GetProperty("reason").GetString()!);
 
         // 5. Final Stop at NeedsApproval returns {}.
         var (_, doneStop, _) = RunHook(toy.RepoDir, "hook stop", new
@@ -578,7 +605,7 @@ public sealed class DualHarnessHookIntegrationTests
             lastUserInput = "/accept",
         });
         Assert.Contains("The change is done: published", AgyInjectedMessage(acceptOut));
-        var remoteSha = TestGitFixture.Git(toy.Temp.Path, "--git-dir", toy.RemoteDir, "rev-parse", "refs/heads/hoshin/greet-polish");
+        var remoteSha = TestGitFixture.Git(toy.Temp.Path, "--git-dir", toy.RemoteDir, "rev-parse", "refs/heads/change/greet-polish");
         Assert.Equal(toy.Repo.Head(), remoteSha);
     }
 
@@ -615,14 +642,35 @@ public sealed class DualHarnessHookIntegrationTests
     // 4. Security: Approval and Acceptance Must Be Human-Only (T02 / S1)
     // =========================================================================
 
+    private static void WriteCleanReview(ToyFixture toy)
+    {
+        var shortHead = WorkflowEngine.Short(toy.Repo.CodeHead());
+        TestGitFixture.Write(Path.Combine(toy.RepoDir, ".hoshin", "build", "review.md"), $$"""
+            ```jsonc
+            { "layout": 2 }
+            ```
+
+            # Review findings
+
+            ## Review 1
+
+            ```jsonc
+            { "review": 1, "reviewed_at": "2026-11-22", "commits": { "repo": "{{shortHead}}" } }
+            ```
+
+            No findings.
+            """);
+    }
+
     private static void AdvanceToyToNeedsApproval(ToyFixture toy)
     {
-        var head = toy.Repo.Head();
+        var head = toy.Repo.CodeHead();
         toy.Repo.WithLedger(l =>
         {
             l.Verdicts.Add(new WorkflowVerdict("T1", 1, head, true, "observed", [], DateTimeOffset.UtcNow));
             l.Verdicts.Add(new WorkflowVerdict("T2", 1, head, true, "observed", [], DateTimeOffset.UtcNow));
             l.Checks.Add(new WorkflowCheckRun(head, true, "ok", DateTimeOffset.UtcNow));
+            l.Reviews.Add(new WorkflowReviewRun(head, 1, 0, 0, DateTimeOffset.UtcNow));
             return 0;
         });
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
@@ -650,7 +698,7 @@ public sealed class DualHarnessHookIntegrationTests
 
         var remoteCheck = ProcessCommandRunner.Default.Run(new CommandRequest(
             toy.Temp.Path,
-            ["git", "--git-dir", toy.RemoteDir, "rev-parse", "--verify", "refs/heads/hoshin/greet-polish"]));
+            ["git", "--git-dir", toy.RemoteDir, "rev-parse", "--verify", "refs/heads/change/greet-polish"]));
         Assert.False(remoteCheck.Ok, "Remote branch must not be pushed by model-invoked accept.");
     }
 

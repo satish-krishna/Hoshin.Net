@@ -105,13 +105,6 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         StopCounterStore.ResetAll(repo);
 
         var prefix = "";
-        if (invoked == "review")
-        {
-            var reviewStep = new ReviewDocument(Path.Combine(repo.ChangeFolder, "build", "review.md"), state.Head, WorkflowBriefs.Review(state));
-            _runner.Issue(repo, state, reviewStep, ev.SessionId);
-            return EmitStartContext(ev, repo, HookInstructions.For(reviewStep, ev.Harness), "review: Review");
-        }
-
         if (invoked == "fix")
         {
             var fixStep = new WriteFix(repo.ChangeFolder, WorkflowBriefs.Fix(state));
@@ -296,6 +289,15 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
 
         if (current?.Kind == "Review")
         {
+            if (hasReport)
+            {
+                var reviewState = ReadState(repo, rolesRoot, out _);
+                if (reviewState is not null && WorkflowEngine.Next(reviewState) is ReviewDocument rv)
+                {
+                    return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(rv, ev.Harness, prefix: verdictReport)), "continue: report Review");
+                }
+            }
+
             return StopWhileReviewing(ev, repo, rolesRoot);
         }
 
@@ -322,6 +324,9 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
                 }
 
                 return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: verdictReport)), $"block {blocks}: {step.Kind}");
+
+            case ReviewDocument when hasReport:
+                return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report Review");
 
             case NeedsApproval when hasReport:
                 return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report NeedsApproval");
@@ -413,7 +418,10 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
 
         StopCounterStore.ResetAll(repo);
         var next = Advance(repo, rolesRoot, ev.SessionId);
-        return (_adapter.BlockStopOutput(ev.Harness, $"The review is committed as {WorkflowEngine.Short(commit)}. Report the findings to the engineer and let them know `{HookInstructions.SkillCommand("accept", ev.Harness)}` or `{HookInstructions.SkillCommand("done", ev.Harness)}` publishes once they approve. Then end your turn."), $"committed review {WorkflowEngine.Short(commit)}; next {next.Kind}");
+        var msg = next is Done { Success: false } stopped
+            ? $"The review is committed as {WorkflowEngine.Short(commit)}. {stopped.Outcome}. Report the findings to the engineer. Then end your turn."
+            : $"The review is committed as {WorkflowEngine.Short(commit)}. Report the findings to the engineer and let them know `{HookInstructions.SkillCommand("accept", ev.Harness)}` or `{HookInstructions.SkillCommand("done", ev.Harness)}` publishes once they approve. Then end your turn.";
+        return (_adapter.BlockStopOutput(ev.Harness, msg), $"committed review {WorkflowEngine.Short(commit)}; next {next.Kind}");
     }
 
     private (string? Output, string Decision) StopWhileFixing(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot)

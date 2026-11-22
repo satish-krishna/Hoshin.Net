@@ -156,7 +156,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T28 | P1 | Make timeouts and the attempt cap configurable | E10 | — | done |
 | T29 | P1 | Accept `testPatterns` in `.hoshin.json` | §7 | — | done |
 | T30 | P1 | The intent brief finds the system's context files | §6 | — | done |
-| T31 | P1 | Publishing: PR, review gate, branch default, diagnostics | E8 | D4 ✔ | open |
+| T31 | P1 | Publishing: PR, review gate, branch default, diagnostics | E8 | D4 ✔ | done |
 | T41 | P1 | Tasks with no testable behavior | §6 | D5 ✔ | open |
 | T11 | P1 | Replace the YAML converter (`Hoshin.Migration` + YamlDotNet) | L1–L3 | D3 ✔, T10 | open |
 | T34 | P1 · SOLID | Remove `?? Default` fallbacks; inject clock and file system | §8.5 (D1–D3) | T39 | open |

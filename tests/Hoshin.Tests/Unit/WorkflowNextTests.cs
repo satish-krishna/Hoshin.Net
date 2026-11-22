@@ -112,18 +112,23 @@ public sealed class WorkflowNextTests
         var step10 = Assert.IsType<RunChecks>(WorkflowEngine.Next(s10));
         Assert.Equal("ccccccc3333333", step10.Head);
 
-        // 12. Checks pass -> NeedsApproval
+        // 12. Checks pass -> ReviewDocument
         ledger.Checks.Add(new WorkflowCheckRun("ccccccc3333333", true, "ok", DateTimeOffset.UtcNow));
+        var stepReview = Assert.IsType<ReviewDocument>(WorkflowEngine.Next(s10));
+        Assert.Equal("ccccccc3333333", stepReview.Head);
+
+        // 13. Clean review -> NeedsApproval
+        ledger.Reviews.Add(new WorkflowReviewRun("ccccccc3333333", 1, 0, 0, DateTimeOffset.UtcNow));
         var step11 = Assert.IsType<NeedsApproval>(WorkflowEngine.Next(s10));
         Assert.Equal("ccccccc3333333", step11.Head);
 
-        // 13. Approved -> Publish
+        // 14. Approved -> Publish
         ledger.Approvals.Add(new WorkflowApproval("ccccccc3333333", true, "approved", DateTimeOffset.UtcNow));
         var step12 = Assert.IsType<Publish>(WorkflowEngine.Next(s10));
         Assert.Equal("ccccccc3333333", step12.Head);
         Assert.Equal("refs/heads/feat/demo", step12.Ref);
 
-        // 14. Published -> Done(Success: true)
+        // 15. Published -> Done(Success: true)
         ledger.Published.Add(new WorkflowPublished("ccccccc3333333", "refs/heads/feat/demo", DateTimeOffset.UtcNow));
         var step13 = Assert.IsType<Done>(WorkflowEngine.Next(s10));
         Assert.True(step13.Success);
@@ -159,6 +164,7 @@ public sealed class WorkflowNextTests
         ledgerReject.Verdicts.Add(new WorkflowVerdict("T1", 1, "h1", true, "observed", [], DateTimeOffset.UtcNow));
         ledgerReject.Verdicts.Add(new WorkflowVerdict("T2", 1, "h2", true, "observed", [], DateTimeOffset.UtcNow));
         ledgerReject.Checks.Add(new WorkflowCheckRun("h2", true, "ok", DateTimeOffset.UtcNow));
+        ledgerReject.Reviews.Add(new WorkflowReviewRun("h2", 1, 0, 0, DateTimeOffset.UtcNow));
         ledgerReject.Approvals.Add(new WorkflowApproval("h2", false, "needs redesign", DateTimeOffset.UtcNow));
         var doneReject = Assert.IsType<Done>(WorkflowEngine.Next(MakeState(ledger: ledgerReject, head: "h2")));
         Assert.False(doneReject.Success);

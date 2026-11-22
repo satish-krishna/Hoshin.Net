@@ -101,16 +101,16 @@ stateDiagram-v2
     Implement --> RunChecks : "All tasks passed"
     Retry --> RunChecks : "All tasks passed"
 
-    RunChecks --> NeedsApproval : "build.finish checks green"
+    RunChecks --> Review : "build.finish checks green"
     RunChecks --> DoneFail : "Checks failed"
 
-    NeedsApproval --> Review : "Engineer invokes /review"
-    Review --> NeedsApproval : "Stop: build/review.md valid & committed"
+    Review --> NeedsApproval : "Stop: clean build/review.md committed (code head unchanged)"
+    Review --> DoneFail : "Review has high findings"
 
     NeedsApproval --> Publish : "Engineer invokes /accept or /done"
     NeedsApproval --> DoneFail : "Engineer rejects"
 
-    Publish --> DoneOk : "Branch pushed (+ optional PR)"
+    Publish --> DoneOk : "Branch pushed to upstream/origin + PR opened or reused"
     DoneOk --> [*]
     DoneFail --> [*]
 ```
@@ -122,9 +122,9 @@ stateDiagram-v2
 - `WriteFix(ChangeFolder, Brief)` — Light-track drafting of `intent.md`, `spec.md`, and `plan.md` together (enforcing 1 repository and ≤ 3 tasks).
 - `Implement(AgentTask)` / `Retry(AgentTask, Handoff)` — Agent work requests carrying the embedded/loaded role procedure and attempt brief.
 - `RunChecks(Head)` — Library-executed `build.finish` blocking checks read strictly from the change's **base branch** ref (`git show <base>:...`), combining `.hoshin.json`, `intent/<system>/hooks.json` (via `HookConfigService`), and any committed per-change `hooks.jsonc`/`hooks.json` (defaulting `blocking` to `true` unless explicitly `false`), never from the working tree.
-- `ReviewDocument(Path, Head, Brief)` — Independent read-only review appended to `build/review.md`.
-- `NeedsApproval(Head, Reason)` — Built and verified change waiting for human approval.
-- `Publish(Head, Ref)` — Library-owned `git push` (and optional PR creation via `IPullRequestClient`).
+- `ReviewDocument(Path, Head, Brief)` — Required review gate after `RunChecks` passes, keyed by **code head** (latest commit touching paths outside `<change>/build/review.md`), written and committed to `build/review.md`. High findings stop with `Done(false)`; zero high findings advance to `NeedsApproval`.
+- `NeedsApproval(Head, Reason)` — Built, checked, and cleanly reviewed change waiting for human approval at the current code head.
+- `Publish(Head, Ref)` — Library-owned `git push` to the branch's upstream remote (defaulting to `origin`, branch `change/<change>` unless overridden in `change.jsonc`) plus opening or reusing a PR via `IPullRequestClient` (surfacing push and PR errors without recording publication).
 - `Done(Success, Outcome)` — Terminal state.
 
 ## 4. Two-Phase Red/Green Verification & Commits

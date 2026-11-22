@@ -149,6 +149,14 @@ public sealed class WorkflowRepo
 
     public string Head() => Git("rev-parse", "HEAD").Output.Trim();
 
+    public string CodeHead()
+    {
+        var reviewRel = Path.GetRelativePath(Root, Path.Combine(ChangeFolder, "build", "review.md")).Replace('\\', '/');
+        var res = Git("log", "-1", "--format=%H", "--", ".", $":(exclude){reviewRel}");
+        var sha = res.Ok ? res.Output.Trim() : "";
+        return sha.Length > 0 ? sha : Head();
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public WorkflowPlan? ReadPlan(PlanReader? planReader = null)
     {

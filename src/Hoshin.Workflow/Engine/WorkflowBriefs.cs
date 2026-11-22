@@ -172,7 +172,7 @@ public static class WorkflowBriefs
         var reviewPath = Path.Combine(state.ChangeFolder, "build", "review.md");
         var reviewRel = RelativePath(state.RepoRoot, reviewPath);
         var nextNum = state.Ledger.Reviews.Count + 1;
-        var shortHead = WorkflowEngine.Short(state.Head);
+        var shortHead = WorkflowEngine.Short(state.EffectiveCodeHead);
 
         var b = new StringBuilder();
         b.AppendLine(CultureInfo.InvariantCulture, $"# Review for change {state.Plan.Change} (Review {nextNum})");

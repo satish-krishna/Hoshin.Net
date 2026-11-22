@@ -23,7 +23,7 @@ public interface IWorkflowRunner
 
     WorkflowApproval Answer(WorkflowRepo repo, WorkflowState state, bool approved, string note);
 
-    WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = false);
+    WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = true);
 
     (IReadOnlyList<Problem> Problems, string? Commit) CommitDocument(WorkflowRepo repo, WorkflowState state, string name);
 
@@ -380,7 +380,8 @@ public sealed partial class WorkflowRunner(
             outputs.Add($"$ {string.Join(' ', check)} -> {run.ExitCode}\n{run.Tail(20)}");
         }
 
-        var result = new WorkflowCheckRun(state.Head, passed, string.Join("\n", outputs), DateTimeOffset.UtcNow);
+        var codeHead = state.EffectiveCodeHead;
+        var result = new WorkflowCheckRun(codeHead, passed, string.Join("\n", outputs), DateTimeOffset.UtcNow);
         repo.WithLedger(l =>
         {
             l.Checks.Add(result);
@@ -391,10 +392,11 @@ public sealed partial class WorkflowRunner(
 
     public WorkflowApproval Answer(WorkflowRepo repo, WorkflowState state, bool approved, string note)
     {
-        var approval = new WorkflowApproval(state.Head, approved, note, DateTimeOffset.UtcNow);
+        var codeHead = state.EffectiveCodeHead;
+        var approval = new WorkflowApproval(codeHead, approved, note, DateTimeOffset.UtcNow);
         repo.WithLedger(l =>
         {
-            if (!l.Approvals.Any(a => a.Head == state.Head))
+            if (!l.Approvals.Any(a => a.Head == codeHead))
             {
                 l.Approvals.Add(approval);
             }
@@ -404,44 +406,86 @@ public sealed partial class WorkflowRunner(
         return approval;
     }
 
-    public WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = false)
+    public WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = true)
     {
+        var remote = ResolvePushRemote(repo);
         var pushEnv = AllowListedCommandRunner.CollectPushEnvironment();
-        var push = repo.GitWithEnv(pushEnv, "push", "origin", $"HEAD:{targetRef}");
+        var push = repo.GitWithEnv(pushEnv, "push", remote, $"HEAD:{targetRef}");
         if (!push.Ok)
         {
             var error = Squash(push.Tail(15));
-            return new WorkflowPublishResult(null, string.IsNullOrWhiteSpace(error) ? $"git push failed (exit {push.ExitCode})" : error);
+            return new WorkflowPublishResult(null, string.IsNullOrWhiteSpace(error) ? $"git push to {remote} failed (exit {push.ExitCode})" : error);
         }
 
         string? prUrl = null;
-        if (openPullRequest)
+        if (openPullRequest && ShouldOpenPullRequest(repo, remote))
         {
-            var branch = targetRef.StartsWith("refs/heads/", StringComparison.Ordinal)
-                ? targetRef["refs/heads/".Length..]
-                : targetRef;
-            var existing = _pullRequests.OpenPullRequest(repo.Root, branch);
-            if (existing is not null)
+            var (url, prError) = OpenOrReusePullRequest(repo, state, targetRef);
+            if (prError is not null)
             {
-                prUrl = existing.Url;
+                return new WorkflowPublishResult(null, prError);
             }
-            else
-            {
-                var created = _pullRequests.OpenNew(repo.Root, new OpenPullRequestInput(state.Plan.Base, branch, state.Plan.Change, $"Automated publish for {state.Plan.Change}."));
-                if (created.PullRequest is not null)
-                {
-                    prUrl = created.PullRequest.Url;
-                }
-            }
+
+            prUrl = url;
         }
 
-        var published = new WorkflowPublished(state.Head, targetRef, DateTimeOffset.UtcNow, prUrl);
+        var published = new WorkflowPublished(state.EffectiveCodeHead, targetRef, DateTimeOffset.UtcNow, prUrl);
         repo.WithLedger(l =>
         {
             l.Published.Add(published);
             return 0;
         });
         return new WorkflowPublishResult(published, null);
+    }
+
+    private static string ResolvePushRemote(WorkflowRepo repo)
+    {
+        var upstream = repo.Git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
+        if (upstream.Ok)
+        {
+            var trimmed = upstream.Output.Trim();
+            var slash = trimmed.IndexOf('/', StringComparison.Ordinal);
+            if (slash > 0)
+            {
+                return trimmed[..slash];
+            }
+        }
+
+        return "origin";
+    }
+
+    private bool ShouldOpenPullRequest(WorkflowRepo repo, string remote)
+    {
+        var urlRes = repo.Git("remote", "get-url", remote);
+        var url = urlRes.Ok ? urlRes.Output.Trim() : "";
+        return _pullRequests.HostOf(url) is not null || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("HOSHIN_GH"));
+    }
+
+    private (string? Url, string? Error) OpenOrReusePullRequest(WorkflowRepo repo, WorkflowState state, string targetRef)
+    {
+        var branch = targetRef.StartsWith("refs/heads/", StringComparison.Ordinal)
+            ? targetRef["refs/heads/".Length..]
+            : targetRef;
+        try
+        {
+            var existing = _pullRequests.OpenPullRequest(repo.Root, branch);
+            if (existing is not null)
+            {
+                return (existing.Url, null);
+            }
+
+            var created = _pullRequests.OpenNew(repo.Root, new OpenPullRequestInput(state.Plan.Base, branch, state.Plan.Change, $"Automated publish for {state.Plan.Change}."));
+            if (created.PullRequest is not null)
+            {
+                return (created.PullRequest.Url, null);
+            }
+
+            return (null, $"opening pull request failed: {created.Error ?? "unknown error"}");
+        }
+        catch (CouldNotRunException e)
+        {
+            return (null, $"opening pull request failed: {e.Message}");
+        }
     }
 
     /// <summary>
@@ -546,13 +590,14 @@ public sealed partial class WorkflowRunner(
             return ([new Problem(relative, 1, $"could not commit: {Squash(commit.Tail(5))}")], null);
         }
 
+        var codeHead = state.EffectiveCodeHead;
         var latest = read.Document.Reviews.LastOrDefault();
         var reviewNum = latest?.Number ?? 1;
         var findingsCount = latest?.Findings.Count ?? 0;
         var highCount = latest?.Findings.Count(f => string.Equals(f.Severity, "high", StringComparison.OrdinalIgnoreCase)) ?? 0;
         repo.WithLedger(l =>
         {
-            l.Reviews.Add(new WorkflowReviewRun(state.Head, reviewNum, findingsCount, highCount, DateTimeOffset.UtcNow));
+            l.Reviews.Add(new WorkflowReviewRun(codeHead, reviewNum, findingsCount, highCount, DateTimeOffset.UtcNow));
             return 0;
         });
 
