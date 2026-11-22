@@ -156,14 +156,35 @@ public static class WorkflowEngine
     }
 
     /// <summary>
-    /// Gate check: returns <c>null</c> if <paramref name="skill"/> owns the current <see cref="Next"/> step;
+    /// Gate check: returns <c>null</c> if <paramref name="skill"/> may act at the current <see cref="Next"/> step;
     /// otherwise returns a clear refusal naming the step that comes next.
     /// </summary>
     public static string? Gate(WorkflowState state, string skill)
     {
+        var normalized = skill.ToLowerInvariant();
+        if (normalized is "setup" or "context")
+        {
+            return null;
+        }
+
         var step = Next(state);
+        if (normalized == "review" && step is RunChecks or NeedsApproval or Publish)
+        {
+            return null;
+        }
+
+        if (normalized == "fix" && step is WriteDocument or AwaitAccept)
+        {
+            return null;
+        }
+
+        if (normalized == "done" && step is NeedsApproval or Publish)
+        {
+            return null;
+        }
+
         var owner = OwnerOf(step);
-        if (string.Equals(owner, skill, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(owner, normalized, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
@@ -175,6 +196,8 @@ public static class WorkflowEngine
     {
         WriteDocument w => w.Document,
         AwaitAccept or NeedsApproval => "accept",
+        ReviewDocument => "review",
+        WriteFix => "fix",
         Implement or Retry or RunChecks or Publish => "build",
         _ => null,
     };
@@ -185,6 +208,8 @@ public static class WorkflowEngine
         WriteDocument { Document: "spec" } => "writing the spec from the accepted intent (`spec`)",
         WriteDocument { Document: "plan" } => "writing the plan from the accepted spec (`plan`)",
         AwaitAccept a => $"accepting the {a.Document}, which is committed at {a.Path} (`accept`)",
+        ReviewDocument => "reviewing the built change (`review`)",
+        WriteFix => "drafting the light-track fix documents (`fix`)",
         NeedsApproval => "approving the built change (`accept`)",
         Implement or Retry or RunChecks or Publish => "building the accepted plan (`build`)",
         Done d => $"nothing: the change is finished ({d.Outcome})",

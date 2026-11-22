@@ -154,28 +154,28 @@ public sealed class WorkflowRepo
 
         if (!File.Exists(planPath))
         {
-            if (!File.Exists(changePath))
-            {
-                return null;
-            }
-
-            var only = ParseJsoncObject(changePath);
-            var changeName = Jsonc.String(only, "change") ?? Path.GetFileName(ChangeFolder);
-            return new WorkflowPlan(
-                Change: changeName,
-                Scope: Jsonc.String(only, "scope") ?? throw new CouldNotRunException("change.jsonc lacks scope"),
-                Base: Jsonc.String(only, "base") ?? "main",
-                Tasks: [],
-                Checks: ReadChecksFromHooks(),
-                HasPlan: false,
-                Branch: Jsonc.String(only, "branch"),
-                WorkType: Jsonc.String(only, "type") ?? "feat",
-                TestPatterns: testPatterns);
+            return LoadPlanMetadataOnly(changePath, testPatterns);
         }
 
-        var read = reader.Read(File.ReadAllText(planPath), "plan.md");
+        var planDocStatus = DocumentStatus("plan.md");
+        PlanReadResult? read = null;
+        try
+        {
+            read = reader.Read(File.ReadAllText(planPath), "plan.md");
+        }
+        catch (CouldNotRunException) when (planDocStatus.Uncommitted || !planDocStatus.InHead)
+        {
+            // An uncommitted draft plan (e.g. bare JSONC front matter during WritePlan/Fix) is validated at Stop.
+            return LoadPlanMetadataOnly(changePath, testPatterns);
+        }
+
         if (read.Problems.Count > 0)
         {
+            if (planDocStatus.Uncommitted || !planDocStatus.InHead)
+            {
+                return LoadPlanMetadataOnly(changePath, testPatterns);
+            }
+
             throw new CouldNotRunException("plan.md has problems: " + string.Join("; ", read.Problems.Select(p => $"line {p.Line}: {p.Message}")));
         }
 
@@ -196,13 +196,22 @@ public sealed class WorkflowRepo
         var branch = hasChange ? Jsonc.String(changeObj, "branch") : null;
         var workType = (hasChange ? Jsonc.String(changeObj, "type") : null) ?? "feat";
 
-        var tasks = read.Document.Tasks.Select(t => new WorkflowTask(
-            t.Id,
-            t.Name,
-            string.Join("\n\n", t.Sections.Select(s => s.Body)),
-            t.Test ?? throw new CouldNotRunException($"plan.md: {t.Id} has no test command"),
-            t.Compile,
-            t.Files)).ToList();
+        var tasks = new List<WorkflowTask>();
+        foreach (var t in read.Document.Tasks)
+        {
+            if (t.Test is null && (planDocStatus.Uncommitted || !planDocStatus.InHead))
+            {
+                return LoadPlanMetadataOnly(changePath, testPatterns);
+            }
+
+            tasks.Add(new WorkflowTask(
+                t.Id,
+                t.Name,
+                string.Join("\n\n", t.Sections.Select(s => s.Body)),
+                t.Test ?? throw new CouldNotRunException($"plan.md: {t.Id} has no test command"),
+                t.Compile,
+                t.Files));
+        }
 
         return new WorkflowPlan(
             Change: change,
@@ -213,6 +222,27 @@ public sealed class WorkflowRepo
             HasPlan: true,
             Branch: branch,
             WorkType: workType,
+            TestPatterns: testPatterns);
+    }
+
+    private WorkflowPlan? LoadPlanMetadataOnly(string changePath, List<string>? testPatterns)
+    {
+        if (!File.Exists(changePath))
+        {
+            return null;
+        }
+
+        var only = ParseJsoncObject(changePath);
+        var changeName = Jsonc.String(only, "change") ?? Path.GetFileName(ChangeFolder);
+        return new WorkflowPlan(
+            Change: changeName,
+            Scope: Jsonc.String(only, "scope") ?? throw new CouldNotRunException("change.jsonc lacks scope"),
+            Base: Jsonc.String(only, "base") ?? "main",
+            Tasks: [],
+            Checks: ReadChecksFromHooks(),
+            HasPlan: false,
+            Branch: Jsonc.String(only, "branch"),
+            WorkType: Jsonc.String(only, "type") ?? "feat",
             TestPatterns: testPatterns);
     }
 

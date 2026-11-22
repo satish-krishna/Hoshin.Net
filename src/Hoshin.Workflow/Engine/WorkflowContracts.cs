@@ -63,6 +63,18 @@ public sealed record AwaitAccept(string Document, string Path, string Head) : St
     public override string Kind => "AwaitAccept";
 }
 
+/// <summary>The built change is being reviewed and findings written to <c>build/review.md</c>.</summary>
+public sealed record ReviewDocument(string Path, string Head, string Brief) : Step
+{
+    public override string Kind => "Review";
+}
+
+/// <summary>Light-track fix drafting (<c>intent.md</c>, <c>spec.md</c>, <c>plan.md</c> together, capped at 1 repo and 3 tasks).</summary>
+public sealed record WriteFix(string ChangeFolder, string Brief) : Step
+{
+    public override string Kind => "Fix";
+}
+
 public sealed record Implement(AgentTask Agent) : Step
 {
     public override string Kind => "Implement";
@@ -115,6 +127,8 @@ public sealed record WorkflowApproval(string Head, bool Approved, string Note, D
 
 public sealed record WorkflowPublished(string Head, string Ref, DateTimeOffset At, string? PullRequestUrl = null);
 
+public sealed record WorkflowReviewRun(string Head, int ReviewNumber, int FindingCount, int HighCount, DateTimeOffset At);
+
 /// <summary>An active async subagent recorded in the ledger so concurrent launches are refused and completion is judged once.</summary>
 public sealed record ActiveSubagent(string Task, int Attempt, string AgentId, DateTimeOffset LaunchedAt);
 
@@ -125,6 +139,7 @@ public sealed class WorkflowLedger
     public List<WorkflowVerdict> Verdicts { get; set; } = [];
     public List<WorkflowBaselineRun> Baselines { get; set; } = [];
     public List<WorkflowCheckRun> Checks { get; set; } = [];
+    public List<WorkflowReviewRun> Reviews { get; set; } = [];
     public List<WorkflowApproval> Approvals { get; set; } = [];
     public List<WorkflowPublished> Published { get; set; } = [];
     public ActiveSubagent? ActiveSubagent { get; set; }

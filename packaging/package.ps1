@@ -47,12 +47,44 @@ foreach ($file in $requiredDlls) {
 
 $skillMeta = @(
     @{
+        Name = "intent"
+        Description = "Interviews a product owner to capture a change's problem, proposed outcome, constraints, and decisions in plain language."
+    },
+    @{
+        Name = "spec"
+        Description = "Translates an accepted intent into testable Gherkin requirements, concrete scenarios, and policy-checked areas of concern."
+    },
+    @{
+        Name = "plan"
+        Description = "Drafts ordered, test-first engineering tasks with scenario coverage, shared decisions, and scoped test commands from an accepted spec."
+    },
+    @{
         Name = "build"
         Description = "Builds the accepted plan of the change one task at a time, test first. Use when the engineer asks to build or continue building the change."
     },
     @{
+        Name = "review"
+        Description = "Conducts an independent read-only review of a built change for spec alignment, bugs, and repository conventions."
+    },
+    @{
+        Name = "fix"
+        Description = "Light-track authoring for small single-repository fixes of at most three tasks, drafting intent, spec, and plan in one pass."
+    },
+    @{
+        Name = "done"
+        Description = "Declares a built and reviewed change done and reports publication results or blocking issues."
+    },
+    @{
         Name = "accept"
         Description = "Records acceptance or approval of the current change document or built change so the workflow can advance or publish."
+    },
+    @{
+        Name = "setup"
+        Description = "Sets up or updates a workspace, system home, policy areas, and workspace instructions."
+    },
+    @{
+        Name = "context"
+        Description = "Extracts or refreshes plain-language business context from a system's repositories with provenance tags."
     }
 )
 

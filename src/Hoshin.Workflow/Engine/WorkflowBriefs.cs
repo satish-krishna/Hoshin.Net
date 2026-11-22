@@ -131,6 +131,42 @@ public static class WorkflowBriefs
         return b.ToString();
     }
 
+    public static string Review(WorkflowState state)
+    {
+        var reviewPath = Path.Combine(state.ChangeFolder, "build", "review.md");
+        var reviewRel = RelativePath(state.RepoRoot, reviewPath);
+        var nextNum = state.Ledger.Reviews.Count + 1;
+        var shortHead = WorkflowEngine.Short(state.Head);
+
+        var b = new StringBuilder();
+        b.AppendLine($"# Review for change {state.Plan.Change} (Review {nextNum})");
+        b.AppendLine();
+        b.AppendLine($"Write the review section to `{reviewRel}` in {state.RepoRoot} (head `{shortHead}`).");
+        b.AppendLine();
+        b.AppendLine("Start a new file on line 1 with a fenced `jsonc` front matter block `{ \"layout\": 2 }`, then `# Review findings`, then `## Review " + nextNum + "` with a fenced `jsonc` header (`review`, `reviewed_at`, `commits`) and `### F<n>` findings (`id`, `severity`, `concern`, `file`, `line`, plus `rule` for every `convention` finding).");
+        b.AppendLine();
+        b.AppendLine("Edit no product code and do not commit: `build/review.md` is validated and committed for you when you end your turn.");
+        return b.ToString();
+    }
+
+    public static string Fix(WorkflowState state)
+    {
+        var intentRel = RelativePath(state.RepoRoot, state.Intent.Path);
+        var specRel = RelativePath(state.RepoRoot, state.Spec.Path);
+        var planRel = RelativePath(state.RepoRoot, state.PlanDoc.Path);
+
+        var b = new StringBuilder();
+        b.AppendLine($"# Light-track fix for change {state.Plan.Change}");
+        b.AppendLine();
+        b.AppendLine($"Write all three change documents in {state.RepoRoot}: `{intentRel}`, `{specRel}`, and `{planRel}`.");
+        b.AppendLine();
+        b.AppendLine("Light-track boundary: one repository, no business rule changes, at most 3 tasks, and 1 new behavior per task.");
+        b.AppendLine("Use fenced `jsonc` front matter on line 1 (`status: \"draft\"`, `scope: \"" + state.Plan.Scope + "\"`, `layout: 2` on spec and plan).");
+        b.AppendLine();
+        b.AppendLine("Edit no product code and do not commit: all three documents are validated, pinned, and committed for you when you end your turn.");
+        return b.ToString();
+    }
+
     public static string LoadRoleProcedure(string? skillsRoot, string role)
     {
         if (!string.IsNullOrWhiteSpace(skillsRoot))

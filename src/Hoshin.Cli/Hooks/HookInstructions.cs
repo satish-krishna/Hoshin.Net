@@ -18,6 +18,8 @@ public static class HookInstructions
         Retry r => Dispatch(r.Agent, harness),
         NeedsApproval n => $"Every task is built test first and the repository's checks pass at {WorkflowEngine.Short(n.Head)}. Tell the engineer the change is ready for approval, and that `{SkillCommand("accept", harness)}` approves it. Then end your turn.",
         WriteDocument w => w.Brief,
+        ReviewDocument rv => rv.Brief,
+        WriteFix fx => fx.Brief,
         AwaitAccept a => $"The {a.Document} is committed and waits for acceptance. Tell the person to review it at {a.Path}, and that `{SkillCommand("accept", harness)}` accepts it. Then end your turn.",
         Done { Success: true } d => $"The change is done: {d.Outcome}. Tell the engineer in one sentence, then end your turn.",
         Done d => $"The run stopped: {d.Outcome}. Tell the engineer in one or two sentences, then end your turn.",

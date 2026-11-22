@@ -120,7 +120,7 @@ public sealed class HoshinServices
         };
         EventRunner = new EventRunner(Git, HookConfig, Ledger, HookScripts, HookProcess, steps);
         AllowListedRunner = AllowListedCommandRunner.Default;
-        WorkflowRunner = new WorkflowRunner(AllowListedRunner, PullRequests, new IntentReader(), SpecReader, PlanReader);
+        WorkflowRunner = new WorkflowRunner(AllowListedRunner, PullRequests, new IntentReader(), SpecReader, PlanReader, ReviewReader);
         HookAdapter = HarnessAdapter.Default;
         HookOrchestrator = new HookOrchestrator(HookAdapter, WorkflowRunner);
     }

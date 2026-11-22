@@ -27,6 +27,10 @@ public interface IWorkflowRunner
 
     (IReadOnlyList<Problem> Problems, string? Commit) CommitDocument(WorkflowRepo repo, WorkflowState state, string name);
 
+    (IReadOnlyList<Problem> Problems, string? Commit) CommitReview(WorkflowRepo repo, WorkflowState state);
+
+    (IReadOnlyList<Problem> Problems, string? Commit) CommitFixDocuments(WorkflowRepo repo, WorkflowState state);
+
     string? AcceptDocument(WorkflowRepo repo, WorkflowState state, string name);
 }
 
@@ -41,7 +45,8 @@ public sealed class WorkflowRunner(
     IPullRequestClient? pullRequests = null,
     IntentReader? intentReader = null,
     SpecReader? specReader = null,
-    PlanReader? planReader = null) : IWorkflowRunner
+    PlanReader? planReader = null,
+    ReviewReader? reviewReader = null) : IWorkflowRunner
 {
     public static WorkflowRunner Default { get; } = new();
 
@@ -53,6 +58,7 @@ public sealed class WorkflowRunner(
     private readonly IntentReader _intentReader = intentReader ?? new IntentReader();
     private readonly SpecReader _specReader = specReader ?? new SpecReader();
     private readonly PlanReader _planReader = planReader ?? new PlanReader();
+    private readonly ReviewReader _reviewReader = reviewReader ?? new ReviewReader();
 
     public void Issue(WorkflowRepo repo, WorkflowState state, Step step, string? sessionId = null)
     {
@@ -88,6 +94,8 @@ public sealed class WorkflowRunner(
             {
                 WriteDocument w => w.Document,
                 AwaitAccept a => a.Document,
+                ReviewDocument => "review",
+                WriteFix => "fix",
                 _ => null,
             };
             var activeSession = sessionId ?? repo.ReadRunMarker()?.SessionId;
@@ -402,7 +410,7 @@ public sealed class WorkflowRunner(
         {
             "intent" => _intentReader.Check(rawText, relative, state.Plan.Scope),
             "spec" => CheckSpecDocument(rawText, relative),
-            "plan" => CheckPlanDocument(rawText, relative),
+            "plan" => CheckPlanDocument(rawText, relative, state.Spec.Exists ? state.Spec.Path : null),
             _ => [new Problem(relative, 1, $"unknown document kind {name}")],
         };
 
@@ -435,6 +443,138 @@ public sealed class WorkflowRunner(
         return commit.Ok
             ? ([], repo.Head())
             : ([new Problem(relative, 1, $"could not commit: {Squash(commit.Tail(5))}")], null);
+    }
+
+    public (IReadOnlyList<Problem> Problems, string? Commit) CommitReview(WorkflowRepo repo, WorkflowState state)
+    {
+        var path = Path.Combine(repo.ChangeFolder, "build", "review.md");
+        var relative = Path.GetRelativePath(repo.Root, path).Replace('\\', '/');
+        if (!File.Exists(path))
+        {
+            return ([new Problem(relative, 1, "build/review.md does not exist")], null);
+        }
+
+        var rawText = File.ReadAllText(path);
+        var wrapped = TryAutoWrapBareJsonFrontMatter(rawText);
+        if (wrapped is not null)
+        {
+            File.WriteAllText(path, wrapped, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            rawText = wrapped;
+        }
+
+        var doc = Doc.Split(rawText);
+        if (FrontMatterCheck.Check(doc, relative) is { } shape)
+        {
+            return ([shape], null);
+        }
+
+        ReviewReadResult read;
+        try
+        {
+            read = _reviewReader.Read(rawText, relative);
+        }
+        catch (CouldNotRunException e)
+        {
+            return ([new Problem(relative, 1, e.Message)], null);
+        }
+
+        if (read.Problems.Count > 0)
+        {
+            return (read.Problems, null);
+        }
+
+        repo.Git("add", "--", relative);
+        var commit = repo.Git("commit", "-q", "-m", $"docs({state.Plan.Scope}): review {state.Plan.Change}", "-m", "Generated-By: hoshin", "--", relative);
+        if (!commit.Ok)
+        {
+            return ([new Problem(relative, 1, $"could not commit: {Squash(commit.Tail(5))}")], null);
+        }
+
+        var latest = read.Document.Reviews.LastOrDefault();
+        var reviewNum = latest?.Number ?? 1;
+        var findingsCount = latest?.Findings.Count ?? 0;
+        var highCount = latest?.Findings.Count(f => string.Equals(f.Severity, "high", StringComparison.OrdinalIgnoreCase)) ?? 0;
+        repo.WithLedger(l =>
+        {
+            l.Reviews.Add(new WorkflowReviewRun(state.Head, reviewNum, findingsCount, highCount, DateTimeOffset.UtcNow));
+            return 0;
+        });
+
+        return ([], repo.Head());
+    }
+
+    public (IReadOnlyList<Problem> Problems, string? Commit) CommitFixDocuments(WorkflowRepo repo, WorkflowState state)
+    {
+        var intentPath = Path.Combine(repo.ChangeFolder, "intent.md");
+        var specPath = Path.Combine(repo.ChangeFolder, "spec.md");
+        var planPath = Path.Combine(repo.ChangeFolder, "plan.md");
+
+        var intentRel = Path.GetRelativePath(repo.Root, intentPath).Replace('\\', '/');
+        var specRel = Path.GetRelativePath(repo.Root, specPath).Replace('\\', '/');
+        var planRel = Path.GetRelativePath(repo.Root, planPath).Replace('\\', '/');
+
+        var problems = new List<Problem>();
+        if (!File.Exists(intentPath)) problems.Add(new Problem(intentRel, 1, "light-track fix requires intent.md"));
+        if (!File.Exists(specPath)) problems.Add(new Problem(specRel, 1, "light-track fix requires spec.md"));
+        if (!File.Exists(planPath)) problems.Add(new Problem(planRel, 1, "light-track fix requires plan.md"));
+        if (problems.Count > 0)
+        {
+            return (problems, null);
+        }
+
+        // Auto-wrap bare JSONC front matter on all three documents first.
+        foreach (var p in new[] { intentPath, specPath, planPath })
+        {
+            var raw = File.ReadAllText(p);
+            var wrapped = TryAutoWrapBareJsonFrontMatter(raw);
+            if (wrapped is not null)
+            {
+                File.WriteAllText(p, wrapped, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            }
+        }
+
+        var intentText = File.ReadAllText(intentPath);
+        var specText = File.ReadAllText(specPath);
+        var planText = File.ReadAllText(planPath);
+
+        problems.AddRange(_intentReader.Check(intentText, intentRel, state.Plan.Scope));
+        problems.AddRange(CheckSpecDocument(specText, specRel));
+        problems.AddRange(CheckPlanDocument(planText, planRel, specPath));
+
+        // Enforce light-track boundary: <= 3 tasks and single repository.
+        try
+        {
+            var planRead = _planReader.Read(planText, planRel);
+            if (planRead.Document.Tasks.Count > 3)
+            {
+                problems.Add(new Problem(planRel, planRead.Document.Tasks[3].Line, "light-track fix allows at most 3 tasks; use the full intent pipeline for larger changes"));
+            }
+
+            var distinctRepos = planRead.Document.Tasks
+                .Select(t => t.Repo)
+                .Where(r => !string.IsNullOrWhiteSpace(r))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (distinctRepos.Count > 1)
+            {
+                problems.Add(new Problem(planRel, 1, $"light-track fix must touch a single repository, found: {string.Join(", ", distinctRepos)}"));
+            }
+        }
+        catch (CouldNotRunException e)
+        {
+            problems.Add(new Problem(planRel, 1, e.Message));
+        }
+
+        if (problems.Count > 0)
+        {
+            return (problems, null);
+        }
+
+        repo.Git("add", "--", intentRel, specRel, planRel);
+        var commit = repo.Git("commit", "-q", "-m", $"docs({state.Plan.Scope}): draft fix {state.Plan.Change}", "-m", "Generated-By: hoshin", "--", intentRel, specRel, planRel);
+        return commit.Ok
+            ? ([], repo.Head())
+            : ([new Problem(planRel, 1, $"could not commit fix draft: {Squash(commit.Tail(5))}")], null);
     }
 
     public string? AcceptDocument(WorkflowRepo repo, WorkflowState state, string name)
@@ -555,7 +695,7 @@ public sealed class WorkflowRunner(
         }
     }
 
-    private List<Problem> CheckPlanDocument(string text, string file)
+    private List<Problem> CheckPlanDocument(string text, string file, string? specPath = null)
     {
         var doc = Doc.Split(text);
         if (FrontMatterCheck.Check(doc, file) is { } shape)
@@ -565,7 +705,29 @@ public sealed class WorkflowRunner(
 
         try
         {
-            return _planReader.Read(text, file).Problems;
+            var planRead = _planReader.Read(text, file);
+            var problems = new List<Problem>(planRead.Problems);
+            if (specPath is not null && File.Exists(specPath))
+            {
+                try
+                {
+                    var specRead = _specReader.Read(File.ReadAllText(specPath), specPath);
+                    if (specRead.Problems.Count == 0)
+                    {
+                        var cross = Changes.CrossChecker.CheckChange([
+                            new Changes.ChangeDoc(specPath, specRead),
+                            new Changes.ChangeDoc(file, planRead),
+                        ]);
+                        problems.AddRange(cross);
+                    }
+                }
+                catch
+                {
+                    // Spec unreadable; plan-only problems still reported.
+                }
+            }
+
+            return problems;
         }
         catch (CouldNotRunException e)
         {

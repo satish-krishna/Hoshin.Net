@@ -121,9 +121,22 @@ public sealed class GuardCommand : IHoshinCommand
             return (repo, null);
         }
 
-        var stepReason = step is { Kind: "WriteDocument" or "AwaitAccept", Task: { } document }
-            ? CheckWhileWriting(ev, repo, step, document)
-            : CheckDuringBuildStep(ev, repo, step);
+        var stepReason = step switch
+        {
+            { Kind: "WriteDocument" or "AwaitAccept", Task: { } document } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, $"{document}.md")], document),
+            { Kind: "Review" } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "build", "review.md")], "review"),
+            { Kind: "Fix" } => CheckWhileWriting(
+                ev,
+                repo,
+                step,
+                [
+                    Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "intent.md"),
+                    Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "spec.md"),
+                    Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "plan.md"),
+                ],
+                "fix"),
+            _ => CheckDuringBuildStep(ev, repo, step),
+        };
 
         return (repo, stepReason);
     }
@@ -239,14 +252,14 @@ public sealed class GuardCommand : IHoshinCommand
         return false;
     }
 
-    private static string? CheckWhileWriting(NormalizedHookEvent ev, WorkflowRepo repo, CurrentStep step, string document)
+    private static string? CheckWhileWriting(NormalizedHookEvent ev, WorkflowRepo repo, CurrentStep step, IReadOnlyList<string> allowedFiles, string label)
     {
         if (ev.IsShellTool)
         {
             var command = ev.CommandLine ?? "";
             if (ActiveRunGitMutation.IsMatch(command) || (ProtectedRunDirs.IsMatch(command) && Writes.IsMatch(command)))
             {
-                return $"While the {document} is written nothing is committed or moved by hand; it is committed for you when you end your turn.";
+                return $"While the {label} is written nothing is committed or moved by hand; it is committed for you when you end your turn.";
             }
 
             return null;
@@ -257,16 +270,17 @@ public sealed class GuardCommand : IHoshinCommand
             return null;
         }
 
-        var folder = step.ChangeFolder ?? repo.ChangeFolder;
-        var allowed = Path.GetFullPath(Path.Combine(folder, $"{document}.md"));
         var target = Path.GetFullPath(ev.FilePath, repo.Root);
-        if (!string.Equals(target, allowed, PathComparison))
+        foreach (var allowed in allowedFiles)
         {
-            var rel = Path.GetRelativePath(repo.Root, allowed).Replace('\\', '/');
-            return $"While the {document} is written only {rel} may change.";
+            if (string.Equals(target, Path.GetFullPath(allowed), PathComparison))
+            {
+                return null;
+            }
         }
 
-        return null;
+        var rels = string.Join(", ", allowedFiles.Select(a => Path.GetRelativePath(repo.Root, Path.GetFullPath(a)).Replace('\\', '/')));
+        return $"While the {label} is written only {rels} may change.";
     }
 
     private static string? StaticRefusal(NormalizedHookEvent ev)

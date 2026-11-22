@@ -15,7 +15,8 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
 {
     private const int MaxStopBlocks = 3;
 
-    private static readonly string[] KnownSkills = ["build", "accept", "intent", "spec", "plan"];
+    private static readonly string[] KnownSkills =
+        ["intent", "spec", "plan", "build", "review", "fix", "done", "accept", "setup", "context"];
     private static readonly Regex AgySkillPath = new(@"(?:^|/)\.agents/skills/([a-z0-9_-]+)/SKILL\.md$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex GenericSkillPath = new(@"(?:^|/)skills/([a-z0-9_-]+)/SKILL\.md$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -83,7 +84,28 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         ResetStops(repo);
 
         var prefix = "";
-        if (invoked == "accept")
+        if (invoked == "review")
+        {
+            var reviewStep = new ReviewDocument(Path.Combine(repo.ChangeFolder, "build", "review.md"), state.Head, WorkflowBriefs.Review(state));
+            _runner.Issue(repo, state, reviewStep, ev.SessionId);
+            return EmitStartContext(ev, repo, HookInstructions.For(reviewStep, ev.Harness), "review: Review");
+        }
+
+        if (invoked == "fix")
+        {
+            var fixStep = new WriteFix(repo.ChangeFolder, WorkflowBriefs.Fix(state));
+            _runner.Issue(repo, state, fixStep, ev.SessionId);
+            var fixArgs = ev.CommandArgs ?? slashArgs ?? "";
+            var desc = fixArgs.Trim().Length > 0 ? $"\n\nThe engineer's fix request: {fixArgs.Trim()}" : "";
+            return EmitStartContext(ev, repo, HookInstructions.For(fixStep, ev.Harness) + desc, "fix: Fix");
+        }
+
+        if (invoked is "setup" or "context")
+        {
+            return (_adapter.EmptyOutput(ev.Harness), $"{invoked}: allowed");
+        }
+
+        if (invoked is "accept" or "done")
         {
             switch (WorkflowEngine.Next(state))
             {
@@ -91,7 +113,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
                     _runner.Answer(state.Repo(repo), state, approved: true, $"approved by the engineer in {(ev.IsAntigravity ? "Antigravity" : "Claude Code")}");
                     prefix = "The engineer's approval is recorded.\n\n";
                     break;
-                case AwaitAccept a:
+                case AwaitAccept a when invoked == "accept":
                     var commit = _runner.AcceptDocument(repo, state, a.Document);
                     prefix = commit is null
                         ? "The acceptance could not be committed.\n\n"
@@ -104,6 +126,11 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         if (invoked == "accept" && step is WriteDocument nextWrite)
         {
             return EmitStartContext(ev, repo, prefix + $"Tell the person the next step is {WorkflowEngine.Describe(step)}. Then end your turn.", $"accept: next {step.Kind} {nextWrite.Document}");
+        }
+
+        if (invoked == "accept" && step is Implement)
+        {
+            return EmitStartContext(ev, repo, prefix + $"Tell the person the plan is accepted and the next step is {WorkflowEngine.Describe(step)}. Then end your turn.", "accept: next Implement");
         }
 
         var args = ev.CommandArgs ?? slashArgs ?? "";
@@ -227,6 +254,16 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             justJudged = true;
         }
 
+        if (current?.Kind == "Review")
+        {
+            return StopWhileReviewing(ev, repo, rolesRoot);
+        }
+
+        if (current?.Kind == "Fix")
+        {
+            return StopWhileFixing(ev, repo, rolesRoot);
+        }
+
         var step = Advance(repo, rolesRoot, ev.SessionId);
         if (step is WriteDocument write)
         {
@@ -295,6 +332,78 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         ResetStops(repo);
         var next = Advance(repo, rolesRoot, ev.SessionId);
         return (_adapter.BlockStopOutput(ev.Harness, $"The {write.Document} draft is committed as {WorkflowEngine.Short(commit)}. Tell the person it is ready to review at {shown}, and that `{HookInstructions.SkillCommand("accept", ev.Harness)}` accepts it. Then end your turn."), $"committed {WorkflowEngine.Short(commit)}; next {next.Kind}");
+    }
+
+    private (string? Output, string Decision) StopWhileReviewing(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot)
+    {
+        var state = ReadState(repo, rolesRoot, out _);
+        if (state is null)
+        {
+            return (_adapter.EmptyOutput(ev.Harness), "allow: no state");
+        }
+
+        var reviewDoc = repo.DocumentStatus(Path.Combine("build", "review.md"));
+        var shown = Path.GetRelativePath(repo.Root, reviewDoc.Path).Replace('\\', '/');
+        if (!reviewDoc.Exists || (!reviewDoc.Uncommitted && reviewDoc.InHead))
+        {
+            ClearTurnFiles(repo);
+            return (_adapter.EmptyOutput(ev.Harness), "allow: waiting, review unchanged");
+        }
+
+        var (problems, commit) = _runner.CommitReview(repo, state);
+        if (commit is null)
+        {
+            var blocks = CountStop(repo);
+            if (blocks > MaxStopBlocks)
+            {
+                return (blocks == MaxStopBlocks + 1
+                    ? _adapter.SystemMessageOutput(ev.Harness, $"hoshin: the review still has problems after {MaxStopBlocks} tries; it stays uncommitted.")
+                    : _adapter.EmptyOutput(ev.Harness), $"gave up after {MaxStopBlocks} blocks");
+            }
+
+            var list = string.Join("\n", problems.Select(p => $"- line {p.Line}: {p.Message}"));
+            return (_adapter.BlockStopOutput(ev.Harness, $"The review at {shown} cannot be committed yet:\n{list}\nFix the review document, then end your turn."), $"block {blocks}: review has {problems.Count} problems");
+        }
+
+        ResetStops(repo);
+        var next = Advance(repo, rolesRoot, ev.SessionId);
+        return (_adapter.BlockStopOutput(ev.Harness, $"The review is committed as {WorkflowEngine.Short(commit)}. Report the findings to the engineer and let them know `{HookInstructions.SkillCommand("accept", ev.Harness)}` or `{HookInstructions.SkillCommand("done", ev.Harness)}` publishes once they approve. Then end your turn."), $"committed review {WorkflowEngine.Short(commit)}; next {next.Kind}");
+    }
+
+    private (string? Output, string Decision) StopWhileFixing(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot)
+    {
+        var state = ReadState(repo, rolesRoot, out _);
+        if (state is null)
+        {
+            return (_adapter.EmptyOutput(ev.Harness), "allow: no state");
+        }
+
+        var docs = new[] { state.Intent, state.Spec, state.PlanDoc };
+        var anyDirty = docs.Any(d => d.Exists && (d.Uncommitted || !d.InHead));
+        if (!anyDirty)
+        {
+            ClearTurnFiles(repo);
+            return (_adapter.EmptyOutput(ev.Harness), "allow: waiting, fix documents unchanged");
+        }
+
+        var (problems, commit) = _runner.CommitFixDocuments(repo, state);
+        if (commit is null)
+        {
+            var blocks = CountStop(repo);
+            if (blocks > MaxStopBlocks)
+            {
+                return (blocks == MaxStopBlocks + 1
+                    ? _adapter.SystemMessageOutput(ev.Harness, $"hoshin: the fix draft still has problems after {MaxStopBlocks} tries; it stays uncommitted.")
+                    : _adapter.EmptyOutput(ev.Harness), $"gave up after {MaxStopBlocks} blocks");
+            }
+
+            var list = string.Join("\n", problems.Select(p => $"- {p.File} line {p.Line}: {p.Message}"));
+            return (_adapter.BlockStopOutput(ev.Harness, $"The light-track fix documents cannot be committed yet:\n{list}\nFix the issues above, or ask the engineer if clarification is needed. Then end your turn."), $"block {blocks}: fix has {problems.Count} problems");
+        }
+
+        ResetStops(repo);
+        var next = Advance(repo, rolesRoot, ev.SessionId);
+        return (_adapter.BlockStopOutput(ev.Harness, $"The light-track fix draft is committed as {WorkflowEngine.Short(commit)}. Tell the engineer it is ready for review and acceptance via `{HookInstructions.SkillCommand("accept", ev.Harness)}`. Then end your turn."), $"committed fix {WorkflowEngine.Short(commit)}; next {next.Kind}");
     }
 
     private (WorkflowVerdict Verdict, Step Next) JudgeAndAdvance(WorkflowRepo repo, string? rolesRoot, CurrentStep current, string? sessionId)
