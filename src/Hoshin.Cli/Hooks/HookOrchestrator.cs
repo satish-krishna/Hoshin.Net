@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
 
@@ -103,7 +102,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
 
         Directory.CreateDirectory(repo.HoshinDir);
         repo.WriteRunMarker(new RunMarker(DateTimeOffset.UtcNow, ev.SessionId, ev.HarnessName, repo.ChangeFolder));
-        ResetStops(repo);
+        StopCounterStore.ResetAll(repo);
 
         var prefix = "";
         if (invoked == "review")
@@ -314,7 +313,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         switch (step)
         {
             case Implement or Retry:
-                var blocks = CountStop(repo);
+                var blocks = StopCounterStore.Next(repo, "build", ev.ContinuationActive);
                 if (blocks > MaxStopBlocks)
                 {
                     ClearTurnFiles(repo);
@@ -358,7 +357,13 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         var (problems, commit) = _runner.CommitDocument(repo, state, write.Document);
         if (commit is null)
         {
-            var blocks = CountStop(repo);
+            if (StopCounterStore.EndsWithQuestion(ev.LastAssistantMessage))
+            {
+                StopCounterStore.Reset(repo, $"write-{write.Document}");
+                return (_adapter.EmptyOutput(ev.Harness), $"allow: assistant asked a question while writing {write.Document}");
+            }
+
+            var blocks = StopCounterStore.Next(repo, $"write-{write.Document}", ev.ContinuationActive);
             if (blocks > MaxStopBlocks)
             {
                 return (blocks == MaxStopBlocks + 1
@@ -370,7 +375,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.BlockStopOutput(ev.Harness, $"The {write.Document} at {shown} cannot be committed yet:\n{list}\nFix the file, or if you are still interviewing, ask your next question. Then end your turn."), $"block {blocks}: {write.Document} has {problems.Count} problems");
         }
 
-        ResetStops(repo);
+        StopCounterStore.ResetAll(repo);
         var next = Advance(repo, rolesRoot, ev.SessionId);
         return (_adapter.BlockStopOutput(ev.Harness, $"The {write.Document} draft is committed as {WorkflowEngine.Short(commit)}. Tell the person it is ready to review at {shown}, and that `{HookInstructions.SkillCommand("accept", ev.Harness)}` accepts it. Then end your turn."), $"committed {WorkflowEngine.Short(commit)}; next {next.Kind}");
     }
@@ -394,7 +399,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         var (problems, commit) = _runner.CommitReview(repo, state);
         if (commit is null)
         {
-            var blocks = CountStop(repo);
+            var blocks = StopCounterStore.Next(repo, "review", ev.ContinuationActive);
             if (blocks > MaxStopBlocks)
             {
                 return (blocks == MaxStopBlocks + 1
@@ -406,7 +411,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.BlockStopOutput(ev.Harness, $"The review at {shown} cannot be committed yet:\n{list}\nFix the review document, then end your turn."), $"block {blocks}: review has {problems.Count} problems");
         }
 
-        ResetStops(repo);
+        StopCounterStore.ResetAll(repo);
         var next = Advance(repo, rolesRoot, ev.SessionId);
         return (_adapter.BlockStopOutput(ev.Harness, $"The review is committed as {WorkflowEngine.Short(commit)}. Report the findings to the engineer and let them know `{HookInstructions.SkillCommand("accept", ev.Harness)}` or `{HookInstructions.SkillCommand("done", ev.Harness)}` publishes once they approve. Then end your turn."), $"committed review {WorkflowEngine.Short(commit)}; next {next.Kind}");
     }
@@ -430,7 +435,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         var (problems, commit) = _runner.CommitFixDocuments(repo, state);
         if (commit is null)
         {
-            var blocks = CountStop(repo);
+            var blocks = StopCounterStore.Next(repo, "fix", ev.ContinuationActive);
             if (blocks > MaxStopBlocks)
             {
                 return (blocks == MaxStopBlocks + 1
@@ -442,7 +447,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.BlockStopOutput(ev.Harness, $"The light-track fix documents cannot be committed yet:\n{list}\nFix the issues above, or ask the engineer if clarification is needed. Then end your turn."), $"block {blocks}: fix has {problems.Count} problems");
         }
 
-        ResetStops(repo);
+        StopCounterStore.ResetAll(repo);
         var next = Advance(repo, rolesRoot, ev.SessionId);
         return (_adapter.BlockStopOutput(ev.Harness, $"The light-track fix draft is committed as {WorkflowEngine.Short(commit)}. Tell the engineer it is ready for review and acceptance via `{HookInstructions.SkillCommand("accept", ev.Harness)}`. Then end your turn."), $"committed fix {WorkflowEngine.Short(commit)}; next {next.Kind}");
     }
@@ -451,7 +456,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
     {
         var state = ReadState(repo, rolesRoot, out _)!;
         var verdict = _runner.EvaluateAndCommitTask(repo, state, current.Task!, current.Attempt);
-        ResetStops(repo);
+        StopCounterStore.ResetAll(repo);
         return (verdict, Advance(repo, rolesRoot, sessionId));
     }
 
@@ -576,19 +581,6 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         var text = File.ReadAllText(path);
         TryDelete(path);
         return text;
-    }
-
-    private static string StopsPath(WorkflowRepo repo) => Path.Combine(repo.HoshinDir, "stop-blocks");
-
-    private static void ResetStops(WorkflowRepo repo) => File.WriteAllText(StopsPath(repo), "0");
-
-    private static int CountStop(WorkflowRepo repo)
-    {
-        var n = File.Exists(StopsPath(repo)) && int.TryParse(File.ReadAllText(StopsPath(repo)), NumberStyles.Integer, CultureInfo.InvariantCulture, out var c)
-            ? c + 1
-            : 1;
-        File.WriteAllText(StopsPath(repo), n.ToString(CultureInfo.InvariantCulture));
-        return n;
     }
 }
 
