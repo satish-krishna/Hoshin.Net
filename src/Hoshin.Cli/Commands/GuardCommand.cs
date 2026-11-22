@@ -17,7 +17,6 @@ public sealed class GuardCommand : IHoshinCommand
 {
     private const string GitPrefix = @"\bgit\s+(?:(?:(?:-C|-c|--git-dir|--work-tree|--namespace)(?:=\S+|\s+\S+)|--?[\w-]+(?:=\S+)?)\s+)*";
     private static readonly TimeSpan StaleStepWindow = TimeSpan.FromHours(24);
-    private static readonly StringComparison PathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     private static readonly (Regex Pattern, string What)[] Protected =
     [
@@ -188,6 +187,15 @@ public sealed class GuardCommand : IHoshinCommand
                 return "The change's documents in .hoshin/, .agents/, .claude-plugin/, and .git/ are not edited during a build.";
             }
 
+            foreach (var target in ShellWriteTargets.Extract(command))
+            {
+                var denied = GuardStepEvaluator.CheckBuildTargetPath(target, repo, step);
+                if (denied is not null)
+                {
+                    return denied;
+                }
+            }
+
             return null;
         }
 
@@ -196,62 +204,7 @@ public sealed class GuardCommand : IHoshinCommand
             return null;
         }
 
-        var full = Path.GetFullPath(ev.FilePath, repo.Root);
-        var sep = Path.DirectorySeparatorChar;
-        if (full.Contains($"{sep}.hoshin{sep}", PathComparison)
-            || full.Contains($"{sep}.git{sep}", PathComparison)
-            || full.Contains($"{sep}.agents{sep}", PathComparison)
-            || full.Contains($"{sep}.claude-plugin{sep}", PathComparison))
-        {
-            return "The change's documents in .hoshin/, .agents/, .claude-plugin/, and .git/ are not edited during a build.";
-        }
-
-        // Red-phase enforcement: during Implement/Retry, deny production file edits until at least one test file
-        // has been created or modified in the working tree.
-        if (step is { Kind: "Implement" or "Retry", Task: not null })
-        {
-            var rel = Path.GetRelativePath(repo.Root, full).Replace('\\', '/');
-            if (!WorkflowRepo.IsTestPath(rel, step.TestPatterns, step.TaskTestFiles))
-            {
-                if (!HasModifiedTestFileInWorkingTree(repo, step))
-                {
-                    return $"Write the failing test for {step.Task} first; production files may only change after a test file has been written.";
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static bool HasModifiedTestFileInWorkingTree(WorkflowRepo repo, CurrentStep step)
-    {
-        var status = repo.Git("status", "--porcelain", "-uall");
-        if (!status.Ok || string.IsNullOrWhiteSpace(status.Output))
-        {
-            return false;
-        }
-
-        foreach (var raw in status.Output.Replace("\r\n", "\n").Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (raw.Length < 4)
-            {
-                continue;
-            }
-
-            var pathPart = raw[3..].Trim().Trim('"');
-            var arrow = pathPart.IndexOf(" -> ", StringComparison.Ordinal);
-            if (arrow >= 0)
-            {
-                pathPart = pathPart[(arrow + 4)..].Trim();
-            }
-
-            if (WorkflowRepo.IsTestPath(pathPart, step.TestPatterns, step.TaskTestFiles))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return GuardStepEvaluator.CheckBuildTargetPath(ev.FilePath, repo, step);
     }
 
     private static string? CheckWhileWriting(NormalizedHookEvent ev, WorkflowRepo repo, CurrentStep step, IReadOnlyList<string> allowedFiles, string label)
@@ -264,6 +217,15 @@ public sealed class GuardCommand : IHoshinCommand
                 return $"While the {label} is written nothing is committed or moved by hand; it is committed for you when you end your turn.";
             }
 
+            foreach (var target in ShellWriteTargets.Extract(command))
+            {
+                var denied = GuardStepEvaluator.CheckWriteTargetPath(target, repo, allowedFiles, label);
+                if (denied is not null)
+                {
+                    return denied;
+                }
+            }
+
             return null;
         }
 
@@ -272,17 +234,7 @@ public sealed class GuardCommand : IHoshinCommand
             return null;
         }
 
-        var target = Path.GetFullPath(ev.FilePath, repo.Root);
-        foreach (var allowed in allowedFiles)
-        {
-            if (string.Equals(target, Path.GetFullPath(allowed), PathComparison))
-            {
-                return null;
-            }
-        }
-
-        var rels = string.Join(", ", allowedFiles.Select(a => Path.GetRelativePath(repo.Root, Path.GetFullPath(a)).Replace('\\', '/')));
-        return $"While the {label} is written only {rels} may change.";
+        return GuardStepEvaluator.CheckWriteTargetPath(ev.FilePath, repo, allowedFiles, label);
     }
 
     private static string? StaticRefusal(NormalizedHookEvent ev, WorkflowRepo? repo = null)

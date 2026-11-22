@@ -200,8 +200,8 @@ public sealed partial class WorkflowRunner(
             return RecordVerdict(repo, new WorkflowVerdict(taskId, attempt, startHead, false, redSummary, reasons, DateTimeOffset.UtcNow));
         }
 
-        // Refuse edits to protected workflow/harness folders.
-        var protectedHits = changed.Where(c => IsProtectedPath(c.Path)).Select(c => c.Path).ToList();
+        // Refuse edits to protected workflow/harness folders and the change folder.
+        var protectedHits = changed.Where(c => IsProtectedPath(c.Path, repo.Root, repo.ChangeFolder)).Select(c => c.Path).ToList();
         if (protectedHits.Count > 0)
         {
             reasons.Add($"protected: modified protected workflow files: {string.Join(", ", protectedHits)}");
@@ -887,14 +887,22 @@ public sealed partial class WorkflowRunner(
         return res.Ok;
     }
 
-    private static bool IsProtectedPath(string relativePath)
+    private static bool IsProtectedPath(string relativePath, string repoRoot, string changeFolder)
     {
         var norm = relativePath.Replace('\\', '/').TrimStart('/');
-        return norm.Equals(".hoshin.json", PathComparison)
+        if (norm.Equals(".hoshin.json", PathComparison)
             || norm.StartsWith(".hoshin/", PathComparison)
             || norm.StartsWith(".git/", PathComparison)
             || norm.StartsWith(".agents/", PathComparison)
-            || norm.StartsWith(".claude-plugin/", PathComparison);
+            || norm.StartsWith(".claude-plugin/", PathComparison))
+        {
+            return true;
+        }
+
+        var changeRel = Path.GetRelativePath(repoRoot, changeFolder).Replace('\\', '/').Trim('/');
+        return changeRel.Length > 0
+            && !changeRel.StartsWith("..", StringComparison.Ordinal)
+            && (norm.Equals(changeRel, PathComparison) || norm.StartsWith(changeRel + "/", PathComparison));
     }
 
     private static WorkflowVerdict RecordVerdict(WorkflowRepo repo, WorkflowVerdict verdict)
