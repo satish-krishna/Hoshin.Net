@@ -34,7 +34,7 @@ flowchart LR
 ### Workflow Lifecycle
 
 ```mermaid
-flowchart LR
+flowchart TD
     setup --> context
     context -. business context .-> intent
     intent -->|accept| spec
