@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
 
@@ -14,11 +13,6 @@ namespace Hoshin.Cli.Hooks;
 public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunner? runner = null)
 {
     private const int MaxStopBlocks = 3;
-
-    private static readonly string[] KnownSkills =
-        ["intent", "spec", "plan", "build", "review", "fix", "done", "accept", "setup", "context"];
-    private static readonly Regex AgySkillPath = new(@"(?:^|/)\.agents/skills/([a-z0-9_-]+)/SKILL\.md$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex GenericSkillPath = new(@"(?:^|/)skills/([a-z0-9_-]+)/SKILL\.md$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private readonly IHookAdapter _adapter = adapter ?? HarnessAdapter.Default;
     private readonly IWorkflowRunner _runner = runner ?? WorkflowRunner.Default;
@@ -48,10 +42,24 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             }
         }
 
-        var (invoked, slashArgs) = DetectInvokedSkill(ev);
-        if (invoked is null)
+        var invocation = SkillInvocationDetector.Detect(ev);
+        if (invocation is null)
         {
             return (_adapter.EmptyOutput(ev.Harness), "not ours");
+        }
+
+        var invoked = invocation.Skill;
+        var slashArgs = invocation.Args;
+
+        // S1: Approval and document acceptance are strictly human-only (user-typed slash commands).
+        if (invoked is "accept" or "done" && invocation.Source != SkillInvocationSource.User)
+        {
+            var cmd = HookInstructions.SkillCommand("accept", ev.Harness);
+            return EmitStartContext(
+                ev,
+                repo,
+                $"Only the engineer can approve or accept a change. Ask the engineer to type `{cmd}`, then end your turn.",
+                $"{invoked}: refused model-sourced invocation");
         }
 
         // Antigravity PreInvocation fires before every model call in a turn with unchanged lastUserInput: deduplicate.
@@ -462,91 +470,6 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         }
 
         return (_adapter.ContextOutput(ev, text), decision);
-    }
-
-    private static (string? Skill, string? Args) DetectInvokedSkill(NormalizedHookEvent ev)
-    {
-        if (ev.IsAntigravity)
-        {
-            if (ev.EventName == "PostToolUse" && ev.IsSkillReadTool)
-            {
-                var path = ev.FilePath?.Replace('\\', '/');
-                if (path is not null)
-                {
-                    var match = AgySkillPath.Match(path);
-                    if (!match.Success && ev.IsSkillFile)
-                    {
-                        match = GenericSkillPath.Match(path);
-                    }
-
-                    if (match.Success)
-                    {
-                        var skill = match.Groups[1].Value.ToLowerInvariant();
-                        if (KnownSkills.Contains(skill))
-                        {
-                            return (skill, null);
-                        }
-                    }
-                }
-
-                return (null, null);
-            }
-
-            if (ev.EventName == "PreInvocation")
-            {
-                return ParseSlashCommand(ev.LastUserInput);
-            }
-
-            return (null, null);
-        }
-
-        // Claude Code: UserPromptExpansion or PostToolUse on Skill.
-        var name = ev.CommandName;
-        if (name is null)
-        {
-            return (null, null);
-        }
-
-        foreach (var prefix in new[] { $"{HookInstructions.PluginName}:", "hoshin-net:" })
-        {
-            if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                var skill = name[prefix.Length..].ToLowerInvariant();
-                return KnownSkills.Contains(skill) ? (skill, ev.CommandArgs) : (null, null);
-            }
-        }
-
-        return (null, null);
-    }
-
-    private static (string? Skill, string? Args) ParseSlashCommand(string? input)
-    {
-        if (string.IsNullOrWhiteSpace(input))
-        {
-            return (null, null);
-        }
-
-        var trimmed = input.Trim();
-        if (!trimmed.StartsWith('/'))
-        {
-            return (null, null);
-        }
-
-        var space = trimmed.IndexOfAny([' ', '\t', '\r', '\n']);
-        var token = (space < 0 ? trimmed[1..] : trimmed[1..space]).Trim();
-        var rest = space < 0 ? "" : trimmed[(space + 1)..].Trim();
-
-        foreach (var prefix in new[] { $"{HookInstructions.PluginName}:", "hoshin-net:" })
-        {
-            if (token.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                token = token[prefix.Length..];
-                break;
-            }
-        }
-
-        token = token.ToLowerInvariant();
-        return KnownSkills.Contains(token) ? (token, rest) : (null, null);
     }
 
     private static WorkflowRepo? ResolveRepo(NormalizedHookEvent ev) =>

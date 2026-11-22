@@ -156,7 +156,7 @@ dotnet test tests/Hoshin.Tests                                                  
 
 - A procedure in `skills/<name>/procedure.md` describes judgment only. Sequencing, gating, commits and publishing belong to the library.
 - A change to a skill procedure, or to library behavior a skill relies on, needs an eval case. *(The eval harness lands with EPIC-B; until then, describe the manual check in the pull request.)*
-- `packaging/package.ps1` generates the `SKILL.md` wrappers. `accept` and `done` are user-only (`disable-model-invocation: true`). **[test]** *(lands with T02)*
+- `packaging/package.ps1` generates the `SKILL.md` wrappers. `accept` and `done` are user-only (`disable-model-invocation: true`). **[test]**
 
 ## 9. Releases
 

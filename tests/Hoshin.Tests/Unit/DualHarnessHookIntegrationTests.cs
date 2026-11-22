@@ -534,7 +534,150 @@ public sealed class DualHarnessHookIntegrationTests
     }
 
     // =========================================================================
-    // 4. Harness-Neutral Skills Hygiene Check
+    // 4. Security: Approval and Acceptance Must Be Human-Only (T02 / S1)
+    // =========================================================================
+
+    private static void AdvanceToyToNeedsApproval(ToyFixture toy)
+    {
+        var head = toy.Repo.Head();
+        toy.Repo.WithLedger(l =>
+        {
+            l.Verdicts.Add(new WorkflowVerdict("T1", 1, head, true, "observed", [], DateTimeOffset.UtcNow));
+            l.Verdicts.Add(new WorkflowVerdict("T2", 1, head, true, "observed", [], DateTimeOffset.UtcNow));
+            l.Checks.Add(new WorkflowCheckRun(head, true, "ok", DateTimeOffset.UtcNow));
+            return 0;
+        });
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+    }
+
+    [Fact]
+    public void ClaudeCode_ModelInvokedAcceptAtNeedsApproval_DoesNotApproveOrPublish()
+    {
+        using var toy = new ToyFixture();
+        AdvanceToyToNeedsApproval(toy);
+
+        var (_, stdout, _) = RunHook(toy.RepoDir, "hook start", new
+        {
+            hook_event_name = "PostToolUse",
+            cwd = toy.RepoDir,
+            session_id = "claude-s1",
+            tool_name = "Skill",
+            tool_input = new { skill = "hoshin:accept" },
+        });
+
+        Assert.Empty(toy.Repo.ReadLedger().Approvals);
+        Assert.Empty(toy.Repo.ReadLedger().Published);
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+        Assert.Contains("/hoshin:accept", ClaudeContext(stdout), StringComparison.Ordinal);
+
+        var remoteCheck = ProcessCommandRunner.Default.Run(new CommandRequest(
+            toy.Temp.Path,
+            ["git", "--git-dir", toy.RemoteDir, "rev-parse", "--verify", "refs/heads/hoshin/greet-polish"]));
+        Assert.False(remoteCheck.Ok, "Remote branch must not be pushed by model-invoked accept.");
+    }
+
+    [Fact]
+    public void Antigravity_ModelReadAcceptSkillAtNeedsApproval_DoesNotApproveOrPublish()
+    {
+        using var toy = new ToyFixture();
+        AdvanceToyToNeedsApproval(toy);
+
+        var (_, postOut, _) = RunHook(toy.RepoDir, "hook start", new
+        {
+            hookEventName = "PostToolUse",
+            conversationId = "agy-s1",
+            cwd = toy.RepoDir,
+            toolCall = new
+            {
+                id = "v1",
+                name = "view_file",
+                args = new { Path = Path.Combine(toy.RepoDir, ".agents", "skills", "accept", "SKILL.md") },
+            },
+        });
+        Assert.Equal("{}", postOut);
+
+        Assert.Empty(toy.Repo.ReadLedger().Approvals);
+        Assert.Empty(toy.Repo.ReadLedger().Published);
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+
+        var (_, preOut, _) = RunHook(toy.RepoDir, "hook start", new
+        {
+            hookEventName = "PreInvocation",
+            conversationId = "agy-s1",
+            cwd = toy.RepoDir,
+            invocationNum = 1,
+            lastUserInput = "continue",
+        });
+        Assert.Contains("/accept", AgyInjectedMessage(preOut), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ModelInvokedAcceptAtAwaitAcceptIntent_DoesNotAcceptIntent()
+    {
+        using var tmp = new TempDir("hoshin-await-s1-");
+        var repoDir = Path.Combine(tmp.Path, "repo");
+        TestGitFixture.InitRepo(repoDir, new Dictionary<string, string>
+        {
+            [".hoshin/change.jsonc"] = """
+                { "version": 1, "change": "demo-s1", "type": "feat", "scope": "demo", "base": "main" }
+                """,
+            [".hoshin/intent.md"] = """
+                ```jsonc
+                { "title": "Demo", "system": "demo", "author": "t", "date": "2026-11-22", "status": "draft", "scope": "demo" }
+                ```
+
+                # Intent: Demo
+
+                ## Problem
+                p
+                ## Proposed outcome
+                o
+                ## Affected users and systems
+                u
+                ## Constraints
+                c
+                ## Decisions
+                d
+                ## Open questions
+                q
+                """,
+        });
+        var repo = WorkflowRepo.Find(repoDir)!;
+        var headBefore = repo.Head();
+        Assert.IsType<AwaitAccept>(WorkflowEngine.Next(WorkflowState.Read(repo)!));
+
+        // Claude model-invoked Skill("hoshin:accept") must NOT accept the intent.
+        var (_, claudeOut, _) = RunHook(repoDir, "hook start", new
+        {
+            hook_event_name = "PostToolUse",
+            cwd = repoDir,
+            session_id = "c1",
+            tool_name = "Skill",
+            tool_input = new { skill = "hoshin:accept" },
+        });
+        Assert.Equal(headBefore, repo.Head());
+        Assert.IsType<AwaitAccept>(WorkflowEngine.Next(WorkflowState.Read(repo)!));
+        Assert.Contains("/hoshin:accept", ClaudeContext(claudeOut), StringComparison.Ordinal);
+
+        // Antigravity model-invoked view_file on accept/SKILL.md must NOT accept the intent.
+        RunHook(repoDir, "hook start", new
+        {
+            hookEventName = "PostToolUse",
+            conversationId = "a1",
+            cwd = repoDir,
+            toolCall = new
+            {
+                id = "v2",
+                name = "view_file",
+                args = new { Path = Path.Combine(repoDir, ".agents", "skills", "accept", "SKILL.md") },
+            },
+        });
+        Assert.Equal(headBefore, repo.Head());
+        Assert.IsType<AwaitAccept>(WorkflowEngine.Next(WorkflowState.Read(repo)!));
+    }
+
+    // =========================================================================
+    // 5. Harness-Neutral Skills Hygiene Check
     // =========================================================================
 
     [Fact]

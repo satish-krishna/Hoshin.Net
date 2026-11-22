@@ -782,6 +782,14 @@ public sealed class AuthoringAndReviewHookTests
 
                 var wrapperText = File.ReadAllText(skillMd);
                 Assert.Contains("Read `references/procedure.md` and follow it.", wrapperText);
+                if (skill is "accept" or "done")
+                {
+                    Assert.Contains("disable-model-invocation: true", wrapperText);
+                }
+                else
+                {
+                    Assert.DoesNotContain("disable-model-invocation: true", wrapperText);
+                }
 
                 // Verbatim copy check.
                 var srcProc = File.ReadAllText(Path.Combine(SkillsDir, skill, "procedure.md"));

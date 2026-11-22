@@ -145,7 +145,8 @@ function Write-SkillWrappers {
         Copy-Item -Path (Join-Path $srcSkillDir "*") -Destination $refsDir -Recurse -Force
 
         # Emit one-line SKILL.md wrapper (YAML front matter is required by Claude Code / Antigravity skill loaders).
-        $wrapper = "---`nname: $name`ndescription: $desc`n---`n`nRead ``references/procedure.md`` and follow it.`n"
+        $userOnly = if ($name -in @("accept", "done")) { "`ndisable-model-invocation: true" } else { "" }
+        $wrapper = "---`nname: $name`ndescription: $desc$userOnly`n---`n`nRead ``references/procedure.md`` and follow it.`n"
         [System.IO.File]::WriteAllText((Join-Path $skillDir "SKILL.md"), $wrapper, [System.Text.UTF8Encoding]::new($false))
     }
 }
