@@ -1,6 +1,7 @@
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Hooks;
 
@@ -9,14 +10,18 @@ internal sealed class WorkflowAdvancer(
     ITaskEvaluator tasks,
     ICheckRunner checks,
     IPublisher publisher,
-    IAllowListedCommandRunner commandRunner,
+    IGitWorktrees gitWorktrees,
+    IGitQuery gitQuery,
+    IGitStatus gitStatus,
     IFileSystem fileSystem,
     PlanReader planReader)
 {
     private readonly ITaskEvaluator _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
     private readonly ICheckRunner _checks = checks ?? throw new ArgumentNullException(nameof(checks));
     private readonly IPublisher _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-    private readonly IAllowListedCommandRunner _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
+    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
 
@@ -25,7 +30,7 @@ internal sealed class WorkflowAdvancer(
     public PlanReader PlanReader => _planReader;
 
     public WorkflowRepo? ResolveRepo(NormalizedHookEvent ev) =>
-        WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _commandRunner, _fs);
+        WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _gitWorktrees, _gitQuery, _gitStatus, _fs);
 
     public WorkflowState? ReadState(WorkflowRepo repo, string? rolesRoot, out string? error)
     {

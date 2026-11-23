@@ -11,7 +11,8 @@ public sealed record CommandRequest(
     string? StandardInput = null,
     Dictionary<string, string>? ExtraEnvironment = null,
     TimeSpan? Timeout = null,
-    bool CaptureRawBytes = false);
+    bool CaptureRawBytes = false,
+    bool ClearEnvironment = false);
 
 public sealed record CommandOutcome(
     bool Started,
@@ -121,6 +122,11 @@ public sealed class ProcessCommandRunner : ICommandRunner
         for (var i = 1; i < request.Argv.Count; i++)
         {
             psi.ArgumentList.Add(request.Argv[i]);
+        }
+
+        if (request.ClearEnvironment)
+        {
+            psi.Environment.Clear();
         }
 
         if (request.ExtraEnvironment is not null)

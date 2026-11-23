@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Engine;
 
 namespace Hoshin.Workflow.Git;
 
@@ -33,7 +34,6 @@ public sealed class ProcessGitClient(ICommandRunner runner) : IGitClient
     public static readonly string[] BaseOptions = ["-c", "core.quotepath=off", "--no-optional-locks"];
     public static readonly string[] DiffOptions = ["--no-ext-diff", "--no-textconv"];
 
-    private static readonly Dictionary<string, string> GitEnv = new(StringComparer.Ordinal) { ["GIT_TERMINAL_PROMPT"] = "0" };
     private static readonly Regex LsTreeLine = new(@"^(\d+) blob [0-9a-f]+\t(.+)$", RegexOptions.Compiled);
     private static readonly Regex IndexLockRegex = new(@"index\.lock'?:? File exists|Unable to create '[^']*index\.lock'", RegexOptions.Compiled);
     private static readonly Regex DigitsRegex = new(@"^\d+$", RegexOptions.Compiled);
@@ -48,7 +48,8 @@ public sealed class ProcessGitClient(ICommandRunner runner) : IGitClient
         var argv = new List<string>(1 + BaseOptions.Length + args.Count) { "git" };
         argv.AddRange(BaseOptions);
         argv.AddRange(args);
-        var r = _runner.Run(new CommandRequest(cwd, argv, StandardInput: input, ExtraEnvironment: GitEnv));
+        var env = BuildGitEnvironment(args);
+        var r = _runner.Run(new CommandRequest(cwd, argv, StandardInput: input, ExtraEnvironment: env, ClearEnvironment: true));
         if (!r.Started)
         {
             throw new CouldNotRunException($"cannot run git: {r.StartError}");
@@ -62,7 +63,8 @@ public sealed class ProcessGitClient(ICommandRunner runner) : IGitClient
         var argv = new List<string>(1 + BaseOptions.Length + args.Count) { "git" };
         argv.AddRange(BaseOptions);
         argv.AddRange(args);
-        var r = _runner.Run(new CommandRequest(cwd, argv, StandardInput: input, ExtraEnvironment: GitEnv, CaptureRawBytes: true));
+        var env = BuildGitEnvironment(args);
+        var r = _runner.Run(new CommandRequest(cwd, argv, StandardInput: input, ExtraEnvironment: env, CaptureRawBytes: true, ClearEnvironment: true));
         if (!r.Started || !r.Ok)
         {
             var detail = !string.IsNullOrWhiteSpace(r.Stderr) ? r.Stderr.Trim() : r.StartError ?? "unknown error";
@@ -70,6 +72,51 @@ public sealed class ProcessGitClient(ICommandRunner runner) : IGitClient
         }
 
         return r.RawStdout ?? [];
+    }
+
+    private static Dictionary<string, string> BuildGitEnvironment(IReadOnlyList<string> args)
+    {
+        var env = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var name in AllowListedCommandRunner.AllowedEnvironmentVariables)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (value is not null)
+            {
+                env[name] = value;
+            }
+        }
+
+        var trace2 = Environment.GetEnvironmentVariable("GIT_TRACE2_EVENT");
+        if (trace2 is not null)
+        {
+            env["GIT_TRACE2_EVENT"] = trace2;
+        }
+
+        env["GIT_TERMINAL_PROMPT"] = "0";
+        if (IsPushSubcommand(args))
+        {
+            foreach (var (k, v) in AllowListedCommandRunner.CollectPushEnvironment())
+            {
+                env[k] = v;
+            }
+        }
+
+        return env;
+    }
+
+    private static bool IsPushSubcommand(IReadOnlyList<string> args)
+    {
+        foreach (var arg in args)
+        {
+            if (arg.StartsWith('-'))
+            {
+                continue;
+            }
+
+            return string.Equals(arg, "push", StringComparison.Ordinal);
+        }
+
+        return false;
     }
 
     public string? Out(string cwd, IReadOnlyList<string> args)
@@ -547,4 +594,69 @@ public sealed class ProcessGitClient(ICommandRunner runner) : IGitClient
 
         throw new CouldNotRunException($"git diff failed in {top}: {(string.IsNullOrEmpty(r.Stderr) ? r.Stdout : r.Stderr).Trim()}");
     }
+
+    public string? CodeHead(string dir, string excludeRelativePath) =>
+        Out(dir, ["log", "-1", "--format=%H", "--", ".", $":(exclude){excludeRelativePath}"]);
+
+    public string? LastCommitForPath(string dir, string relativePath) =>
+        Out(dir, ["log", "-1", "--format=%H", "--", relativePath]);
+
+    public string? RemoteUrl(string dir, string remote) =>
+        Out(dir, ["remote", "get-url", remote]);
+
+    public string PorcelainStatusZ(string dir)
+    {
+        var r = Run(dir, ["status", "--porcelain=v1", "-z", "-uall"]);
+        return r.Ok ? r.Stdout : "";
+    }
+
+    public string? UpstreamRemote(string dir)
+    {
+        var upstream = Out(dir, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+        if (string.IsNullOrWhiteSpace(upstream))
+        {
+            return null;
+        }
+
+        var slash = upstream.IndexOf('/', StringComparison.Ordinal);
+        return slash > 0 ? upstream[..slash] : null;
+    }
+
+    public GitResult EnsureDetachedWorktree(string repoRoot, string worktreeDir, string rev)
+    {
+        var gitMarker = Path.Combine(worktreeDir, ".git");
+        if (Directory.Exists(worktreeDir) && (File.Exists(gitMarker) || Directory.Exists(gitMarker)))
+        {
+            var checkout = Run(worktreeDir, ["checkout", "--detach", "--force", rev]);
+            if (checkout.Ok)
+            {
+                Run(worktreeDir, ["clean", "-fd", "--quiet"]);
+                return checkout;
+            }
+
+            Run(repoRoot, ["worktree", "remove", "--force", worktreeDir]);
+            Run(repoRoot, ["worktree", "prune"]);
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(worktreeDir)!);
+        if (Directory.Exists(worktreeDir))
+        {
+            Directory.Delete(worktreeDir, recursive: true);
+        }
+
+        return Run(repoRoot, ["worktree", "add", "--detach", "--force", worktreeDir, rev]);
+    }
+
+    public GitResult CleanDetachedWorktree(string worktreeDir, string rev)
+    {
+        var reset = Run(worktreeDir, ["reset", "--hard", "--quiet", rev]);
+        Run(worktreeDir, ["clean", "-fd", "--quiet"]);
+        return reset;
+    }
+
+    public GitResult ResetMixed(string dir, string rev) =>
+        Run(dir, ["reset", "--mixed", "--quiet", rev]);
+
+    public GitResult Push(string dir, string remote, string refSpec) =>
+        Run(dir, ["push", remote, refSpec]);
 }

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
 
@@ -10,6 +11,8 @@ public sealed record TaskEvaluationContext(
     int Attempt,
     string StartHead,
     IReadOnlyList<WorkingTreeChange> Changed,
+    IGitWorktrees GitWorktrees,
+    IGitCommitter GitCommitter,
     IAllowListedCommandRunner Runner,
     DateTimeOffset At);
 
@@ -50,39 +53,29 @@ public sealed class NoTestPolicy : ITaskVerdictPolicy
         }
 
         var paths = context.Changed.Select(c => c.Path).ToArray();
-        if (!TaskCommitHelpers.StagePaths(context.Repo, paths, out var stageErr))
-        {
-            context.Repo.Git("reset", "--mixed", "--quiet", context.StartHead);
-            return new WorkflowVerdict(
-                context.Task.Id,
-                context.Attempt,
-                context.StartHead,
-                false,
-                SkippedRedSummary,
-                [$"git: could not stage files: {stageErr}"],
-                context.At);
-        }
-
         var workType = string.IsNullOrWhiteSpace(plan.WorkType) ? "feat" : plan.WorkType;
         var trailers = $"Plan-Task: {context.Task.Id}\nGenerated-By: hoshin";
-        var commit = TaskCommitHelpers.CommitPaths(context.Repo, $"{workType}({plan.Scope}): {context.Task.Title}", trailers, paths);
-        if (!commit.Ok)
+        var commit = context.GitCommitter.CommitPaths(
+            context.Repo.Root,
+            paths,
+            [$"{workType}({plan.Scope}): {context.Task.Title}", trailers]);
+        if (!commit.Ok || string.IsNullOrEmpty(commit.Sha))
         {
-            context.Repo.Git("reset", "--mixed", "--quiet", context.StartHead);
+            context.GitCommitter.ResetMixed(context.Repo.Root, context.StartHead);
             return new WorkflowVerdict(
                 context.Task.Id,
                 context.Attempt,
                 context.StartHead,
                 false,
                 SkippedRedSummary,
-                [$"git: implementation commit failed: {TaskCommitHelpers.Squash(commit.Tail(10))}"],
+                [$"git: implementation commit failed: {TaskCommitHelpers.Squash(commit.Error ?? commit.Output)}"],
                 context.At);
         }
 
         return new WorkflowVerdict(
             context.Task.Id,
             context.Attempt,
-            context.Repo.Head(),
+            commit.Sha,
             true,
             SkippedRedSummary,
             [],
@@ -124,7 +117,16 @@ public sealed class RedGreenPolicy : ITaskVerdictPolicy
         }
 
         var prodPathsForRed = prodChanges.Select(c => c.Path).ToList();
-        var redCheck = RedWorktree.ObserveRed(context.Repo, context.Runner, context.StartHead, testCmd, testChanges, prodPathsForRed, taskEnv, taskTimeout);
+        var redCheck = RedWorktree.ObserveRed(
+            context.Repo,
+            context.GitWorktrees,
+            context.Runner,
+            context.StartHead,
+            testCmd,
+            testChanges,
+            prodPathsForRed,
+            taskEnv,
+            taskTimeout);
         if (!redCheck.IsValidRed)
         {
             return Failed(context, redCheck.Summary, [$"red: {redCheck.Summary}"]);
@@ -200,32 +202,21 @@ public sealed class RedGreenPolicy : ITaskVerdictPolicy
         var testPaths = testChanges.Select(c => c.Path).ToArray();
         var prodPaths = prodChanges.Select(c => c.Path).ToArray();
 
-        if (!TaskCommitHelpers.StagePaths(repo, testPaths, out var stageTestErr))
+        var testCommit = context.GitCommitter.CommitPaths(repo.Root, testPaths, [$"test({plan.Scope}): {task.Title}", trailers]);
+        if (!testCommit.Ok || string.IsNullOrEmpty(testCommit.Sha))
         {
-            return ResetAndFail(context, redSummary, $"git: could not stage test files: {stageTestErr}");
+            return ResetAndFail(context, redSummary, $"git: test commit failed: {TaskCommitHelpers.Squash(testCommit.Error ?? testCommit.Output)}");
         }
 
-        var testCommit = TaskCommitHelpers.CommitPaths(repo, $"test({plan.Scope}): {task.Title}", trailers, testPaths);
-        if (!testCommit.Ok)
-        {
-            return ResetAndFail(context, redSummary, $"git: test commit failed: {TaskCommitHelpers.Squash(testCommit.Tail(10))}");
-        }
-
-        var testCommitSha = repo.Head();
-
-        if (!TaskCommitHelpers.StagePaths(repo, prodPaths, out var stageProdErr))
-        {
-            return ResetAndFail(context, redSummary, $"git: could not stage production files: {stageProdErr}");
-        }
-
+        var testCommitSha = testCommit.Sha;
         var workType = string.IsNullOrWhiteSpace(plan.WorkType) ? "feat" : plan.WorkType;
-        var prodCommit = TaskCommitHelpers.CommitPaths(repo, $"{workType}({plan.Scope}): {task.Title}", trailers, prodPaths);
-        if (!prodCommit.Ok)
+        var prodCommit = context.GitCommitter.CommitPaths(repo.Root, prodPaths, [$"{workType}({plan.Scope}): {task.Title}", trailers]);
+        if (!prodCommit.Ok || string.IsNullOrEmpty(prodCommit.Sha))
         {
-            return ResetAndFail(context, redSummary, $"git: implementation commit failed: {TaskCommitHelpers.Squash(prodCommit.Tail(10))}");
+            return ResetAndFail(context, redSummary, $"git: implementation commit failed: {TaskCommitHelpers.Squash(prodCommit.Error ?? prodCommit.Output)}");
         }
 
-        var headSha = repo.Head();
+        var headSha = prodCommit.Sha;
         var greenHead = context.Runner.Run(repo.Root, testCmd, taskTimeout, taskEnv);
         if (!greenHead.Ok)
         {
@@ -239,7 +230,7 @@ public sealed class RedGreenPolicy : ITaskVerdictPolicy
 
     private static WorkflowVerdict ResetAndFail(TaskEvaluationContext context, string redSummary, string reason)
     {
-        context.Repo.Git("reset", "--mixed", "--quiet", context.StartHead);
+        context.GitCommitter.ResetMixed(context.Repo.Root, context.StartHead);
         return Failed(context, redSummary, [reason]);
     }
 
@@ -251,22 +242,6 @@ internal static partial class TaskCommitHelpers
 {
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();
-
-    public static bool StagePaths(WorkflowRepo repo, string[] paths, out string error)
-    {
-        var args = new List<string> { "add", "-A", "--" };
-        args.AddRange(paths);
-        var res = repo.Git([.. args]);
-        error = res.Ok ? "" : Squash(res.Tail(10));
-        return res.Ok;
-    }
-
-    public static AllowListedCommandResult CommitPaths(WorkflowRepo repo, string subject, string trailers, string[] paths)
-    {
-        var args = new List<string> { "commit", "-q", "-m", subject, "-m", trailers, "--" };
-        args.AddRange(paths);
-        return repo.Git([.. args]);
-    }
 
     public static string Squash(string text)
     {

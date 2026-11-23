@@ -96,11 +96,8 @@ public static class BaseBranchChecksReader
     private static bool IsBlocking(JsonElement hook) =>
         !hook.TryGetProperty("blocking", out var b) || b.ValueKind != JsonValueKind.False;
 
-    private static string? ShowAtRef(WorkflowRepo repo, string gitRef, string repoRelativePath)
-    {
-        var result = repo.Git("show", $"{gitRef}:{repoRelativePath}");
-        return result.Ok ? result.Output : null;
-    }
+    private static string? ShowAtRef(WorkflowRepo repo, string gitRef, string repoRelativePath) =>
+        repo.GitQuery.ShowFile(repo.Root, gitRef, repoRelativePath);
 
     private static string? ResolveSystemName(WorkflowRepo repo, string? explicitSystem)
     {

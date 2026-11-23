@@ -1,17 +1,20 @@
+using Hoshin.Workflow.Git;
+
 namespace Hoshin.Workflow.Engine;
 
 /// <summary>Executes base-branch baseline checks and post-build checks via <see cref="IAllowListedCommandRunner"/>.</summary>
 public sealed class CheckRunner(
-    IAllowListedCommandRunner commandRunner,
+    IGitQuery gitQuery,
+    IAllowListedCommandRunner checkRunner,
     TimeProvider timeProvider) : ICheckRunner
 {
-    private readonly IAllowListedCommandRunner _runner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IAllowListedCommandRunner _runner = checkRunner ?? throw new ArgumentNullException(nameof(checkRunner));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public WorkflowBaselineRun RunBaseline(WorkflowRepo repo, WorkflowState state)
     {
-        var baseHead = repo.Git("rev-parse", state.Plan.Base);
-        var sha = baseHead.Ok ? baseHead.Output.Trim() : state.Head;
+        var sha = _gitQuery.CommitOf(repo.Root, state.Plan.Base) ?? state.Head;
         var outputs = new List<string>();
         var passed = true;
 

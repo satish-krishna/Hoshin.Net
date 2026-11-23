@@ -29,6 +29,7 @@ public sealed class WorkflowRunner(
     private readonly IDocumentCommitter _documents = documentCommitter ?? throw new ArgumentNullException(nameof(documentCommitter));
 
     public WorkflowRunner(
+        IGitClient git,
         IAllowListedCommandRunner commandRunner,
         IPullRequestClient pullRequests,
         IntentReader intentReader,
@@ -40,11 +41,11 @@ public sealed class WorkflowRunner(
         IFileSystem fileSystem,
         TimeProvider timeProvider)
         : this(
-            new TaskEvaluator(commandRunner, timeProvider),
-            new CheckRunner(commandRunner, timeProvider),
+            new TaskEvaluator(git, git, git, git, commandRunner, timeProvider),
+            new CheckRunner(git, commandRunner, timeProvider),
             new ApprovalRecorder(timeProvider),
-            new Publisher(pullRequests, timeProvider),
-            new DocumentCommitter(intentReader, specReader, planReader, reviewReader, frontMatterEdit, crossChecker, fileSystem, timeProvider))
+            new Publisher(git, git, git, pullRequests, timeProvider),
+            new DocumentCommitter(git, git, intentReader, specReader, planReader, reviewReader, frontMatterEdit, crossChecker, fileSystem, timeProvider))
     {
     }
 

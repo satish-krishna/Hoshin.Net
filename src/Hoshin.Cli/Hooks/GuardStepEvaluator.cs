@@ -66,34 +66,7 @@ public static class GuardStepEvaluator
         return $"While the {label} is written only {rels} may change.";
     }
 
-    private static bool HasModifiedTestFileInWorkingTree(WorkflowRepo repo, CurrentStep step)
-    {
-        var status = repo.Git("status", "--porcelain", "-uall");
-        if (!status.Ok || string.IsNullOrWhiteSpace(status.Output))
-        {
-            return false;
-        }
-
-        foreach (var raw in status.Output.Replace("\r\n", "\n").Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (raw.Length < 4)
-            {
-                continue;
-            }
-
-            var pathPart = raw[3..].Trim().Trim('"');
-            var arrow = pathPart.IndexOf(" -> ", StringComparison.Ordinal);
-            if (arrow >= 0)
-            {
-                pathPart = pathPart[(arrow + 4)..].Trim();
-            }
-
-            if (WorkflowRepo.IsTestPath(pathPart, step.TestPatterns, step.TaskTestFiles))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+    private static bool HasModifiedTestFileInWorkingTree(WorkflowRepo repo, CurrentStep step) =>
+        WorkingTreeSnapshot.GetChanges(repo)
+            .Any(c => WorkflowRepo.IsTestPath(c.Path, step.TestPatterns, step.TaskTestFiles));
 }

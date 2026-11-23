@@ -163,7 +163,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T35 | P1 · SOLID | Give commands narrow dependencies; split fat interfaces | §8.4 (I1, I2) | T34 | done |
 | T36 | P1 · SOLID | One owner for duplicated rules; enums for closed sets | E13 (O1, R1) | — | done |
 | T43 | P1 · SOLID | Split `WorkflowRunner`, `WorkflowRepo` and `HookOrchestrator` | §8.1 (S1, S3) | T34 | done |
-| A1 | P1 | Unify: `WorkflowRunner` uses `IGitClient` | §3.2 | D1 ✔, T35 | open |
+| A1 | P1 | Unify: `WorkflowRunner` uses `IGitClient` | §3.2 | D1 ✔, T35 | done |
 | A2 | P1 | Unify: one Red rule | §3.2 | A1, T14 | open |
 | A3 | P1 | Unify: one ledger (`LedgerStore`, per change and repo) | §3.2 | A1, T07, T19 | open |
 | A4 | P1 | Unify: `WorkflowState` from `ChangeStateService` | §3.2, §6 | A1 | open |

@@ -1,11 +1,14 @@
 using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
 
-/// <summary>Validates, auto-wraps bare JSONC front matter, writes upstream source pins, and commits change documents, reviews, and fixes.</summary>
+/// <summary>Validates, auto-wraps bare JSONC front matter, writes upstream source pins, and commits change documents, reviews, and fixes via <see cref="IGitCommitter"/>.</summary>
 public sealed class DocumentCommitter(
+    IGitQuery gitQuery,
+    IGitCommitter gitCommitter,
     IntentReader intentReader,
     SpecReader specReader,
     PlanReader planReader,
@@ -15,6 +18,8 @@ public sealed class DocumentCommitter(
     IFileSystem fileSystem,
     TimeProvider timeProvider) : IDocumentCommitter
 {
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IGitCommitter _gitCommitter = gitCommitter ?? throw new ArgumentNullException(nameof(gitCommitter));
     private readonly IntentReader _intentReader = intentReader ?? throw new ArgumentNullException(nameof(intentReader));
     private readonly SpecReader _specReader = specReader ?? throw new ArgumentNullException(nameof(specReader));
     private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
@@ -46,11 +51,13 @@ public sealed class DocumentCommitter(
 
         WriteSourcePin(repo, state, document, path);
 
-        repo.Git("add", "--", relative);
-        var commit = repo.Git("commit", "-q", "-m", $"docs({state.Plan.Scope}): draft {name} {state.Plan.Change}", "-m", "Generated-By: hoshin", "--", relative);
+        var commit = _gitCommitter.CommitPaths(
+            repo.Root,
+            [relative],
+            [$"docs({state.Plan.Scope}): draft {name} {state.Plan.Change}", "Generated-By: hoshin"]);
         return commit.Ok
-            ? ([], repo.Head())
-            : ([new Problem(relative, 1, $"could not commit: {TaskCommitHelpers.Squash(commit.Tail(5))}")], null);
+            ? ([], commit.Sha)
+            : ([new Problem(relative, 1, $"could not commit: {TaskCommitHelpers.Squash(commit.Error ?? commit.Output)}")], null);
     }
 
     public (IReadOnlyList<Problem> Problems, string? Commit) CommitReview(WorkflowRepo repo, WorkflowState state)
@@ -84,11 +91,13 @@ public sealed class DocumentCommitter(
             return (read.Problems, null);
         }
 
-        repo.Git("add", "--", relative);
-        var commit = repo.Git("commit", "-q", "-m", $"docs({state.Plan.Scope}): review {state.Plan.Change}", "-m", "Generated-By: hoshin", "--", relative);
+        var commit = _gitCommitter.CommitPaths(
+            repo.Root,
+            [relative],
+            [$"docs({state.Plan.Scope}): review {state.Plan.Change}", "Generated-By: hoshin"]);
         if (!commit.Ok)
         {
-            return ([new Problem(relative, 1, $"could not commit: {TaskCommitHelpers.Squash(commit.Tail(5))}")], null);
+            return ([new Problem(relative, 1, $"could not commit: {TaskCommitHelpers.Squash(commit.Error ?? commit.Output)}")], null);
         }
 
         var codeHead = state.EffectiveCodeHead;
@@ -102,7 +111,7 @@ public sealed class DocumentCommitter(
             return 0;
         });
 
-        return ([], repo.Head());
+        return ([], commit.Sha);
     }
 
     public (IReadOnlyList<Problem> Problems, string? Commit) CommitFixDocuments(WorkflowRepo repo, WorkflowState state)
@@ -136,11 +145,13 @@ public sealed class DocumentCommitter(
             return (problems, null);
         }
 
-        repo.Git("add", "--", intentRel, specRel, planRel);
-        var commit = repo.Git("commit", "-q", "-m", $"docs({state.Plan.Scope}): draft fix {state.Plan.Change}", "-m", "Generated-By: hoshin", "--", intentRel, specRel, planRel);
+        var commit = _gitCommitter.CommitPaths(
+            repo.Root,
+            [intentRel, specRel, planRel],
+            [$"docs({state.Plan.Scope}): draft fix {state.Plan.Change}", "Generated-By: hoshin"]);
         return commit.Ok
-            ? ([], repo.Head())
-            : ([new Problem(planRel, 1, $"could not commit fix draft: {TaskCommitHelpers.Squash(commit.Tail(5))}")], null);
+            ? ([], commit.Sha)
+            : ([new Problem(planRel, 1, $"could not commit fix draft: {TaskCommitHelpers.Squash(commit.Error ?? commit.Output)}")], null);
     }
 
     public string? AcceptDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document)
@@ -149,9 +160,11 @@ public sealed class DocumentCommitter(
         var path = state.Document(document).Path;
         var relative = Path.GetRelativePath(repo.Root, path).Replace('\\', '/');
         _frontMatterEdit.Set(path, "status", "accepted");
-        repo.Git("add", "--", relative);
-        var commit = repo.Git("commit", "-q", "-m", $"docs({state.Plan.Scope}): accept {name} {state.Plan.Change}", "-m", "Generated-By: hoshin", "--", relative);
-        return commit.Ok ? repo.Head() : null;
+        var commit = _gitCommitter.CommitPaths(
+            repo.Root,
+            [relative],
+            [$"docs({state.Plan.Scope}): accept {name} {state.Plan.Change}", "Generated-By: hoshin"]);
+        return commit.Ok ? commit.Sha : null;
     }
 
     private string ReadAndAutoWrap(string path)
@@ -172,8 +185,8 @@ public sealed class DocumentCommitter(
         if (document == WorkflowDocument.Spec && state.Intent.InHead)
         {
             var intentRel = Path.GetRelativePath(repo.Root, state.Intent.Path).Replace('\\', '/');
-            var sha = repo.Git("log", "-1", "--format=%H", "--", intentRel).Output.Trim();
-            if (sha.Length > 0)
+            var sha = _gitQuery.LastCommitForPath(repo.Root, intentRel);
+            if (!string.IsNullOrEmpty(sha))
             {
                 _frontMatterEdit.Set(path, "source_intent_commit", sha);
             }
@@ -181,8 +194,8 @@ public sealed class DocumentCommitter(
         else if (document == WorkflowDocument.Plan && state.Spec.InHead)
         {
             var specRel = Path.GetRelativePath(repo.Root, state.Spec.Path).Replace('\\', '/');
-            var sha = repo.Git("log", "-1", "--format=%H", "--", specRel).Output.Trim();
-            if (sha.Length > 0)
+            var sha = _gitQuery.LastCommitForPath(repo.Root, specRel);
+            if (!string.IsNullOrEmpty(sha))
             {
                 _frontMatterEdit.Set(path, "source_spec_commit", sha);
             }

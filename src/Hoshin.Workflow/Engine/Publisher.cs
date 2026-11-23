@@ -3,23 +3,29 @@ using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
 
-/// <summary>Pushes approved changes to the upstream/origin remote and opens or reuses a pull request via <see cref="IPullRequestClient"/>.</summary>
+/// <summary>Pushes approved changes via <see cref="IGitCommitter"/> and opens or reuses a pull request via <see cref="IPullRequestClient"/>.</summary>
 public sealed class Publisher(
+    IGitBranches gitBranches,
+    IGitQuery gitQuery,
+    IGitCommitter gitCommitter,
     IPullRequestClient pullRequests,
     TimeProvider timeProvider) : IPublisher
 {
+    private readonly IGitBranches _gitBranches = gitBranches ?? throw new ArgumentNullException(nameof(gitBranches));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IGitCommitter _gitCommitter = gitCommitter ?? throw new ArgumentNullException(nameof(gitCommitter));
     private readonly IPullRequestClient _pullRequests = pullRequests ?? throw new ArgumentNullException(nameof(pullRequests));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = true)
     {
-        var remote = ResolvePushRemote(repo);
-        var pushEnv = AllowListedCommandRunner.CollectPushEnvironment();
-        var push = repo.GitWithEnv(pushEnv, "push", remote, $"HEAD:{targetRef}");
+        var remote = _gitBranches.UpstreamRemote(repo.Root) ?? "origin";
+        var push = _gitCommitter.Push(repo.Root, remote, $"HEAD:{targetRef}");
         if (!push.Ok)
         {
-            var error = TaskCommitHelpers.Squash(push.Tail(15));
-            return new WorkflowPublishResult(null, string.IsNullOrWhiteSpace(error) ? $"git push to {remote} failed (exit {push.ExitCode})" : error);
+            var rawErr = string.IsNullOrWhiteSpace(push.Stderr) ? push.Stdout : push.Stderr;
+            var error = TaskCommitHelpers.Squash(rawErr);
+            return new WorkflowPublishResult(null, string.IsNullOrWhiteSpace(error) ? $"git push to {remote} failed (exit {push.Status})" : error);
         }
 
         string? prUrl = null;
@@ -43,26 +49,9 @@ public sealed class Publisher(
         return new WorkflowPublishResult(published, null);
     }
 
-    private static string ResolvePushRemote(WorkflowRepo repo)
-    {
-        var upstream = repo.Git("rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}");
-        if (upstream.Ok)
-        {
-            var trimmed = upstream.Output.Trim();
-            var slash = trimmed.IndexOf('/', StringComparison.Ordinal);
-            if (slash > 0)
-            {
-                return trimmed[..slash];
-            }
-        }
-
-        return "origin";
-    }
-
     private bool ShouldOpenPullRequest(WorkflowRepo repo, string remote)
     {
-        var urlRes = repo.Git("remote", "get-url", remote);
-        var url = urlRes.Ok ? urlRes.Output.Trim() : "";
+        var url = _gitQuery.RemoteUrl(repo.Root, remote) ?? "";
         return _pullRequests.HostOf(url) is not null || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("HOSHIN_GH"));
     }
 

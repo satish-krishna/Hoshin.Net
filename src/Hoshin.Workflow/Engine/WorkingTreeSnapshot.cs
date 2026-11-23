@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
 
@@ -19,20 +20,20 @@ public static class WorkingTreeSnapshot
     private const string DeletedDigest = "<deleted>";
     private const string MissingDigest = "<missing>";
 
-    public static IReadOnlyList<WorkingTreeChange> GetChanges(WorkflowRepo repo)
+    public static IReadOnlyList<WorkingTreeChange> GetChanges(WorkflowRepo repo, IGitStatus? gitStatus = null)
     {
-        var status = repo.Git("status", "--porcelain=v1", "-z", "-uall");
-        if (!status.Ok || string.IsNullOrEmpty(status.Output))
+        var output = (gitStatus ?? repo.GitStatus).PorcelainStatusZ(repo.Root);
+        if (string.IsNullOrEmpty(output))
         {
             return [];
         }
 
-        return ParsePorcelainZ(status.Output);
+        return ParsePorcelainZ(output);
     }
 
-    public static WorkingTreeBaseline Capture(WorkflowRepo repo)
+    public static WorkingTreeBaseline Capture(WorkflowRepo repo, IGitStatus? gitStatus = null)
     {
-        var changes = GetChanges(repo);
+        var changes = GetChanges(repo, gitStatus);
         var hasStaged = changes.Any(c => c.Staged);
         var digests = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var change in changes)

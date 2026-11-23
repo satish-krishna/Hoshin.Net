@@ -222,11 +222,13 @@ public sealed class HoshinServices
             ],
             TimeProvider));
         _allowListedRunner = new(() => new AllowListedCommandRunner());
-        _taskEvaluator = new(() => new TaskEvaluator(AllowListedRunner, TimeProvider));
-        _checkRunner = new(() => new CheckRunner(AllowListedRunner, TimeProvider));
+        _taskEvaluator = new(() => new TaskEvaluator(Git, Git, Git, Git, AllowListedRunner, TimeProvider));
+        _checkRunner = new(() => new CheckRunner(Git, AllowListedRunner, TimeProvider));
         _approvalRecorder = new(() => new ApprovalRecorder(TimeProvider));
-        _publisher = new(() => new Publisher(PullRequests, TimeProvider));
+        _publisher = new(() => new Publisher(Git, Git, Git, PullRequests, TimeProvider));
         _documentCommitter = new(() => new DocumentCommitter(
+            Git,
+            Git,
             IntentReader,
             SpecReader,
             PlanReader,
@@ -249,7 +251,9 @@ public sealed class HoshinServices
             ApprovalRecorder,
             Publisher,
             DocumentCommitter,
-            AllowListedRunner,
+            Git,
+            Git,
+            Git,
             FileSystem,
             PlanReader,
             TimeProvider));

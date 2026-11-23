@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Hoshin.Cli.Hooks;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Commands;
 
@@ -12,12 +13,16 @@ namespace Hoshin.Cli.Commands;
 public sealed class HookCommand(
     HarnessAdapter hookAdapter,
     HookOrchestrator hookOrchestrator,
-    IAllowListedCommandRunner allowListedRunner,
+    IGitWorktrees gitWorktrees,
+    IGitQuery gitQuery,
+    IGitStatus gitStatus,
     IFileSystem fileSystem) : IHoshinCommand
 {
     private readonly HarnessAdapter _hookAdapter = hookAdapter ?? throw new ArgumentNullException(nameof(hookAdapter));
     private readonly HookOrchestrator _hookOrchestrator = hookOrchestrator ?? throw new ArgumentNullException(nameof(hookOrchestrator));
-    private readonly IAllowListedCommandRunner _allowListedRunner = allowListedRunner ?? throw new ArgumentNullException(nameof(allowListedRunner));
+    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
     public string Name => "hook";
@@ -39,7 +44,7 @@ public sealed class HookCommand(
             var rolesRoot = o.Get("roles") ?? DefaultRolesDir();
 
             var ev = _hookAdapter.ReadFromStdin();
-            var repo = WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _allowListedRunner, _fs);
+            var repo = WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _gitWorktrees, _gitQuery, _gitStatus, _fs);
 
             var (output, decision) = sub switch
             {

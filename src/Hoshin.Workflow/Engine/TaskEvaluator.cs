@@ -1,11 +1,21 @@
+using Hoshin.Workflow.Git;
+
 namespace Hoshin.Workflow.Engine;
 
-/// <summary>Issues workflow steps, tracks active subagents, and evaluates/commits task attempts via <see cref="ITaskVerdictPolicy"/>.</summary>
+/// <summary>Issues workflow steps, tracks active subagents, and evaluates/commits task attempts via <see cref="ITaskVerdictPolicy"/> and Git role interfaces.</summary>
 public sealed class TaskEvaluator(
-    IAllowListedCommandRunner commandRunner,
+    IGitQuery gitQuery,
+    IGitStatus gitStatus,
+    IGitWorktrees gitWorktrees,
+    IGitCommitter gitCommitter,
+    IAllowListedCommandRunner testRunner,
     TimeProvider timeProvider) : ITaskEvaluator
 {
-    private readonly IAllowListedCommandRunner _runner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
+    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
+    private readonly IGitCommitter _gitCommitter = gitCommitter ?? throw new ArgumentNullException(nameof(gitCommitter));
+    private readonly IAllowListedCommandRunner _runner = testRunner ?? throw new ArgumentNullException(nameof(testRunner));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly IReadOnlyList<ITaskVerdictPolicy> _verdictPolicies = [new NoTestPolicy(), new RedGreenPolicy()];
 
@@ -84,7 +94,7 @@ public sealed class TaskEvaluator(
             return existing;
         }
 
-        var startHead = repo.Head();
+        var startHead = _gitQuery.CommitOf(repo.Root, "HEAD") ?? "";
         ClearActiveSubagent(repo);
         var now = _time.GetUtcNow();
 
@@ -94,7 +104,17 @@ public sealed class TaskEvaluator(
         }
 
         var policy = _verdictPolicies.First(p => p.AppliesTo(task));
-        var verdict = policy.EvaluateAndCommit(new TaskEvaluationContext(repo, state, task, attempt, startHead, changed, _runner, now));
+        var verdict = policy.EvaluateAndCommit(new TaskEvaluationContext(
+            repo,
+            state,
+            task,
+            attempt,
+            startHead,
+            changed,
+            _gitWorktrees,
+            _gitCommitter,
+            _runner,
+            now));
         return RecordVerdict(repo, verdict);
     }
 
@@ -118,8 +138,8 @@ public sealed class TaskEvaluator(
             if (!ledger.Issued.Any(x => x.Task == agent.Task && x.Attempt == agent.Attempt))
             {
                 var firstForTask = ledger.Issued.FirstOrDefault(x => x.Task == agent.Task);
-                var taskStart = firstForTask?.StartHead ?? repo.Head();
-                var snapshot = WorkingTreeSnapshot.Capture(repo);
+                var taskStart = firstForTask?.StartHead ?? _gitQuery.CommitOf(repo.Root, "HEAD") ?? "";
+                var snapshot = WorkingTreeSnapshot.Capture(repo, _gitStatus);
                 var preIssuePaths = firstForTask?.PreIssuePaths ?? snapshot.PathDigests;
                 ledger.Issued.Add(new WorkflowIssued(
                     agent.Task,
@@ -178,7 +198,7 @@ public sealed class TaskEvaluator(
         repo.WriteStep(nextStep);
     }
 
-    private static WorkflowVerdict? ValidatePreConditions(
+    private WorkflowVerdict? ValidatePreConditions(
         WorkflowRepo repo,
         WorkflowLedger liveLedger,
         WorkflowTask task,
@@ -199,7 +219,7 @@ public sealed class TaskEvaluator(
             return new WorkflowVerdict(task.Id, attempt, startHead, false, "not observed: index had staged changes", [WorkingTreeSnapshot.StagedIndexRefusalReason], now);
         }
 
-        changed = WorkingTreeSnapshot.FilterTaskChanges(repo, WorkingTreeSnapshot.GetChanges(repo), issued?.PreIssuePaths);
+        changed = WorkingTreeSnapshot.FilterTaskChanges(repo, WorkingTreeSnapshot.GetChanges(repo, _gitStatus), issued?.PreIssuePaths);
         var defaultRed = task.Test is { Length: > 0 } ? "not observed: no test commit" : NoTestPolicy.SkippedRedSummary;
 
         if (changed.Count == 0)

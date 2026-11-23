@@ -1,31 +1,34 @@
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
 
 /// <summary>
 /// A git repository hosting a workflow run, together with its change folder and <c>.git/hoshin/</c> ledger/step paths.
-/// Delegates resolution, plan loading, ledger persistence, and test-path classification to dedicated helpers.
+/// Performs zero direct process execution; every Git query goes through narrow <see cref="IGitQuery"/> / <see cref="IGitStatus"/> interfaces.
 /// </summary>
-public sealed class WorkflowRepo
+public sealed class WorkflowRepo(
+    string root,
+    string gitCommonDir,
+    string changeFolder,
+    IGitQuery gitQuery,
+    IGitStatus gitStatus,
+    IFileSystem fileSystem)
 {
-    private readonly IAllowListedCommandRunner _runner;
-    private readonly IFileSystem _fs;
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
-    private WorkflowRepo(string root, string gitCommonDir, string changeFolder, IAllowListedCommandRunner runner, IFileSystem fileSystem)
-    {
-        Root = Path.GetFullPath(root);
-        HoshinDir = Path.Combine(Path.GetFullPath(gitCommonDir), "hoshin");
-        ChangeFolder = Path.GetFullPath(changeFolder);
-        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
-    }
+    public string Root { get; } = Path.GetFullPath(root);
 
-    public string Root { get; }
+    public string HoshinDir { get; } = Path.Combine(Path.GetFullPath(gitCommonDir), "hoshin");
 
-    public string HoshinDir { get; }
+    public string ChangeFolder { get; } = Path.GetFullPath(changeFolder);
 
-    public string ChangeFolder { get; }
+    public IGitQuery GitQuery => _gitQuery;
+
+    public IGitStatus GitStatus => _gitStatus;
 
     public string ChangeKey => ChangeLedgerPaths.ResolveChangeKey(ChangeFolder);
 
@@ -45,46 +48,41 @@ public sealed class WorkflowRepo
 
     public static WorkflowRepo? Find(
         string directory,
-        IAllowListedCommandRunner runner,
+        IGitWorktrees gitWorktrees,
+        IGitQuery gitQuery,
+        IGitStatus gitStatus,
         IFileSystem fileSystem,
         string? explicitChangeFolder = null)
     {
-        ArgumentNullException.ThrowIfNull(runner);
+        ArgumentNullException.ThrowIfNull(gitWorktrees);
+        ArgumentNullException.ThrowIfNull(gitQuery);
+        ArgumentNullException.ThrowIfNull(gitStatus);
         ArgumentNullException.ThrowIfNull(fileSystem);
         if (!fileSystem.DirectoryExists(directory))
         {
             return null;
         }
 
-        var top = GitIn(runner, directory, "rev-parse", "--show-toplevel");
-        var common = GitIn(runner, directory, "rev-parse", "--path-format=absolute", "--git-common-dir");
-        if (!top.Ok || !common.Ok)
+        var top = gitWorktrees.TopLevel(directory);
+        var dirs = top is null ? null : gitWorktrees.GitDirs(top);
+        if (top is null || dirs is null)
         {
             return null;
         }
 
-        var root = Path.GetFullPath(top.Output.Trim());
-        var commonDir = Path.GetFullPath(common.Output.Trim());
+        var root = Path.GetFullPath(top);
+        var commonDir = Path.GetFullPath(dirs.Common);
         var changeFolder = ChangeFolderResolver.Resolve(root, commonDir, explicitChangeFolder, fileSystem);
-        return new WorkflowRepo(root, commonDir, changeFolder, runner, fileSystem);
+        return new WorkflowRepo(root, commonDir, changeFolder, gitQuery, gitStatus, fileSystem);
     }
 
-    public AllowListedCommandResult Git(params string[] args) => GitIn(_runner, Root, args);
-
-    public AllowListedCommandResult GitWithEnv(IReadOnlyDictionary<string, string>? extraEnv, params string[] args) =>
-        _runner.Run(Root, ["git", .. args], TimeSpan.FromMinutes(2), extraEnv);
-
-    public static AllowListedCommandResult GitIn(IAllowListedCommandRunner runner, string directory, params string[] args) =>
-        runner.Run(directory, ["git", .. args], TimeSpan.FromMinutes(2));
-
-    public string Head() => Git("rev-parse", "HEAD").Output.Trim();
+    public string Head() => _gitQuery.CommitOf(Root, "HEAD") ?? "";
 
     public string CodeHead()
     {
         var reviewRel = Path.GetRelativePath(Root, Path.Combine(ChangeFolder, "build", "review.md")).Replace('\\', '/');
-        var res = Git("log", "-1", "--format=%H", "--", ".", $":(exclude){reviewRel}");
-        var sha = res.Ok ? res.Output.Trim() : "";
-        return sha.Length > 0 ? sha : Head();
+        var sha = _gitQuery.CodeHead(Root, reviewRel);
+        return !string.IsNullOrWhiteSpace(sha) ? sha : Head();
     }
 
     public WorkflowPlan? ReadPlan(PlanReader planReader) =>
@@ -95,15 +93,16 @@ public sealed class WorkflowRepo
         var path = Path.Combine(ChangeFolder, fileName);
         var relative = Path.GetRelativePath(Root, path).Replace('\\', '/');
         var exists = _fs.FileExists(path);
-        var head = Git("show", $"HEAD:{relative}");
-        var uncommitted = Git("status", "--porcelain", "--", relative).Output.Trim().Length > 0;
+        var headContent = _gitQuery.ShowFile(Root, "HEAD", relative);
+        var inHead = headContent is not null;
+        var uncommitted = _gitStatus.ChangedPaths(Root, [relative]).Count > 0;
         return new WorkflowDocState(
             path,
             exists,
-            head.Ok,
+            inHead,
             uncommitted,
             exists ? StatusOf(_fs.ReadAllText(path)) : null,
-            head.Ok ? StatusOf(head.Output) : null);
+            inHead ? StatusOf(headContent!) : null);
     }
 
     private static string? StatusOf(string text)

@@ -41,8 +41,11 @@ internal static class TestServices
     public static HarnessAdapter HookAdapter => Default.HookAdapter;
     public static HookOrchestrator HookOrchestrator => Default.HookOrchestrator;
 
-    public static WorkflowRepo? FindRepo(string directory, string? explicitChangeFolder = null, IAllowListedCommandRunner? runner = null) =>
-        WorkflowRepo.Find(directory, runner ?? AllowListedRunner, FileSystem, explicitChangeFolder);
+    public static WorkflowRepo? FindRepo(string directory, string? explicitChangeFolder = null, IGitClient? git = null)
+    {
+        var g = git ?? Git;
+        return WorkflowRepo.Find(directory, g, g, g, FileSystem, explicitChangeFolder);
+    }
 
     public static WorkflowState? ReadState(WorkflowRepo repo, string? skillsRoot = null) =>
         WorkflowState.Read(repo, PlanReader, skillsRoot);
@@ -53,8 +56,10 @@ internal static class TestServices
     public static WorkflowRunner CreateWorkflowRunner(
         IAllowListedCommandRunner? commandRunner = null,
         IPullRequestClient? pullRequests = null,
+        IGitClient? git = null,
         TimeProvider? timeProvider = null) =>
         new(
+            git ?? Git,
             commandRunner ?? AllowListedRunner,
             pullRequests ?? PullRequests,
             IntentReader,
@@ -69,10 +74,11 @@ internal static class TestServices
     public static HookOrchestrator CreateOrchestrator(
         IHookAdapter? adapter = null,
         IWorkflowRunner? runner = null,
-        IAllowListedCommandRunner? commandRunner = null,
+        IGitClient? git = null,
         TimeProvider? timeProvider = null)
     {
         var r = runner ?? WorkflowRunner;
+        var g = git ?? Git;
         return new(
             adapter ?? HookAdapter,
             r,
@@ -80,7 +86,9 @@ internal static class TestServices
             r,
             r,
             r,
-            commandRunner ?? AllowListedRunner,
+            g,
+            g,
+            g,
             FileSystem,
             PlanReader,
             timeProvider ?? Time);
@@ -88,7 +96,10 @@ internal static class TestServices
 
     public static (WorkflowRepo? Repo, string? Reason) EvaluateGuard(
         NormalizedHookEvent ev,
-        IAllowListedCommandRunner? runner = null,
-        TimeProvider? timeProvider = null) =>
-        GuardCommand.Evaluate(ev, runner ?? AllowListedRunner, FileSystem, timeProvider ?? Time);
+        IGitClient? git = null,
+        TimeProvider? timeProvider = null)
+    {
+        var g = git ?? Git;
+        return GuardCommand.Evaluate(ev, g, g, g, FileSystem, timeProvider ?? Time);
+    }
 }

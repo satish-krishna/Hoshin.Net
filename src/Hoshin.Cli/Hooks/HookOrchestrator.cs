@@ -1,6 +1,7 @@
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Hooks;
 
@@ -21,7 +22,9 @@ public sealed class HookOrchestrator
         IApprovalRecorder approvals,
         IPublisher publisher,
         IDocumentCommitter documentCommitter,
-        IAllowListedCommandRunner commandRunner,
+        IGitWorktrees gitWorktrees,
+        IGitQuery gitQuery,
+        IGitStatus gitStatus,
         IFileSystem fileSystem,
         PlanReader planReader,
         TimeProvider timeProvider)
@@ -32,12 +35,14 @@ public sealed class HookOrchestrator
         ArgumentNullException.ThrowIfNull(approvals);
         ArgumentNullException.ThrowIfNull(publisher);
         ArgumentNullException.ThrowIfNull(documentCommitter);
-        ArgumentNullException.ThrowIfNull(commandRunner);
+        ArgumentNullException.ThrowIfNull(gitWorktrees);
+        ArgumentNullException.ThrowIfNull(gitQuery);
+        ArgumentNullException.ThrowIfNull(gitStatus);
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(planReader);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
-        var advancer = new WorkflowAdvancer(taskEvaluator, checkRunner, publisher, commandRunner, fileSystem, planReader);
+        var advancer = new WorkflowAdvancer(taskEvaluator, checkRunner, publisher, gitWorktrees, gitQuery, gitStatus, fileSystem, planReader);
         _start = new StartHandler(adapter, taskEvaluator, approvals, documentCommitter, advancer, fileSystem, timeProvider);
         _result = new ResultHandler(adapter, taskEvaluator, advancer, fileSystem, timeProvider);
         _stop = new StopHandler(adapter, documentCommitter, advancer, fileSystem, timeProvider);
