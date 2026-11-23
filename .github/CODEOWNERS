@@ -1,7 +1,0 @@
-# Changes to these paths need the code owner's review (with "Require review from Code Owners" on in branch protection).
-
-# The R0 acceptance gate is reviewer-owned: implementers must not change it to make it pass (TASKS.md, round 2, R-rules 1 and 2).
-/tests/Hoshin.Tests/Acceptance/ @satish-krishna
-
-# This file, so the rule above can't be removed in the same pull request that needs it gone.
-/.github/CODEOWNERS @satish-krishna

@@ -33,15 +33,15 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
 2. Open a pull request.
 3. Merge only when CI is green on both Linux and Windows, by squash merge.
 
-`main` is protected: no direct pushes, no force pushes, linear history, and the `ci gate` and `conventional names` checks required on a branch that is up to date with `main`. Changes to the paths in `.github/CODEOWNERS` (the acceptance gate in `tests/Hoshin.Tests/Acceptance/`, and `CODEOWNERS` itself) also need the code owner's approval.
+`main` is protected: changes arrive by pull request, with no force pushes, linear history, and the `ci gate` and `conventional names` checks required on a branch that is up to date with `main`.
 
-### 2.1 Administrator bypass
+### 2.1 Bypass and the acceptance gate
 
-Administrators are not enforced by the protection, so they can merge past a failing check or a missing approval. The bypass is allowed in one case only:
+The repository has one owner, and the changes are made by AI agents (Claude Code, Antigravity) working with the owner's credentials. GitHub can't tell the owner and the agents apart, so the protection stops accidents, not people, and administrators can merge past a failing check. These rules are the owner's commitment:
 
-- **Docs emergencies.** The pull request changes only documentation: Markdown files outside `src/`, `tests/`, `skills/`, `packaging/` and `.github/`. And it can't merge normally because a required check can't run or is failing for a reason unrelated to the change, such as a GitHub outage. The pull request description says what the emergency is and why the check couldn't pass.
-
-**Code never gets the bypass.** That covers everything else: source, tests (the acceptance gate above all), skills, packaging, CI workflows and `CODEOWNERS`. A red check on code is fixed, not bypassed, however urgent the change is. A change to a code-owned path needs the code owner's approval, and GitHub doesn't let an author approve their own pull request, so such a pull request must be opened by an identity other than the code owner (for example, the implementing agent's own account).
+- **Docs emergencies are the only bypass.** That means a pull request that changes only documentation (Markdown outside `src/`, `tests/`, `skills/`, `packaging/` and `.github/`), when a required check can't run or fails for a reason unrelated to the change, such as a GitHub outage. Its description says what happened.
+- **Code never gets the bypass.** That covers source, tests, skills, packaging and CI workflows. A red check on code is fixed, not bypassed, however urgent the change is.
+- **The acceptance gate (`tests/Hoshin.Tests/Acceptance/`) is changed only by the reviewer.** Before merging any pull request, run `git diff origin/main...HEAD -- tests/Hoshin.Tests/Acceptance/`. It must be empty, or show only changes the reviewer made.
 
 ## 3. Design rules (SOLID)
 

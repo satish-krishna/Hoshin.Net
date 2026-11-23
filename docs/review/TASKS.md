@@ -1053,7 +1053,7 @@ Round 2 differs from round 1 in one way that matters: **it is gated by an accept
 Every rule of round 1's "How to work through this file" still applies, with these changes.
 
 0. **Before the first task, read the gate.** Read the header comment of `tests/Hoshin.Tests/Acceptance/WorkspaceLifecycleAcceptanceTests.cs` and the message of the commit that added it (`git log -1 617291d`). The gate drives the shipped `hoshin.dll` with Claude Code hook payloads through one whole change, in a workspace whose master is `ai-sdlc`, with each repository built from a session started inside it. It judges only what an engineer can see.
-1. **The gate belongs to the reviewer.** Don't edit, skip, filter, rename or re-trait anything under `tests/Hoshin.Tests/Acceptance/`, and don't change CI so that it stops running there. `.github/CODEOWNERS` requires the reviewer's approval for that folder.
+1. **The gate belongs to the reviewer.** Don't edit, skip, filter, rename or re-trait anything under `tests/Hoshin.Tests/Acceptance/`, and don't change CI so that it stops running there. The engineer checks the diff of that folder before merging (CONTRIBUTING §2.1).
 2. **When you think the gate is wrong,** stop work on that task. Add the failure message, including the hook transcript it prints, to the pull request description under a "Gate disputes" heading, and say why you think the test is at fault. The reviewer decides. Don't work around it in the meantime. Stages 4–9 of the gate have not yet run against working code, so a dispute there is possible and expected; raising one is part of the job.
 3. **The gate is red until R01–R09 are done.** So the commit rule changes: every commit builds with 0 warnings and passes the fast suite *without the gate*:
    ```bash
@@ -1067,9 +1067,9 @@ Every rule of round 1's "How to work through this file" still applies, with thes
 
 ### Delivery
 
-- **Branch:** `fix/round-2`. It exists, and its first commits are the gate (`617291d`), the review docs, this part of TASKS.md and `.github/CODEOWNERS`. Don't rebase those away.
+- **Branch:** `fix/round-2`. It exists, and its first commits are the gate (`617291d`), the review docs and this part of TASKS.md. Don't rebase those away.
 - **Scope of the branch:** R01–R09 (tier R1) only. They are what the gate needs. R10–R20 go in later branches, one pull request per tier, after this branch merges.
-- **Pull request:** a draft, opened from the `hoshin-net-bot` account (D7, and "No bypass" below), titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
+- **Pull request:** a draft, opened by the engineer, titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
 - **Commits:** one per task, in index order, with round 1's trailers plus one:
   ```
   Task: R02
@@ -1078,23 +1078,13 @@ Every rule of round 1's "How to work through this file" still applies, with thes
   Gate: <the gate's first failing assertion after this commit, or "passes">
   ```
 - **Ready for review:** when all three gate tests pass on Linux and Windows in CI and R01–R09 are `done` or `invalid`. Then the branch merges by squash, as usual.
-- **No bypass:** this branch is code, so CONTRIBUTING §2.1 gives it no administrator bypass. It contains code-owned paths (the gate and `CODEOWNERS`), so the code owner must approve it, which means the pull request must be opened by an identity other than the code owner's (D7).
+- **No bypass:** this branch is code, so CONTRIBUTING §2.1 gives it no bypass. It merges when the checks are green, not before.
 
 ## Decisions needed for round 2
 
 ### D6 — How does the engineer decline at approval?
 
 Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reason>` at `NeedsApproval` records a declined approval with the reason, and the change goes back to the fix loop of R06, like a review finding; (b) declining means "don't approve", and the engineer then runs a fix build with instructions. **Recommendation:** (a). It keeps a record of why, and it reuses R06's loop. **Answer:** _(open)_
-
-### D7 — Whose GitHub identity does the implementer push and open pull requests under?
-
-Code gets no administrator bypass (CONTRIBUTING §2.1), and an author can't approve their own pull request, so the round-2 pull request has to come from someone other than the code owner. **Options:** (a) a machine-user account; (b) a GitHub App; (c) a human collaborator's account. **Answer:** (a), the machine user `hoshin-net-bot`. The conditions:
-- `hoshin-net-bot` is a collaborator on this repository with `write` permission, **never `admin` or `maintain`**. Admins aren't enforced by the branch protection, so an admin bot could merge a red gate or change `CODEOWNERS` without approval;
-- it is not a code owner, so its approval never stands in for the code owner's;
-- it has access to this repository only, and has two-factor authentication on;
-- the agent pushes and opens pull requests with a token of the bot's, never the code owner's. Use a fine-grained token limited to this repository (contents and pull requests: read and write) if GitHub offers this repository to the bot's fine-grained tokens. Otherwise use a classic token with the `repo` scope only; the bot can reach no other repository, so `repo` reaches only this one. Either way, leave out the `workflow` scope, so the agent can't push changes to `.github/workflows/`;
-- commits are authored as `hoshin-net-bot` with its GitHub noreply address, so the history shows which commits the agent made.
-
 ## Round 2 index
 
 | ID | Tier | Title | Fixes | Needs | Gate stage | Status |
