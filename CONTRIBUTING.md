@@ -33,7 +33,15 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
 2. Open a pull request.
 3. Merge only when CI is green on both Linux and Windows, by squash merge.
 
-`main` should be protected for everyone, administrators included: no direct pushes, no force pushes, and the CI and conventional-names checks required on a branch that is up to date with `main`.
+`main` is protected: no direct pushes, no force pushes, linear history, and the `ci gate` and `conventional names` checks required on a branch that is up to date with `main`. Changes to the paths in `.github/CODEOWNERS` (the acceptance gate in `tests/Hoshin.Tests/Acceptance/`, and `CODEOWNERS` itself) also need the code owner's approval.
+
+### 2.1 Administrator bypass
+
+Administrators are not enforced by the protection, so they can merge past a failing check or a missing approval. The bypass is allowed in one case only:
+
+- **Docs emergencies.** The pull request changes only documentation: Markdown files outside `src/`, `tests/`, `skills/`, `packaging/` and `.github/`. And it can't merge normally because a required check can't run or is failing for a reason unrelated to the change, such as a GitHub outage. The pull request description says what the emergency is and why the check couldn't pass.
+
+**Code never gets the bypass.** That covers everything else: source, tests (the acceptance gate above all), skills, packaging, CI workflows and `CODEOWNERS`. A red check on code is fixed, not bypassed, however urgent the change is. A change to a code-owned path needs the code owner's approval, and GitHub doesn't let an author approve their own pull request, so such a pull request must be opened by an identity other than the code owner (for example, the implementing agent's own account).
 
 ## 3. Design rules (SOLID)
 

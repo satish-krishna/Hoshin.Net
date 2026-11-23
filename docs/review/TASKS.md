@@ -1069,7 +1069,7 @@ Every rule of round 1's "How to work through this file" still applies, with thes
 
 - **Branch:** `fix/round-2`. It exists, and its first commits are the gate (`617291d`), the review docs, this part of TASKS.md and `.github/CODEOWNERS`. Don't rebase those away.
 - **Scope of the branch:** R01–R09 (tier R1) only. They are what the gate needs. R10–R20 go in later branches, one pull request per tier, after this branch merges.
-- **Pull request:** a draft, opened by the engineer, titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
+- **Pull request:** a draft, opened by the implementer's GitHub identity (see "No bypass" below), titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
 - **Commits:** one per task, in index order, with round 1's trailers plus one:
   ```
   Task: R02
@@ -1078,6 +1078,7 @@ Every rule of round 1's "How to work through this file" still applies, with thes
   Gate: <the gate's first failing assertion after this commit, or "passes">
   ```
 - **Ready for review:** when all three gate tests pass on Linux and Windows in CI and R01–R09 are `done` or `invalid`. Then the branch merges by squash, as usual.
+- **No bypass:** this branch is code, so CONTRIBUTING §2.1 gives it no administrator bypass. It contains code-owned paths (the gate and `CODEOWNERS`), so the code owner must approve it, which means the pull request must be opened by the implementer's own GitHub identity, not the code owner's.
 
 ## Decisions needed for round 2
 
