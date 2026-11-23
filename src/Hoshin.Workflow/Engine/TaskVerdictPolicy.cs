@@ -124,7 +124,7 @@ public sealed class RedGreenPolicy : ITaskVerdictPolicy
         }
 
         var prodPathsForRed = prodChanges.Select(c => c.Path).ToList();
-        var redCheck = ObserveRedOnCachedWorktree(context, testCmd, testChanges, prodPathsForRed, taskEnv, taskTimeout);
+        var redCheck = RedWorktree.ObserveRed(context.Repo, context.Runner, context.StartHead, testCmd, testChanges, prodPathsForRed, taskEnv, taskTimeout);
         if (!redCheck.IsValidRed)
         {
             return Failed(context, redCheck.Summary, [$"red: {redCheck.Summary}"]);
@@ -235,75 +235,6 @@ public sealed class RedGreenPolicy : ITaskVerdictPolicy
 
         var finalRed = $"{redSummary} at {WorkflowEngine.Short(testCommitSha)}";
         return new WorkflowVerdict(task.Id, context.Attempt, headSha, true, finalRed, [], context.At, testCommitSha);
-    }
-
-    private static RedClassification ObserveRedOnCachedWorktree(
-        TaskEvaluationContext context,
-        string[] testCmd,
-        List<WorkingTreeChange> testChanges,
-        IReadOnlyList<string> prodPaths,
-        IReadOnlyDictionary<string, string>? taskEnv,
-        TimeSpan taskTimeout)
-    {
-        var repo = context.Repo;
-        var wtDir = repo.RedWorktreePath;
-        var prepared = EnsureCachedWorktree(repo, context.Runner, wtDir, context.StartHead);
-        if (!prepared.Ok)
-        {
-            return new RedClassification(RedKind.CouldNotRun, false, $"not observed: could not prepare detached worktree at {WorkflowEngine.Short(context.StartHead)}: {TaskCommitHelpers.Squash(prepared.Tail(5))}");
-        }
-
-        OverlayTestFiles(repo.Root, wtDir, testChanges);
-        var redRun = context.Runner.Run(wtDir, testCmd, taskTimeout, taskEnv);
-        WorkflowRepo.GitIn(context.Runner, wtDir, "reset", "--hard", "--quiet", context.StartHead);
-        WorkflowRepo.GitIn(context.Runner, wtDir, "clean", "-fd", "--quiet");
-        return RedClassifier.Classify(redRun, prodPaths);
-    }
-
-    private static void OverlayTestFiles(string repoRoot, string wtDir, List<WorkingTreeChange> testChanges)
-    {
-        foreach (var change in testChanges)
-        {
-            var src = Path.Combine(repoRoot, change.Path.Replace('/', Path.DirectorySeparatorChar));
-            var dst = Path.Combine(wtDir, change.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (change.Deleted || !File.Exists(src))
-            {
-                if (File.Exists(dst))
-                {
-                    File.Delete(dst);
-                }
-            }
-            else
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
-                File.Copy(src, dst, overwrite: true);
-            }
-        }
-    }
-
-    private static AllowListedCommandResult EnsureCachedWorktree(WorkflowRepo repo, IAllowListedCommandRunner runner, string wtDir, string startHead)
-    {
-        var gitMarker = Path.Combine(wtDir, ".git");
-        if (Directory.Exists(wtDir) && (File.Exists(gitMarker) || Directory.Exists(gitMarker)))
-        {
-            var checkout = WorkflowRepo.GitIn(runner, wtDir, "checkout", "--detach", "--force", startHead);
-            if (checkout.Ok)
-            {
-                WorkflowRepo.GitIn(runner, wtDir, "clean", "-fd", "--quiet");
-                return checkout;
-            }
-
-            repo.Git("worktree", "remove", "--force", wtDir);
-            repo.Git("worktree", "prune");
-        }
-
-        Directory.CreateDirectory(Path.GetDirectoryName(wtDir)!);
-        if (Directory.Exists(wtDir))
-        {
-            Directory.Delete(wtDir, recursive: true);
-        }
-
-        return repo.Git("worktree", "add", "--detach", "--force", wtDir, startHead);
     }
 
     private static WorkflowVerdict ResetAndFail(TaskEvaluationContext context, string redSummary, string reason)

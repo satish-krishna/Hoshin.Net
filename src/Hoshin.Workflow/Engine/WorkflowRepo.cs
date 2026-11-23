@@ -1,13 +1,11 @@
-using System.Text.Json;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
-using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Workflow.Engine;
 
 /// <summary>
-/// A git repository hosting a workflow run, together with its change folder and <c>.git/hoshin/</c> ledger/step files.
-/// Supports both standalone <c>.hoshin/</c> change folders (test/toy layouts) and standard <c>intent/&lt;system&gt;/&lt;change&gt;/</c> folders.
+/// A git repository hosting a workflow run, together with its change folder and <c>.git/hoshin/</c> ledger/step paths.
+/// Delegates resolution, plan loading, ledger persistence, and test-path classification to dedicated helpers.
 /// </summary>
 public sealed class WorkflowRepo
 {
@@ -67,83 +65,8 @@ public sealed class WorkflowRepo
 
         var root = Path.GetFullPath(top.Output.Trim());
         var commonDir = Path.GetFullPath(common.Output.Trim());
-        var changeFolder = ResolveChangeFolder(root, commonDir, explicitChangeFolder, fileSystem);
+        var changeFolder = ChangeFolderResolver.Resolve(root, commonDir, explicitChangeFolder, fileSystem);
         return new WorkflowRepo(root, commonDir, changeFolder, runner, fileSystem);
-    }
-
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
-    private static string ResolveChangeFolder(string root, string commonDir, string? explicitChangeFolder, IFileSystem fs)
-    {
-        if (!string.IsNullOrWhiteSpace(explicitChangeFolder))
-        {
-            return Path.IsPathRooted(explicitChangeFolder)
-                ? explicitChangeFolder
-                : Path.Combine(root, explicitChangeFolder);
-        }
-
-        // Check existing run marker first so multi-turn sessions stay pinned to the active change.
-        var runPath = Path.Combine(commonDir, "hoshin", "run.json");
-        if (fs.FileExists(runPath))
-        {
-            try
-            {
-                var marker = JsonSerializer.Deserialize(fs.ReadAllText(runPath), WorkflowJsonContext.Default.RunMarker);
-                if (!string.IsNullOrWhiteSpace(marker?.ChangeFolder) && fs.DirectoryExists(marker.ChangeFolder))
-                {
-                    return marker.ChangeFolder;
-                }
-            }
-            catch
-            {
-                // Ignore corrupt marker.
-            }
-        }
-
-        // Direct `.hoshin/` change folder in repo root (used by standalone/single-change layouts).
-        var dotHoshin = Path.Combine(root, ".hoshin");
-        if (fs.FileExists(Path.Combine(dotHoshin, "change.jsonc")) || fs.FileExists(Path.Combine(dotHoshin, "plan.md")) || fs.FileExists(Path.Combine(dotHoshin, "intent.md")))
-        {
-            return dotHoshin;
-        }
-
-        // Standard `intent/<system>/<change>/` layout: pick the sole or most recent change folder with documents.
-        var intentRoot = Path.Combine(root, "intent");
-        if (fs.DirectoryExists(intentRoot))
-        {
-            var candidates = new List<string>();
-            foreach (var sysDir in fs.EnumerateDirectories(intentRoot).OrderBy(d => d, StringComparer.Ordinal))
-            {
-                var sysName = Path.GetFileName(sysDir);
-                if (sysName.Equals("hooks", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                foreach (var chDir in fs.EnumerateDirectories(sysDir).OrderByDescending(d => d, StringComparer.Ordinal))
-                {
-                    var chName = Path.GetFileName(chDir);
-                    if (chName is "context" or "hooks")
-                    {
-                        continue;
-                    }
-
-                    if (fs.FileExists(Path.Combine(chDir, "change.jsonc")) ||
-                        fs.FileExists(Path.Combine(chDir, "plan.md")) ||
-                        fs.FileExists(Path.Combine(chDir, "intent.md")) ||
-                        fs.FileExists(Path.Combine(chDir, "spec.md")))
-                    {
-                        candidates.Add(chDir);
-                    }
-                }
-            }
-
-            if (candidates.Count > 0)
-            {
-                return candidates[0];
-            }
-        }
-
-        return dotHoshin;
     }
 
     public AllowListedCommandResult Git(params string[] args) => GitIn(_runner, Root, args);
@@ -164,114 +87,8 @@ public sealed class WorkflowRepo
         return sha.Length > 0 ? sha : Head();
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
-    public WorkflowPlan? ReadPlan(PlanReader planReader)
-    {
-        ArgumentNullException.ThrowIfNull(planReader);
-        var settings = MarkerBuildSettings.Read(Root, _fs);
-        var planPath = Path.Combine(ChangeFolder, "plan.md");
-        var changePath = Path.Combine(ChangeFolder, "change.jsonc");
-
-        if (!_fs.FileExists(planPath))
-        {
-            return LoadPlanMetadataOnly(changePath, settings);
-        }
-
-        var planDocStatus = DocumentStatus("plan.md");
-        PlanReadResult? read = null;
-        try
-        {
-            read = planReader.Read(_fs.ReadAllText(planPath), "plan.md");
-        }
-        catch (CouldNotRunException) when (planDocStatus.Uncommitted || !planDocStatus.InHead)
-        {
-            // An uncommitted draft plan (e.g. bare JSONC front matter during WritePlan/Fix) is validated at Stop.
-            return LoadPlanMetadataOnly(changePath, settings);
-        }
-
-        if (read.Problems.Count > 0)
-        {
-            if (planDocStatus.Uncommitted || !planDocStatus.InHead)
-            {
-                return LoadPlanMetadataOnly(changePath, settings);
-            }
-
-            throw new CouldNotRunException("plan.md has problems: " + string.Join("; ", read.Problems.Select(p => $"line {p.Line}: {p.Message}")));
-        }
-
-        JsonElement changeObj = default;
-        var hasChange = _fs.FileExists(changePath);
-        if (hasChange)
-        {
-            changeObj = ParseJsoncObject(changePath);
-        }
-
-        var scope = (hasChange ? Jsonc.String(changeObj, "scope") : null)
-            ?? Jsonc.String(read.FrontMatter, "scope")
-            ?? Jsonc.String(read.FrontMatter, "system")
-            ?? throw new CouldNotRunException("change.jsonc lacks scope");
-
-        var change = (hasChange ? Jsonc.String(changeObj, "change") : null) ?? Path.GetFileName(ChangeFolder);
-        var baseBranch = (hasChange ? Jsonc.String(changeObj, "base") : null) ?? "main";
-        var branch = hasChange ? Jsonc.String(changeObj, "branch") : null;
-        var workType = (hasChange ? Jsonc.String(changeObj, "type") : null) ?? "feat";
-
-        var tasks = new List<WorkflowTask>();
-        foreach (var t in read.Document.Tasks)
-        {
-            tasks.Add(new WorkflowTask(
-                t.Id,
-                t.Name,
-                string.Join("\n\n", t.Sections.Select(s => s.Body)),
-                t.Test,
-                t.Compile,
-                t.Files,
-                t.Timeout));
-        }
-
-        var systemName = Jsonc.String(read.FrontMatter, "system") ?? scope;
-        return new WorkflowPlan(
-            Change: change,
-            Scope: scope,
-            Base: baseBranch,
-            Tasks: tasks,
-            Checks: BaseBranchChecksReader.Read(this, baseBranch, systemName),
-            HasPlan: true,
-            Branch: branch,
-            WorkType: workType,
-            TestPatterns: settings.TestPatterns,
-            EnvAllow: settings.EnvAllow,
-            TestTimeoutSeconds: settings.TestTimeoutSeconds,
-            CheckTimeoutSeconds: settings.CheckTimeoutSeconds,
-            MaxAttempts: settings.MaxAttempts);
-    }
-
-    private WorkflowPlan? LoadPlanMetadataOnly(string changePath, MarkerBuildSettings settings)
-    {
-        if (!_fs.FileExists(changePath))
-        {
-            return null;
-        }
-
-        var only = ParseJsoncObject(changePath);
-        var changeName = Jsonc.String(only, "change") ?? Path.GetFileName(ChangeFolder);
-        var scope = Jsonc.String(only, "scope") ?? throw new CouldNotRunException("change.jsonc lacks scope");
-        var baseBranch = Jsonc.String(only, "base") ?? "main";
-        return new WorkflowPlan(
-            Change: changeName,
-            Scope: scope,
-            Base: baseBranch,
-            Tasks: [],
-            Checks: BaseBranchChecksReader.Read(this, baseBranch, scope),
-            HasPlan: false,
-            Branch: Jsonc.String(only, "branch"),
-            WorkType: Jsonc.String(only, "type") ?? "feat",
-            TestPatterns: settings.TestPatterns,
-            EnvAllow: settings.EnvAllow,
-            TestTimeoutSeconds: settings.TestTimeoutSeconds,
-            CheckTimeoutSeconds: settings.CheckTimeoutSeconds,
-            MaxAttempts: settings.MaxAttempts);
-    }
+    public WorkflowPlan? ReadPlan(PlanReader planReader) =>
+        WorkflowPlanLoader.Load(this, planReader, _fs);
 
     public WorkflowDocState DocumentStatus(string fileName)
     {
@@ -295,66 +112,27 @@ public sealed class WorkflowRepo
         {
             return Jsonc.String(FrontMatter.Parse(text, "document").Data, "status");
         }
-        catch
+        catch (CouldNotRunException)
         {
             return null;
         }
     }
 
-    private JsonElement ParseJsoncObject(string path)
-    {
-        if (!Jsonc.TryParse(_fs.ReadAllText(path), out var value, out var error))
-        {
-            throw new CouldNotRunException($"{Path.GetFileName(path)} is not valid JSONC: {error}");
-        }
+    public WorkflowLedger ReadLedger() => WorkflowLedgerStore.ReadLedger(this, _fs);
 
-        return value is { ValueKind: JsonValueKind.Object } obj
-            ? obj
-            : throw new CouldNotRunException($"{Path.GetFileName(path)} is not a set of fields");
-    }
+    public void WriteLedger(WorkflowLedger ledger) => WorkflowLedgerStore.WriteLedger(this, _fs, ledger);
 
-    public WorkflowLedger ReadLedger()
-    {
-        ChangeLedgerPaths.TryMigrateLegacyLedger(HoshinDir, LedgerPath, ReadRunMarker());
-        return _fs.FileExists(LedgerPath)
-            ? JsonSerializer.Deserialize(_fs.ReadAllText(LedgerPath), WorkflowJsonContext.Default.WorkflowLedger) ?? new()
-            : new();
-    }
+    public CurrentStep? ReadStep() => WorkflowLedgerStore.ReadStep(this, _fs);
 
-    public void WriteLedger(WorkflowLedger ledger) =>
-        _fs.WriteAllTextAtomic(LedgerPath, JsonSerializer.Serialize(ledger, WorkflowJsonContext.Default.WorkflowLedger));
+    public void WriteStep(CurrentStep step) => WorkflowLedgerStore.WriteStep(this, _fs, step);
 
-    public CurrentStep? ReadStep() =>
-        _fs.FileExists(StepPath)
-            ? JsonSerializer.Deserialize(_fs.ReadAllText(StepPath), WorkflowJsonContext.Default.CurrentStep)
-            : null;
+    public RunMarker? ReadRunMarker() => WorkflowLedgerStore.ReadRunMarker(this, _fs);
 
-    public void WriteStep(CurrentStep step) =>
-        _fs.WriteAllTextAtomic(StepPath, JsonSerializer.Serialize(step, WorkflowJsonContext.Default.CurrentStep));
+    public void WriteRunMarker(RunMarker marker) => WorkflowLedgerStore.WriteRunMarker(this, _fs, marker);
 
-    public RunMarker? ReadRunMarker() =>
-        _fs.FileExists(RunMarkerPath)
-            ? JsonSerializer.Deserialize(_fs.ReadAllText(RunMarkerPath), WorkflowJsonContext.Default.RunMarker)
-            : null;
+    public T WithLedger<T>(Func<WorkflowLedger, T> update) => WorkflowLedgerStore.WithLedger(this, _fs, update);
 
-    public void WriteRunMarker(RunMarker marker) =>
-        _fs.WriteAllTextAtomic(RunMarkerPath, JsonSerializer.Serialize(marker, WorkflowJsonContext.Default.RunMarker));
-
-    public T WithLedger<T>(Func<WorkflowLedger, T> update)
-    {
-        _fs.CreateDirectory(HoshinDir);
-        using var gate = AcquireLock();
-        var ledger = ReadLedger();
-        var result = update(ledger);
-        WriteLedger(ledger);
-        return result;
-    }
-
-    public FileStream AcquireRunLock(TimeSpan? timeout = null) =>
-        FileLock.Acquire(RunLockPath, timeout ?? TimeSpan.FromMinutes(10));
-
-    private FileStream AcquireLock() =>
-        FileLock.Acquire(Path.Combine(HoshinDir, "workflow-ledger.lock"), TimeSpan.FromSeconds(5));
+    public FileStream AcquireRunLock(TimeSpan? timeout = null) => WorkflowLedgerStore.AcquireRunLock(this, timeout);
 
     /// <summary>Checks whether a repository-relative path matches any configured test glob pattern or explicit task test file.</summary>
     public static bool IsTestPath(string relativePath, IReadOnlyList<string>? testPatterns = null, IReadOnlyList<string>? taskTestFiles = null) =>

@@ -1,0 +1,89 @@
+using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Engine;
+
+namespace Hoshin.Cli.Hooks;
+
+/// <summary>Shared workflow state reader, automatic-step advancer, and verdict reporter used by hook handlers.</summary>
+internal sealed class WorkflowAdvancer(
+    ITaskEvaluator tasks,
+    ICheckRunner checks,
+    IPublisher publisher,
+    IAllowListedCommandRunner commandRunner,
+    IFileSystem fileSystem,
+    PlanReader planReader)
+{
+    private readonly ITaskEvaluator _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
+    private readonly ICheckRunner _checks = checks ?? throw new ArgumentNullException(nameof(checks));
+    private readonly IPublisher _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+    private readonly IAllowListedCommandRunner _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+    private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
+
+    public IFileSystem FileSystem => _fs;
+
+    public PlanReader PlanReader => _planReader;
+
+    public WorkflowRepo? ResolveRepo(NormalizedHookEvent ev) =>
+        WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _commandRunner, _fs);
+
+    public WorkflowState? ReadState(WorkflowRepo repo, string? rolesRoot, out string? error)
+    {
+        error = null;
+        try
+        {
+            return WorkflowState.Read(repo, _planReader, rolesRoot);
+        }
+        catch (CouldNotRunException e)
+        {
+            error = e.Message;
+            return null;
+        }
+    }
+
+    public (WorkflowVerdict Verdict, Step Next) JudgeAndAdvance(WorkflowRepo repo, string? rolesRoot, CurrentStep current, string? sessionId)
+    {
+        var state = ReadState(repo, rolesRoot, out _)!;
+        var verdict = _tasks.EvaluateAndCommitTask(repo, state, current.Task!, current.Attempt);
+        StopCounterStore.ResetAll(repo);
+        return (verdict, Advance(repo, rolesRoot, sessionId));
+    }
+
+    public Step Advance(WorkflowRepo repo, string? rolesRoot, string? sessionId)
+    {
+        while (true)
+        {
+            var state = ReadState(repo, rolesRoot, out var error);
+            if (state is null)
+            {
+                return new Done(false, error ?? "no plan");
+            }
+
+            var step = WorkflowEngine.Next(state);
+            switch (step)
+            {
+                case RunChecks:
+                    _checks.RunChecks(repo, state);
+                    continue;
+
+                case Publish p:
+                    var publish = _publisher.Publish(repo, state, p.Ref);
+                    if (!publish.Ok)
+                    {
+                        var detail = string.IsNullOrWhiteSpace(publish.Error) ? "" : $": {publish.Error}";
+                        return new Done(false, $"could not push to {p.Ref}{detail}");
+                    }
+
+                    continue;
+
+                default:
+                    _tasks.Issue(repo, state, step, sessionId);
+                    return step;
+            }
+        }
+    }
+
+    public static string ReportVerdict(CurrentStep current, WorkflowVerdict verdict) => verdict.Passed
+        ? $"{current.Task} attempt {current.Attempt} is accepted: test committed first ({verdict.Red}) and green at {WorkflowEngine.Short(verdict.Head)}.\n\n"
+        : $"{current.Task} attempt {current.Attempt} is not accepted:\n- " + string.Join("\n- ", verdict.Reasons) + "\n\n";
+}

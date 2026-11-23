@@ -58,6 +58,11 @@ public sealed class HoshinServices
     private readonly Lazy<BuildStartStep> _buildStartStep;
     private readonly Lazy<EventRunner> _eventRunner;
     private readonly Lazy<IAllowListedCommandRunner> _allowListedRunner;
+    private readonly Lazy<ITaskEvaluator> _taskEvaluator;
+    private readonly Lazy<ICheckRunner> _checkRunner;
+    private readonly Lazy<IApprovalRecorder> _approvalRecorder;
+    private readonly Lazy<IPublisher> _publisher;
+    private readonly Lazy<IDocumentCommitter> _documentCommitter;
     private readonly Lazy<IWorkflowRunner> _workflowRunner;
     private readonly Lazy<HarnessAdapter> _hookAdapter;
     private readonly Lazy<HookOrchestrator> _hookOrchestrator;
@@ -112,12 +117,12 @@ public sealed class HoshinServices
     public BuildStartStep BuildStartStep => _buildStartStep.Value;
     public EventRunner EventRunner => _eventRunner.Value;
     public IAllowListedCommandRunner AllowListedRunner => _allowListedRunner.Value;
+    public ITaskEvaluator TaskEvaluator => _taskEvaluator.Value;
+    public ICheckRunner CheckRunner => _checkRunner.Value;
+    public IApprovalRecorder ApprovalRecorder => _approvalRecorder.Value;
+    public IPublisher Publisher => _publisher.Value;
+    public IDocumentCommitter DocumentCommitter => _documentCommitter.Value;
     public IWorkflowRunner WorkflowRunner => _workflowRunner.Value;
-    public ITaskEvaluator TaskEvaluator => _workflowRunner.Value;
-    public ICheckRunner CheckRunner => _workflowRunner.Value;
-    public IApprovalRecorder ApprovalRecorder => _workflowRunner.Value;
-    public IPublisher Publisher => _workflowRunner.Value;
-    public IDocumentCommitter DocumentCommitter => _workflowRunner.Value;
     public HarnessAdapter HookAdapter => _hookAdapter.Value;
     public HookOrchestrator HookOrchestrator => _hookOrchestrator.Value;
 
@@ -217,9 +222,11 @@ public sealed class HoshinServices
             ],
             TimeProvider));
         _allowListedRunner = new(() => new AllowListedCommandRunner());
-        _workflowRunner = new(() => new WorkflowRunner(
-            AllowListedRunner,
-            PullRequests,
+        _taskEvaluator = new(() => new TaskEvaluator(AllowListedRunner, TimeProvider));
+        _checkRunner = new(() => new CheckRunner(AllowListedRunner, TimeProvider));
+        _approvalRecorder = new(() => new ApprovalRecorder(TimeProvider));
+        _publisher = new(() => new Publisher(PullRequests, TimeProvider));
+        _documentCommitter = new(() => new DocumentCommitter(
             IntentReader,
             SpecReader,
             PlanReader,
@@ -228,6 +235,12 @@ public sealed class HoshinServices
             CrossChecker,
             FileSystem,
             TimeProvider));
+        _workflowRunner = new(() => new WorkflowRunner(
+            TaskEvaluator,
+            CheckRunner,
+            ApprovalRecorder,
+            Publisher,
+            DocumentCommitter));
         _hookAdapter = new(() => new HarnessAdapter(TimeProvider));
         _hookOrchestrator = new(() => new HookOrchestrator(
             HookAdapter,
