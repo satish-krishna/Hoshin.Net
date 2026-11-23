@@ -15,7 +15,8 @@ internal sealed class WorkflowAdvancer(
     IGitStatus gitStatus,
     IFileSystem fileSystem,
     LedgerStore ledgerStore,
-    WorkflowStateReader stateReader)
+    WorkflowStateReader stateReader,
+    IWorkflowEventBridge eventBridge)
 {
     private readonly ITaskEvaluator _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
     private readonly ICheckRunner _checks = checks ?? throw new ArgumentNullException(nameof(checks));
@@ -26,6 +27,7 @@ internal sealed class WorkflowAdvancer(
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly LedgerStore _ledgerStore = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
     private readonly WorkflowStateReader _stateReader = stateReader ?? throw new ArgumentNullException(nameof(stateReader));
+    private readonly IWorkflowEventBridge _events = eventBridge ?? throw new ArgumentNullException(nameof(eventBridge));
 
     public IFileSystem FileSystem => _fs;
 
@@ -82,6 +84,11 @@ internal sealed class WorkflowAdvancer(
                     }
 
                     continue;
+
+                case Implement when _events.IsWorkspaceRepo(repo) && state.Ledger.WorkflowBaselines.Count == 0:
+                    _checks.RunBaseline(repo, state);
+                    _tasks.Issue(repo, state, step, sessionId);
+                    return step;
 
                 default:
                     _tasks.Issue(repo, state, step, sessionId);

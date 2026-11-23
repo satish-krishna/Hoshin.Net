@@ -177,7 +177,7 @@ public sealed class UnifiedLedgerTests
             # Intent: Greeting
             """);
         TestGitFixture.Git(repoDir, "add", ".");
-        TestGitFixture.Git(repoDir, "commit", "-q", "-m", $"docs(demo): accept intent {Change}");
+        TestGitFixture.Git(repoDir, "commit", "-q", "-m", $"docs(demo): accept intent {Change}", "-m", "Generated-By: hoshin");
         var intentSha = TestGitFixture.Git(repoDir, "rev-parse", "HEAD");
 
         TestGitFixture.Write(
@@ -191,15 +191,19 @@ public sealed class UnifiedLedgerTests
 
             ```gherkin
             Feature: Greeting
-              @req:R1 @from:intent
-              Scenario: Greets by name
-                Given a name "world"
-                When greeted
-                Then the result is "hello world"
+
+              @R1 @from:intent
+              Rule: Greet callers by name
+
+                @R1.1
+                Scenario: Greets by name
+                  Given a name "world"
+                  When greeted
+                  Then the result is "hello world"
             ```
             """);
         TestGitFixture.Git(repoDir, "add", ".");
-        TestGitFixture.Git(repoDir, "commit", "-q", "-m", $"docs(demo): accept spec {Change}");
+        TestGitFixture.Git(repoDir, "commit", "-q", "-m", $"docs(demo): accept spec {Change}", "-m", "Generated-By: hoshin");
         var specSha = TestGitFixture.Git(repoDir, "rev-parse", "HEAD");
 
         TestGitFixture.Write(
@@ -216,7 +220,7 @@ public sealed class UnifiedLedgerTests
             ### T1: Add greeting helper
 
             ```jsonc
-            { "id": "T1", "repo": "app", "depends_on": [], "covers": ["R1"], "supports": [], "test": ["node", "--test", "test/greet.test.mjs"] }
+            { "id": "T1", "repo": "app", "depends_on": [], "covers": ["R1.1"], "supports": [], "test": ["node", "--test", "test/greet.test.mjs"] }
             ```
 
             #### Change
@@ -226,7 +230,7 @@ public sealed class UnifiedLedgerTests
             Add `test/greet.test.mjs`.
             """);
         TestGitFixture.Git(repoDir, "add", ".");
-        TestGitFixture.Git(repoDir, "commit", "-q", "-m", $"docs(demo): accept plan {Change}");
+        TestGitFixture.Git(repoDir, "commit", "-q", "-m", $"docs(demo): accept plan {Change}", "-m", "Generated-By: hoshin");
 
         return repoDir;
     }

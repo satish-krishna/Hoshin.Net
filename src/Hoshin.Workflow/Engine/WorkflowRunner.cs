@@ -38,14 +38,15 @@ public sealed class WorkflowRunner(
         ReviewReader reviewReader,
         FrontMatterEdit frontMatterEdit,
         CrossChecker crossChecker,
+        IWorkflowEventBridge eventBridge,
         IFileSystem fileSystem,
         TimeProvider timeProvider)
         : this(
-            new TaskEvaluator(git, git, git, git, commandRunner, timeProvider),
-            new CheckRunner(git, commandRunner, timeProvider),
+            new TaskEvaluator(git, git, git, git, commandRunner, new BuildLogWriter(fileSystem), eventBridge, timeProvider),
+            new CheckRunner(git, commandRunner, eventBridge, timeProvider),
             new ApprovalRecorder(timeProvider),
-            new Publisher(git, git, git, pullRequests, timeProvider),
-            new DocumentCommitter(git, git, intentReader, specReader, planReader, reviewReader, frontMatterEdit, crossChecker, fileSystem, timeProvider))
+            new Publisher(git, git, git, pullRequests, eventBridge, timeProvider),
+            new DocumentCommitter(git, git, intentReader, specReader, planReader, reviewReader, frontMatterEdit, crossChecker, eventBridge, fileSystem, timeProvider))
     {
     }
 

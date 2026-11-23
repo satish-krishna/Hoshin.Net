@@ -2,19 +2,32 @@ using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
 
-/// <summary>Executes base-branch baseline checks and post-build checks via <see cref="IAllowListedCommandRunner"/>.</summary>
+/// <summary>Executes base-branch baseline checks and post-build checks via <see cref="IWorkflowEventBridge"/> (with standalone fallback).</summary>
 public sealed class CheckRunner(
     IGitQuery gitQuery,
     IAllowListedCommandRunner checkRunner,
+    IWorkflowEventBridge eventBridge,
     TimeProvider timeProvider) : ICheckRunner
 {
     private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
     private readonly IAllowListedCommandRunner _runner = checkRunner ?? throw new ArgumentNullException(nameof(checkRunner));
+    private readonly IWorkflowEventBridge _events = eventBridge ?? throw new ArgumentNullException(nameof(eventBridge));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public WorkflowBaselineRun RunBaseline(WorkflowRepo repo, WorkflowState state)
     {
         var sha = _gitQuery.CommitOf(repo.Root, state.Plan.Base) ?? state.Head;
+        if (_events.TryFire(repo, "build.start") is { } outcome)
+        {
+            var eventBaseline = new WorkflowBaselineRun(
+                sha,
+                outcome.Outcome == "passed",
+                WorkflowEventBridge.FormatOutcome(outcome),
+                _time.GetUtcNow());
+            repo.UpdateLedger(l => l with { Baselines = new List<WorkflowBaselineRun>(l.WorkflowBaselines) { eventBaseline } });
+            return eventBaseline;
+        }
+
         var outputs = new List<string>();
         var passed = true;
 
@@ -35,6 +48,18 @@ public sealed class CheckRunner(
 
     public WorkflowCheckRun RunChecks(WorkflowRepo repo, WorkflowState state)
     {
+        var codeHead = state.EffectiveCodeHead;
+        if (_events.TryFire(repo, "build.finish") is { } outcome)
+        {
+            var eventCheck = new WorkflowCheckRun(
+                codeHead,
+                outcome.Outcome == "passed",
+                WorkflowEventBridge.FormatOutcome(outcome),
+                _time.GetUtcNow());
+            repo.UpdateLedger(l => l with { Checks = new List<WorkflowCheckRun>(l.WorkflowChecks) { eventCheck } });
+            return eventCheck;
+        }
+
         var outputs = new List<string>();
         var passed = true;
         var env = AllowListedCommandRunner.CollectAdditionalEnvironment(state.Plan.EnvAllow);
@@ -46,7 +71,6 @@ public sealed class CheckRunner(
             outputs.Add($"$ {string.Join(' ', check)} -> {run.ExitCode}\n{run.Tail(20)}");
         }
 
-        var codeHead = state.EffectiveCodeHead;
         var result = new WorkflowCheckRun(codeHead, passed, string.Join("\n", outputs), _time.GetUtcNow());
         repo.UpdateLedger(l => l with { Checks = new List<WorkflowCheckRun>(l.WorkflowChecks) { result } });
         return result;

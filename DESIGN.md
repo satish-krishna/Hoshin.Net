@@ -35,16 +35,15 @@ flowchart TB
     end
 
     subgraph Lib["Hoshin.Workflow (Markdig + Gherkin only)"]
-        ENGINE["WorkflowEngine.Next(State) & Gate"]
-        RUNNER["WorkflowRunner & AllowListedCommandRunner<br/>(Detached Red/Green, Two-Phase Commits, Checks, Publish)"]
+        ENGINE["WorkflowEngine.Next(State) & Gate<br/>(Driven by ChangeStateService & ReadinessMap)"]
+        RUNNER["TaskEvaluator, BuildLogWriter & WorkflowEventBridge<br/>(Detached Red/Green, Two-Phase Commits, build/&lt;repo&gt;.md)"]
         DOCS["Document Readers & Validators<br/>(Intent, Gherkin Spec, Plan, BuildLog, Review, CrossChecker)"]
-        MIG["DocumentMigrator & YamlToJsoncConverter<br/>(Layout 1/2 YAML -> Layout 2 JSONC)"]
-        EVENTS["Lifecycle Events, Baselines & Ledger"]
+        EVENTS["EventRunner, HookConfigService & LedgerStore<br/>(build.start, task.done, build.finish, review.finish, change.done)"]
     end
 
     subgraph Store["Repository & Local State"]
         GIT["Git History & Working Tree"]
-        LEDGER[".git/hoshin/<br/>&lt;system&gt;/&lt;change&gt;/&lt;repo&gt;.json, step.json, run.json"]
+        LEDGER[".git/hoshin/<br/>&lt;system&gt;/&lt;change&gt;/&lt;repo&gt;.json, checks.jsonl, step.json, run.json"]
         WT[".git/hoshin/worktrees/red-check<br/>(Cached Detached Worktree)"]
     end
 
@@ -55,9 +54,10 @@ flowchart TB
 
     ORCH --> ENGINE & RUNNER
     GUARD -. "fast-path read" .-> LEDGER
-    CMDS --> DOCS & MIG & EVENTS
+    CMDS --> DOCS & EVENTS
     ENGINE --> DOCS
-    RUNNER --> GIT & LEDGER & WT
+    RUNNER --> GIT & EVENTS & WT
+    EVENTS --> GIT & LEDGER
 ```
 
 ### Design Invariants
@@ -165,7 +165,8 @@ sequenceDiagram
             Runner->>Git: Commit testFiles -> test(scope): title + Plan-Task + Generated-By
             Runner->>Git: Commit prodFiles -> feat/fix(scope): title + Plan-Task + Generated-By
             Runner->>Runner: Verify Green at committed HEAD
-            Runner->>Git: Record passing WorkflowVerdict in ledger
+            Runner->>Git: Append & commit build/&lt;repo&gt;.md entry (red: observed)
+            Runner->>Git: Record verdict & fire EventRunner task.done
         else Invalid Red (passed unexpectedly, timeout, or syntax error CS1002/SyntaxError)
             Runner->>Git: Record failed verdict (0 commits, working tree kept)
             Runner-->>Agent: Retry with diagnostic handoff
@@ -232,15 +233,15 @@ sequenceDiagram
 
     alt Claude Code
         Host->>Hook: hook subagent-stop (agent_id)
-        Hook->>Ledger: EvaluateAndCommitTask + clear ActiveSubagent
+        Hook->>Ledger: EvaluateAndCommitTask + build/&lt;repo&gt;.md + task.done event
         Host->>Hook: hook stop (background_tasks=[])
-        Hook-->>Host: decision="block" with T2 brief (or allow at NeedsApproval)
+        Hook-->>Host: decision="block" with T2 brief (or build.finish -> Review)
     else Google Antigravity
         Sub->>Hook: hook stop (subagent conversationId != run.sessionId)
         Hook-->>Sub: {} (ignored)
         Host->>Hook: hook stop (parent conversationId, fullyIdle=true)
-        Hook->>Ledger: EvaluateAndCommitTask + clear ActiveSubagent + RunChecks
-        Hook-->>Host: decision="continue" with verdict + T2 brief / NeedsApproval
+        Hook->>Ledger: EvaluateAndCommitTask + task.done + build.finish event (checks.jsonl)
+        Hook-->>Host: decision="continue" with verdict + T2 brief / Review / NeedsApproval
     end
 ```
 

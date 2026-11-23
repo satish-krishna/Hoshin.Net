@@ -58,6 +58,8 @@ public sealed class HoshinServices
     private readonly Lazy<BuildStartStep> _buildStartStep;
     private readonly Lazy<EventRunner> _eventRunner;
     private readonly Lazy<IAllowListedCommandRunner> _allowListedRunner;
+    private readonly Lazy<BuildLogWriter> _buildLogWriter;
+    private readonly Lazy<IWorkflowEventBridge> _workflowEventBridge;
     private readonly Lazy<ITaskEvaluator> _taskEvaluator;
     private readonly Lazy<ICheckRunner> _checkRunner;
     private readonly Lazy<IApprovalRecorder> _approvalRecorder;
@@ -118,6 +120,8 @@ public sealed class HoshinServices
     public BuildStartStep BuildStartStep => _buildStartStep.Value;
     public EventRunner EventRunner => _eventRunner.Value;
     public IAllowListedCommandRunner AllowListedRunner => _allowListedRunner.Value;
+    public BuildLogWriter BuildLogWriter => _buildLogWriter.Value;
+    public IWorkflowEventBridge WorkflowEventBridge => _workflowEventBridge.Value;
     public ITaskEvaluator TaskEvaluator => _taskEvaluator.Value;
     public ICheckRunner CheckRunner => _checkRunner.Value;
     public IApprovalRecorder ApprovalRecorder => _approvalRecorder.Value;
@@ -224,10 +228,12 @@ public sealed class HoshinServices
             ],
             TimeProvider));
         _allowListedRunner = new(() => new AllowListedCommandRunner());
-        _taskEvaluator = new(() => new TaskEvaluator(Git, Git, Git, Git, AllowListedRunner, TimeProvider));
-        _checkRunner = new(() => new CheckRunner(Git, AllowListedRunner, TimeProvider));
+        _buildLogWriter = new(() => new BuildLogWriter(FileSystem));
+        _workflowEventBridge = new(() => new WorkflowEventBridge(EventContext, EventRunner, FileSystem));
+        _taskEvaluator = new(() => new TaskEvaluator(Git, Git, Git, Git, AllowListedRunner, BuildLogWriter, WorkflowEventBridge, TimeProvider));
+        _checkRunner = new(() => new CheckRunner(Git, AllowListedRunner, WorkflowEventBridge, TimeProvider));
         _approvalRecorder = new(() => new ApprovalRecorder(TimeProvider));
-        _publisher = new(() => new Publisher(Git, Git, Git, PullRequests, TimeProvider));
+        _publisher = new(() => new Publisher(Git, Git, Git, PullRequests, WorkflowEventBridge, TimeProvider));
         _documentCommitter = new(() => new DocumentCommitter(
             Git,
             Git,
@@ -237,6 +243,7 @@ public sealed class HoshinServices
             ReviewReader,
             FrontMatterEdit,
             CrossChecker,
+            WorkflowEventBridge,
             FileSystem,
             TimeProvider));
         _workflowRunner = new(() => new WorkflowRunner(
@@ -260,6 +267,7 @@ public sealed class HoshinServices
             FileSystem,
             Ledger,
             WorkflowStateReader,
+            WorkflowEventBridge,
             TimeProvider));
     }
 }

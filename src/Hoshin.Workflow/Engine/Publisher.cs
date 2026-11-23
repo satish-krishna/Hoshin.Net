@@ -1,24 +1,40 @@
+using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
 
-/// <summary>Pushes approved changes via <see cref="IGitCommitter"/> and opens or reuses a pull request via <see cref="IPullRequestClient"/>.</summary>
+/// <summary>Pushes approved changes via <c>change.done</c> (<see cref="IWorkflowEventBridge"/>) in Hoshin workspaces, with direct push + PR fallback for standalone repos.</summary>
 public sealed class Publisher(
     IGitBranches gitBranches,
     IGitQuery gitQuery,
     IGitCommitter gitCommitter,
     IPullRequestClient pullRequests,
+    IWorkflowEventBridge eventBridge,
     TimeProvider timeProvider) : IPublisher
 {
     private readonly IGitBranches _gitBranches = gitBranches ?? throw new ArgumentNullException(nameof(gitBranches));
     private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
     private readonly IGitCommitter _gitCommitter = gitCommitter ?? throw new ArgumentNullException(nameof(gitCommitter));
     private readonly IPullRequestClient _pullRequests = pullRequests ?? throw new ArgumentNullException(nameof(pullRequests));
+    private readonly IWorkflowEventBridge _events = eventBridge ?? throw new ArgumentNullException(nameof(eventBridge));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = true)
     {
+        if (openPullRequest && _events.TryFire(repo, "change.done", repoOverride: "master") is { } outcome)
+        {
+            if (outcome.Outcome != "passed")
+            {
+                var detail = WorkflowEventBridge.FormatOutcome(outcome);
+                return new WorkflowPublishResult(null, string.IsNullOrWhiteSpace(detail) ? $"change.done {outcome.Outcome}" : detail);
+            }
+
+            var eventPrUrl = ExtractPullRequestUrl(outcome.Details);
+            var eventPublished = new WorkflowPublished(state.EffectiveCodeHead, targetRef, _time.GetUtcNow(), eventPrUrl);
+            repo.UpdateLedger(l => l with { Published = new List<WorkflowPublished>(l.WorkflowPublishedRecords) { eventPublished } });
+            return new WorkflowPublishResult(eventPublished, null);
+        }
         var remote = _gitBranches.UpstreamRemote(repo.Root) ?? "origin";
         var push = _gitCommitter.Push(repo.Root, remote, $"HEAD:{targetRef}");
         if (!push.Ok)
@@ -76,5 +92,16 @@ public sealed class Publisher(
         {
             return (null, $"opening pull request failed: {e.Message}");
         }
+    }
+
+    private static string? ExtractPullRequestUrl(Dictionary<string, object?> details)
+    {
+        if (!details.TryGetValue("pullRequests", out var raw) || raw is not IEnumerable<PullRequestRecord> prs)
+        {
+            return null;
+        }
+
+        var list = prs.ToList();
+        return list.FirstOrDefault(p => p.Repo == "master")?.Url ?? list.FirstOrDefault()?.Url;
     }
 }

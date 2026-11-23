@@ -70,6 +70,7 @@ internal static class TestServices
             ReviewReader,
             FrontMatterEdit,
             CrossChecker,
+            Default.WorkflowEventBridge,
             FileSystem,
             timeProvider ?? Time);
 
@@ -95,6 +96,7 @@ internal static class TestServices
             FileSystem,
             ledger,
             WorkflowStateReader,
+            Default.WorkflowEventBridge,
             timeProvider ?? Time);
     }
 

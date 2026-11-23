@@ -15,6 +15,7 @@ public sealed class DocumentCommitter(
     ReviewReader reviewReader,
     FrontMatterEdit frontMatterEdit,
     CrossChecker crossChecker,
+    IWorkflowEventBridge eventBridge,
     IFileSystem fileSystem,
     TimeProvider timeProvider) : IDocumentCommitter
 {
@@ -26,6 +27,7 @@ public sealed class DocumentCommitter(
     private readonly ReviewReader _reviewReader = reviewReader ?? throw new ArgumentNullException(nameof(reviewReader));
     private readonly FrontMatterEdit _frontMatterEdit = frontMatterEdit ?? throw new ArgumentNullException(nameof(frontMatterEdit));
     private readonly CrossChecker _crossChecker = crossChecker ?? throw new ArgumentNullException(nameof(crossChecker));
+    private readonly IWorkflowEventBridge _events = eventBridge ?? throw new ArgumentNullException(nameof(eventBridge));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -107,6 +109,7 @@ public sealed class DocumentCommitter(
         var highCount = latest?.Findings.Count(f => string.Equals(f.Severity, "high", StringComparison.OrdinalIgnoreCase)) ?? 0;
         var reviewRun = new WorkflowReviewRun(codeHead, reviewNum, findingsCount, highCount, _time.GetUtcNow());
         repo.UpdateLedger(l => l with { Reviews = new List<WorkflowReviewRun>(l.WorkflowReviews) { reviewRun } });
+        _events.TryFire(repo, "review.finish", repoOverride: "master");
 
         return ([], commit.Sha);
     }

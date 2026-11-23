@@ -178,11 +178,14 @@ public static class WorkflowBriefs
         var reviewRel = RelativePath(state.RepoRoot, reviewPath);
         var nextNum = state.Ledger.WorkflowReviews.Count + 1;
         var shortHead = WorkflowEngine.Short(state.EffectiveCodeHead);
+        var commitSummary = state.ChangeState?.Apps is { Count: > 0 } apps
+            ? string.Join(", ", apps.Where(kv => !string.IsNullOrEmpty(kv.Value.Head)).Select(kv => $"`{kv.Key}`: `{WorkflowEngine.Short(kv.Value.Head!)}`"))
+            : $"head `{shortHead}`";
 
         var b = new StringBuilder();
         b.AppendLine(CultureInfo.InvariantCulture, $"# Review for change {state.Plan.Change} (Review {nextNum})");
         b.AppendLine();
-        b.AppendLine(CultureInfo.InvariantCulture, $"Write the review section to `{reviewRel}` in {state.RepoRoot} (head `{shortHead}`).");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Write the review section to `{reviewRel}` in {state.RepoRoot} ({commitSummary}).");
         b.AppendLine();
         b.AppendLine("Start a new file on line 1 with a fenced `jsonc` front matter block `{ \"layout\": 2 }`, then `# Review findings`, then `## Review " + nextNum + "` with a fenced `jsonc` header (`review`, `reviewed_at`, `commits`) and `### F<n>` findings (`id`, `severity`, `concern`, `file`, `line`, plus `rule` for every `convention` finding).");
         b.AppendLine();

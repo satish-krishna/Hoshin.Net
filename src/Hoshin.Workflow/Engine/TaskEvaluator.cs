@@ -10,6 +10,8 @@ public sealed class TaskEvaluator(
     IGitWorktrees gitWorktrees,
     IGitCommitter gitCommitter,
     IAllowListedCommandRunner testRunner,
+    BuildLogWriter buildLogWriter,
+    IWorkflowEventBridge eventBridge,
     TimeProvider timeProvider) : ITaskEvaluator
 {
     private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
@@ -17,6 +19,8 @@ public sealed class TaskEvaluator(
     private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
     private readonly IGitCommitter _gitCommitter = gitCommitter ?? throw new ArgumentNullException(nameof(gitCommitter));
     private readonly IAllowListedCommandRunner _runner = testRunner ?? throw new ArgumentNullException(nameof(testRunner));
+    private readonly BuildLogWriter _buildLog = buildLogWriter ?? throw new ArgumentNullException(nameof(buildLogWriter));
+    private readonly IWorkflowEventBridge _events = eventBridge ?? throw new ArgumentNullException(nameof(eventBridge));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly IReadOnlyList<ITaskVerdictPolicy> _verdictPolicies = [new NoTestPolicy(), new RedGreenPolicy()];
 
@@ -97,7 +101,7 @@ public sealed class TaskEvaluator(
 
         if (ValidatePreConditions(repo, liveLedger, task, attempt, startHead, now, out var changed) is { } earlyFail)
         {
-            return RecordVerdict(repo, task, earlyFail);
+            return RecordVerdict(repo, task, earlyFail, appendSyntheticRun: true);
         }
 
         var policy = _verdictPolicies.First(p => p.AppliesTo(task));
@@ -112,7 +116,41 @@ public sealed class TaskEvaluator(
             _gitCommitter,
             _runner,
             now));
-        return RecordVerdict(repo, task, verdict);
+
+        if (!verdict.Passed)
+        {
+            return RecordVerdict(repo, task, verdict, appendSyntheticRun: true);
+        }
+
+        var isWorkspace = _events.IsWorkspaceRepo(repo);
+        if (isWorkspace)
+        {
+            verdict = CommitBuildLogEntry(repo, state, task, verdict);
+        }
+
+        RecordVerdict(repo, task, verdict, appendSyntheticRun: !isWorkspace);
+        if (isWorkspace)
+        {
+            _events.TryFire(repo, "task.done", new Dictionary<string, string>(StringComparer.Ordinal) { ["task"] = task.Id });
+        }
+
+        return verdict;
+    }
+
+    private WorkflowVerdict CommitBuildLogEntry(WorkflowRepo repo, WorkflowState state, WorkflowTask task, WorkflowVerdict verdict)
+    {
+        var commits = string.IsNullOrEmpty(verdict.TestCommit)
+            ? new[] { verdict.Head }
+            : [verdict.TestCommit, verdict.Head];
+        var logPath = _buildLog.AppendEntry(repo.ChangeFolder, repo.RepoKey, task.Id, commits, BuildLogWriter.RedValueFor(task));
+        var logRel = Path.GetRelativePath(repo.Root, logPath).Replace('\\', '/');
+        var logCommit = _gitCommitter.CommitPaths(
+            repo.Root,
+            [logRel],
+            [$"docs({state.Plan.Scope}): log {task.Id} {state.Plan.Change}", "Generated-By: hoshin"]);
+        return logCommit.Ok && !string.IsNullOrEmpty(logCommit.Sha)
+            ? verdict with { Head = logCommit.Sha }
+            : verdict;
     }
 
     private void IssueTaskStep(WorkflowRepo repo, WorkflowState state, Step step, string? sessionId)
@@ -246,7 +284,7 @@ public sealed class TaskEvaluator(
         _ => null,
     };
 
-    private static WorkflowVerdict RecordVerdict(WorkflowRepo repo, WorkflowTask task, WorkflowVerdict verdict)
+    private static WorkflowVerdict RecordVerdict(WorkflowRepo repo, WorkflowTask task, WorkflowVerdict verdict, bool appendSyntheticRun)
     {
         repo.UpdateLedger(ledger =>
         {
@@ -273,6 +311,12 @@ public sealed class TaskEvaluator(
                 };
             }
 
+            var updated = ledger with { Verdicts = verdicts, Reds = reds };
+            if (!appendSyntheticRun)
+            {
+                return updated;
+            }
+
             var details = new Dictionary<string, object?>(StringComparer.Ordinal)
             {
                 ["attempt"] = verdict.Attempt,
@@ -295,7 +339,7 @@ public sealed class TaskEvaluator(
                 Failed: null,
                 Details: details);
 
-            return LedgerStore.AppendRun(ledger with { Verdicts = verdicts, Reds = reds }, run);
+            return LedgerStore.AppendRun(updated, run);
         });
         return verdict;
     }

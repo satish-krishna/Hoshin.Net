@@ -31,7 +31,7 @@ public sealed class TaskEvaluatorFakeGitTests
         var missingDoc = new WorkflowDocState(Path.Combine(changeDir, "intent.md"), false, false, false, null, null);
         var state = new WorkflowState(repoRoot, changeDir, plan, fakeGit.HeadSha, Hoshin.Workflow.Events.LedgerStore.Empty(), null, missingDoc, missingDoc, missingDoc);
 
-        var evaluator = new TaskEvaluator(fakeGit, fakeGit, fakeGit, fakeGit, fakeRunner, TimeProvider.System);
+        var evaluator = new TaskEvaluator(fakeGit, fakeGit, fakeGit, fakeGit, fakeRunner, new BuildLogWriter(fs), new NullWorkflowEventBridge(), TimeProvider.System);
         var verdict = evaluator.EvaluateAndCommitTask(repo, state, "T1", 1);
 
         Assert.True(verdict.Passed, string.Join("; ", verdict.Reasons));
