@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
@@ -29,10 +30,8 @@ public interface IPullRequestClient
 }
 
 /// <summary>Default <see cref="IPullRequestClient"/> backed by the <c>gh</c> CLI (or <c>HOSHIN_GH</c> JSON argv).</summary>
-public sealed class GhPullRequestClient(ICommandRunner? runner = null) : IPullRequestClient
+public sealed class GhPullRequestClient(ICommandRunner runner) : IPullRequestClient
 {
-    public static GhPullRequestClient Default { get; } = new();
-
     private static readonly Dictionary<string, string> GhEnv = new(StringComparer.Ordinal)
     {
         ["GH_PROMPT_DISABLED"] = "1",
@@ -42,9 +41,9 @@ public sealed class GhPullRequestClient(ICommandRunner? runner = null) : IPullRe
     private static readonly Regex ScpHost = new(@"^[\w.-]+@([\w.-]+):", RegexOptions.Compiled);
     private static readonly Regex PullNumber = new(@"/pull/(\d+)", RegexOptions.Compiled);
 
-    private readonly ICommandRunner _runner = runner ?? ProcessCommandRunner.Default;
+    private readonly ICommandRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
 
-    private IReadOnlyList<string> GhCommand()
+    private static string[] GhCommand()
     {
         var value = Environment.GetEnvironmentVariable("HOSHIN_GH");
         if (string.IsNullOrEmpty(value))
@@ -72,10 +71,10 @@ public sealed class GhPullRequestClient(ICommandRunner? runner = null) : IPullRe
         throw new CouldNotRunException("HOSHIN_GH must be a JSON list of the gh program and its arguments, as non-empty strings");
     }
 
-    private (bool Ok, string Stdout, string Stderr) RunGh(string cwd, IReadOnlyList<string> args)
+    private (bool Ok, string Stdout, string Stderr) RunGh(string cwd, List<string> args)
     {
         var cmd = GhCommand();
-        var argv = new List<string>(cmd.Count + args.Count);
+        var argv = new List<string>(cmd.Length + args.Count);
         argv.AddRange(cmd);
         argv.AddRange(args);
         var r = _runner.Run(new CommandRequest(cwd, argv, ExtraEnvironment: GhEnv));
@@ -156,7 +155,7 @@ public sealed class GhPullRequestClient(ICommandRunner? runner = null) : IPullRe
         var m = PullNumber.Match(url);
         if ((url.StartsWith("http://", StringComparison.Ordinal) || url.StartsWith("https://", StringComparison.Ordinal)) && m.Success)
         {
-            return new OpenPullRequestResult(new PullRequestRef(url, int.Parse(m.Groups[1].Value)), null);
+            return new OpenPullRequestResult(new PullRequestRef(url, int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)), null);
         }
 
         return new OpenPullRequestResult(null, $"gh printed no pull request address: {stdout.Trim()}");

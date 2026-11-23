@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Git;
 using Hoshin.Workflow.Workspace;
@@ -7,18 +8,17 @@ namespace Hoshin.Workflow.Changes;
 public sealed record LocatedChange(string Master, string System);
 
 /// <summary>Locates changes, copies, and system repositories across a workspace.</summary>
-public sealed class ChangeLocator(IGitClient? git = null, AppService? apps = null)
+public sealed class ChangeLocator(IGitClient git, AppService apps, MarkerReader markerReader)
 {
-    public static ChangeLocator Default { get; } = new();
-
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly AppService _apps = apps ?? new AppService(git);
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
 
     public static string CopiesFolder(string workspace) => Path.Combine(workspace, ".hoshin", "copies");
 
     public List<string> SystemRepos(string master, string workspace, string system)
     {
-        var marker = MarkerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName));
+        var marker = _markerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName));
         if (!marker.Systems.TryGetValue(system, out var entry))
         {
             throw new CouldNotRunException($"the marker lists no system {system}");
@@ -45,6 +45,7 @@ public sealed class ChangeLocator(IGitClient? git = null, AppService? apps = nul
             .ToList();
     }
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public List<string> ChangeHolders(string master, string workspace, string change)
     {
         var own = Path.Combine(CopiesFolder(workspace), change);
@@ -65,6 +66,7 @@ public sealed class ChangeLocator(IGitClient? git = null, AppService? apps = nul
         return holders;
     }
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public List<string> SystemsHolding(string master, string change)
     {
         var intent = Path.Combine(master, "intent");
@@ -115,7 +117,7 @@ public sealed class ChangeLocator(IGitClient? git = null, AppService? apps = nul
         }
         catch (CouldNotRunException)
         {
-            var names = MarkerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.Keys
+            var names = _markerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.Keys
                 .Where(s => system is null || s == system)
                 .ToList();
             foreach (var holder in ChangeHolders(master, workspace, change))

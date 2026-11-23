@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
@@ -7,7 +8,7 @@ namespace Hoshin.Workflow.Documents;
 /// <summary>Checks an <c>intent.md</c> document: line-1 JSONC front matter fields, required sections, and no leftover template placeholders.</summary>
 public sealed class IntentReader
 {
-    public static readonly string[] RequiredSections =
+    public static readonly string[] RequiredHeadings =
     [
         "## Problem",
         "## Proposed outcome",
@@ -22,6 +23,8 @@ public sealed class IntentReader
     private static readonly Regex InlineCode = new("`[^`]*`", RegexOptions.Compiled);
     private static readonly Regex TemplatePlaceholder = new("<[a-z][^>]*>", RegexOptions.Compiled);
 
+    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected document reader service.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public List<Problem> Check(string text, string file, string? expectedScope = null)
     {
         var problems = new List<Problem>();
@@ -70,7 +73,7 @@ public sealed class IntentReader
         }
 
         var last = -1;
-        foreach (var section in RequiredSections)
+        foreach (var section in RequiredHeadings)
         {
             var at = Enumerable.Range(0, doc.Lines.Length)
                 .FirstOrDefault(i => doc.Heading[i] && doc.Lines[i].TrimEnd() == section, -1);

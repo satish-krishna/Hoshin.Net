@@ -1,0 +1,10 @@
+{
+  "hookEventName": "PreInvocation",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "invocationNum": 0,
+  "lastUserInput": "/build"
+}

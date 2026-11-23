@@ -1,0 +1,16 @@
+{
+  "hookEventName": "PreToolUse",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "toolCall": {
+    "id": "call-run-0001",
+    "name": "run_command",
+    "args": {
+      "CommandLine": "git status",
+      "WaitMsBeforeAsync": 5000
+    }
+  }
+}

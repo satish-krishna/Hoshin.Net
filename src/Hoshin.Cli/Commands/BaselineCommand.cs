@@ -5,8 +5,17 @@ using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class BaselineCommand(HoshinServices services) : IHoshinCommand
+public sealed class BaselineCommand(
+    EventContextFactory eventContext,
+    BaselineTaker baselineTaker,
+    HookConfigService hookConfig,
+    BaselineApprovals baselineApprovals) : IHoshinCommand
 {
+    private readonly EventContextFactory _eventContext = eventContext ?? throw new ArgumentNullException(nameof(eventContext));
+    private readonly BaselineTaker _baselineTaker = baselineTaker ?? throw new ArgumentNullException(nameof(baselineTaker));
+    private readonly HookConfigService _hookConfig = hookConfig ?? throw new ArgumentNullException(nameof(hookConfig));
+    private readonly BaselineApprovals _baselineApprovals = baselineApprovals ?? throw new ArgumentNullException(nameof(baselineApprovals));
+
     public string Name => "baseline";
     public string Usage => "baseline show|retake|approve --json --change c --repo r [--hook id] [--system s] [--master p] [--workspace p]";
 
@@ -26,13 +35,13 @@ public sealed class BaselineCommand(HoshinServices services) : IHoshinCommand
             throw new UsageException();
         }
 
-        var ctx = services.EventContext.Build(
+        var ctx = _eventContext.Build(
             Directory.GetCurrentDirectory(),
             new EventContextArgs("build.finish", o.Get("change")!, o.Get("system"), o.Get("repo")!, new ResolveOptions(o.Get("master"), o.Get("workspace")), new Dictionary<string, string>()),
-            services.BaselineTaker.RecoverInterrupted);
+            _baselineTaker.RecoverInterrupted);
         ctx.CheckProblems = [];
 
-        var config = services.HookConfig.ReadFromBaseBranch(ctx.Master, ctx.System);
+        var config = _hookConfig.ReadFromBaseBranch(ctx.Master, ctx.System);
         if (config.Problems.Count > 0)
         {
             return PrintTaken(null, new TakenBaseline(null, null, false, "could-not-run", config.Problems.Select(p => $"the hook configuration on the base branch: {p}").ToList()));
@@ -40,8 +49,8 @@ public sealed class BaselineCommand(HoshinServices services) : IHoshinCommand
 
         if (verb == "approve")
         {
-            var stored = services.BaselineTaker.Stored(ctx, config);
-            var problems = stored.Problems.Count > 0 ? stored.Problems : services.BaselineApprovals.Approve(ctx, stored.Entry, hookId!);
+            var stored = _baselineTaker.Stored(ctx, config);
+            var problems = stored.Problems.Count > 0 ? stored.Problems : _baselineApprovals.Approve(ctx, stored.Entry, hookId!);
             CliIo.PrintJson(new
             {
                 approved = problems.Count == 0 && stored.Base is not null ? new { hook = hookId, @base = stored.Base } : null,
@@ -51,8 +60,8 @@ public sealed class BaselineCommand(HoshinServices services) : IHoshinCommand
         }
 
         var taken = verb == "retake"
-            ? await services.BaselineTaker.TakeAsync(ctx, config, retake: true).ConfigureAwait(false)
-            : services.BaselineTaker.Stored(ctx, config);
+            ? await _baselineTaker.TakeAsync(ctx, config, retake: true).ConfigureAwait(false)
+            : _baselineTaker.Stored(ctx, config);
         return PrintTaken(ctx, taken, ctx.CheckProblems);
     }
 
@@ -60,7 +69,7 @@ public sealed class BaselineCommand(HoshinServices services) : IHoshinCommand
     {
         var hooks = taken.Entry?.Hooks ?? [];
         var approved = ctx is not null && taken.Base is not null
-            ? BaselineApprovals.ApprovedHooks(services.BaselineApprovals.LedgerOf(ctx), taken.Base)
+            ? BaselineApprovals.ApprovedHooks(_baselineApprovals.LedgerOf(ctx), taken.Base)
             : [];
         var needed = taken.Entry is not null ? BaselineApprovals.NeedsApproval(taken.Entry, approved) : [];
         var allProblems = taken.Problems.Concat(extra ?? []).ToList();

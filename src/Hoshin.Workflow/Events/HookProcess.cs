@@ -5,13 +5,11 @@ namespace Hoshin.Workflow.Events;
 public sealed record HookProcessResult(string Outcome, int? ExitCode, string Output, List<string>? Ids);
 
 /// <summary>Executes a single hook or test process with timeout, process-tree kill, tailed output, and failure-ID parsing.</summary>
-public sealed class HookProcessRunner(ICommandRunner? runner = null)
+public sealed class HookProcessRunner(ICommandRunner runner)
 {
-    public static HookProcessRunner Default { get; } = new();
-
     private const int KeepLines = 200;
 
-    private readonly ICommandRunner _runner = runner ?? ProcessCommandRunner.Default;
+    private readonly ICommandRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
 
     public static List<string>? ReadFailureIds(string file)
     {
@@ -60,7 +58,7 @@ public sealed class HookProcessRunner(ICommandRunner? runner = null)
             cwd,
             argv,
             StandardInput: input,
-            ExtraEnvironment: env,
+            ExtraEnvironment: env is null ? null : new Dictionary<string, string>(env, StringComparer.Ordinal),
             Timeout: TimeSpan.FromSeconds(timeoutSeconds))).ConfigureAwait(false);
 
         if (!outcome.Started)

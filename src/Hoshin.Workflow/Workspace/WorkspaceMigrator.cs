@@ -19,23 +19,30 @@ public sealed record MigrateResult(
     List<string> Problems);
 
 /// <summary>Migrates a workspace from legacy <c>ai-sdlc</c> names to <c>hoshin</c> names and rewrites legacy YAML documents / <c>change.yml</c> to Layout 2 JSONC (idempotent, dry-run by default).</summary>
-public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver? resolver = null, IDocumentMigrator? documentMigrator = null)
+public sealed class WorkspaceMigrator(
+    IGitClient git,
+    IWorkspaceResolver resolver,
+    IDocumentMigrator documentMigrator,
+    MarkerReader markerReader,
+    ScopeRules scopeRules)
 {
-    public static WorkspaceMigrator Default { get; } = new();
-
     private const string OldState = "ai-sdlc";
     private const string NewState = "hoshin";
     private const string OldStart = "<!-- ai-sdlc:start -->";
     private const string OldEnd = "<!-- ai-sdlc:end -->";
     private const string RerunSetup = "run the hoshin setup skill with `--instructions` to write the new block, then delete the old block between the `ai-sdlc` markers";
+    private static readonly string[] MergeOrRebaseFiles = ["MERGE_HEAD", "rebase-merge", "rebase-apply"];
     private static readonly Regex LineSplitWithNewline = new(@"(?<=\n)", RegexOptions.Compiled);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly IWorkspaceResolver _resolver = resolver ?? new WorkspaceResolver(git);
-    private readonly IDocumentMigrator _documents = documentMigrator ?? DocumentMigrator.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly IDocumentMigrator _documents = documentMigrator ?? throw new ArgumentNullException(nameof(documentMigrator));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
+    private readonly ScopeRules _scopeRules = scopeRules ?? throw new ArgumentNullException(nameof(scopeRules));
 
     private sealed record PlannedStep(MigrateStep Step, Func<string?>? Act, string? Branch = null);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public MigrateResult Migrate(string cwd, ResolveOptions options, bool write)
     {
         var resolved = _resolver.Resolve(cwd, options, MarkerConstants.AnyMarkers);
@@ -54,9 +61,9 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
         }
 
         var main = PathHelpers.RealPath(wts[0].Path);
-        var markerFile = MarkerReader.MarkerFileIn(main, MarkerConstants.AnyMarkers)
-            ?? MarkerReader.MarkerFileIn(master, MarkerConstants.AnyMarkers)!;
-        var marker = MarkerReader.ReadMarker(markerFile);
+        var markerFile = _markerReader.MarkerFileIn(main, MarkerConstants.AnyMarkers)
+            ?? _markerReader.MarkerFileIn(master, MarkerConstants.AnyMarkers)!;
+        var marker = _markerReader.ReadMarker(markerFile);
 
         var (groups, moving) = Plan(workspace, master, main, marker);
         var planned = groups.SelectMany(g => g).ToList();
@@ -134,6 +141,7 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
         return new MigrateResult(workspace, master, layout, write, steps, kept, manual, problems);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private (List<List<PlannedStep>> Groups, List<string> Moving) Plan(string workspace, string master, string main, Marker marker)
     {
         var oldCopies = Path.Combine(workspace, ".ai-sdlc", "copies");
@@ -264,7 +272,7 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
             why.Add("the index has staged changes");
         }
 
-        var midway = new[] { "MERGE_HEAD", "rebase-merge", "rebase-apply" }.Any(name =>
+        var midway = MergeOrRebaseFiles.Any(name =>
         {
             var gp = _git.Out(dir, ["rev-parse", "--git-path", name]) ?? name;
             var full = Path.IsPathRooted(gp) ? gp : Path.Combine(dir, gp);
@@ -285,7 +293,7 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
 
     private string MarkerScope(string dir, string? copyName)
     {
-        var systems = MarkerReader.ReadMarker(MarkerReader.MarkerFileIn(dir, MarkerConstants.AnyMarkers)!).Systems.Keys.ToList();
+        var systems = _markerReader.ReadMarker(_markerReader.MarkerFileIn(dir, MarkerConstants.AnyMarkers)!).Systems.Keys.ToList();
         if (copyName is not null)
         {
             foreach (var system in systems)
@@ -293,12 +301,12 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
                 var folder = Path.Combine(dir, "intent", system, copyName);
                 if (Directory.Exists(folder))
                 {
-                    return ScopeRules.ChangeScope(dir, system, folder, MarkerConstants.AnyMarkers);
+                    return _scopeRules.ChangeScope(dir, system, folder, MarkerConstants.AnyMarkers);
                 }
             }
         }
 
-        return ScopeRules.SystemScope(dir, systems[0], MarkerConstants.AnyMarkers);
+        return _scopeRules.SystemScope(dir, systems[0], MarkerConstants.AnyMarkers);
     }
 
     private PlannedStep MarkerStep(string dir, string? branch, string? copyName)

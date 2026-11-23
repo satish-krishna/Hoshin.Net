@@ -7,19 +7,23 @@ namespace Hoshin.Workflow.Events.Steps;
 
 /// <summary><c>build.finish</c>: verifies all tasks logged and commit rules, then judges checks against baseline.</summary>
 public sealed class BuildFinishStep(
-    IGitClient? git = null,
-    ProgressService? progress = null,
-    AppService? apps = null,
-    EventContextFactory? contextFactory = null,
-    BaselineTaker? baselineTaker = null,
-    BaselineApprovals? approvals = null) : IEventStep
+    IGitClient git,
+    ProgressService progress,
+    AppService apps,
+    EventContextFactory contextFactory,
+    BaselineTaker baselineTaker,
+    BaselineApprovals approvals,
+    ChangeRecordStore changeRecords,
+    ScopeRules scopeRules) : IEventStep
 {
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly ProgressService _progress = progress ?? ProgressService.Default;
-    private readonly AppService _apps = apps ?? new AppService(git);
-    private readonly EventContextFactory _contextFactory = contextFactory ?? new EventContextFactory(git);
-    private readonly BaselineTaker _baselineTaker = baselineTaker ?? new BaselineTaker(git);
-    private readonly BaselineApprovals _approvals = approvals ?? BaselineApprovals.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly ProgressService _progress = progress ?? throw new ArgumentNullException(nameof(progress));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly EventContextFactory _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+    private readonly BaselineTaker _baselineTaker = baselineTaker ?? throw new ArgumentNullException(nameof(baselineTaker));
+    private readonly BaselineApprovals _approvals = approvals ?? throw new ArgumentNullException(nameof(approvals));
+    private readonly ChangeRecordStore _changeRecords = changeRecords ?? throw new ArgumentNullException(nameof(changeRecords));
+    private readonly ScopeRules _scopeRules = scopeRules ?? throw new ArgumentNullException(nameof(scopeRules));
 
     public string EventName => "build.finish";
     public bool ReusePassed => true;
@@ -46,7 +50,7 @@ public sealed class BuildFinishStep(
             return Task.FromResult(new List<string> { $"{ctx.Repo} still has tasks without a build log entry: {string.Join(", ", missing)}" });
         }
 
-        var branch = ChangeRecordStore.BranchOf(ctx.Folder);
+        var branch = _changeRecords.BranchOf(ctx.Folder);
         if (ctx.Branch != branch)
         {
             return Task.FromResult(new List<string> { $"{ctx.Repo} is on {ctx.Branch ?? "a detached HEAD"}, not on the change's branch {branch}" });
@@ -59,7 +63,7 @@ public sealed class BuildFinishStep(
 
         var broken = ScopeRules.CommitRuleProblems(
             _git.CommitsBeyondBase(ctx.Root, "HEAD", ctx.Base),
-            ScopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder));
+            _scopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder));
         if (broken.Count > 0)
         {
             return Task.FromResult(new List<string> { $"commits on {branch} break the commit rules (references/workspace.md, section 8): {string.Join("; ", broken)}" });
@@ -159,6 +163,6 @@ public sealed class BuildFinishStep(
             return new HookVerdict(true);
         }
 
-        return new StepResult([], new Dictionary<string, object?> { ["baseline"] = summary }, Judge: Judge);
+        return new StepResult([], new Dictionary<string, object?> { ["baseline"] = summary }) { Judge = Judge };
     }
 }

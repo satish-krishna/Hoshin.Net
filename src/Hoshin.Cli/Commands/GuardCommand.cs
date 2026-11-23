@@ -4,6 +4,8 @@ using System.Text.RegularExpressions;
 using Hoshin.Cli.Hooks;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Events;
+using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Commands;
 
@@ -13,18 +15,31 @@ namespace Hoshin.Cli.Commands;
 /// <c>.git/hoshin/run.json</c> + <c>step.json</c> (never recomputes <see cref="WorkflowState"/> and never locks out
 /// unrelated sessions). Always exits <c>0</c> and logs errors to <c>stderr</c>.
 /// </summary>
-public sealed class GuardCommand : IHoshinCommand
+public sealed class GuardCommand(
+    HarnessAdapter adapter,
+    IGitWorktrees gitWorktrees,
+    IGitQuery gitQuery,
+    IGitStatus gitStatus,
+    IFileSystem fileSystem,
+    LedgerStore ledgerStore,
+    TimeProvider timeProvider) : IHoshinCommand
 {
-    private const string GitPrefix = @"\bgit\s+(?:(?:-C|-c)\s+\S+\s+|--?[\w-]+(?:=\S+)?\s+)*";
-    private static readonly TimeSpan StaleStepWindow = TimeSpan.FromHours(24);
-    private static readonly StringComparison PathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    private readonly HarnessAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+    private readonly LedgerStore _ledgerStore = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
+    private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
+    private const string GitPrefix = @"\bgit\s+(?:(?:(?:-C|-c|--git-dir|--work-tree|--namespace)(?:=\S+|\s+\S+)|--?[\w-]+(?:=\S+)?)\s+)*";
 
     private static readonly (Regex Pattern, string What)[] Protected =
     [
-        (new Regex(@"(^|[\\/\s'""=])\.hoshin\.json\b", RegexOptions.Compiled), "the marker, .hoshin.json, which holds the hooks for every system"),
-        (new Regex(@"(^|[\\/\s'""=])intent[\\/]hooks([\\/]|\b)", RegexOptions.Compiled), "the global hook scripts in intent/hooks/"),
-        (new Regex(@"(^|[\\/\s'""=])intent[\\/][^\\/\s'""]+[\\/]hooks(\.json\b|[\\/])", RegexOptions.Compiled), "a system's hooks (intent/<system>/hooks.json or hooks/)"),
-        (new Regex(@"(^|[\\/\s'""=])intent[\\/][^\\/\s'""]+[\\/][^\\/\s'""]+[\\/]change\.(jsonc|yml)\b", RegexOptions.Compiled), "a change's record, change.jsonc, which only the hoshin program writes"),
+        (new Regex(@"(^|[\\/\s'""=>|])\.hoshin\.json\b", RegexOptions.Compiled), "the marker, .hoshin.json, which holds the hooks for every system"),
+        (new Regex(@"(^|[\\/\s'""=>|])intent[\\/]hooks([\\/]|\b)", RegexOptions.Compiled), "the global hook scripts in intent/hooks/"),
+        (new Regex(@"(^|[\\/\s'""=>|])intent[\\/][^\\/\s'""]+[\\/]hooks(\.json\b|[\\/])", RegexOptions.Compiled), "a system's hooks (intent/<system>/hooks.json or hooks/)"),
+        (new Regex(@"(^|[\\/\s'""=>|])intent[\\/][^\\/\s'""]+[\\/][^\\/\s'""]+[\\/]change\.(jsonc|yml)\b", RegexOptions.Compiled), "a change's record, change.jsonc, which only the hoshin program writes"),
         (new Regex(@"[\\/]hoshin[\\/][^\s'""]*\.jsonl?\b", RegexOptions.Compiled), "the hoshin ledger, build records and check events in the git folder"),
     ];
 
@@ -35,9 +50,10 @@ public sealed class GuardCommand : IHoshinCommand
     private static readonly (Regex Pattern, string Why)[] Rules =
     [
         (new Regex(GitPrefix + @"push\b", RegexOptions.Compiled), "Pushing happens only in the change.done event, after its checks: run the hoshin done skill."),
+        (new Regex(@"\bgit\b[^|;&\n]*(?:-c\s+['""]?alias\.|\bconfig\b[^|;&\n]*\balias\.)", RegexOptions.Compiled | RegexOptions.IgnoreCase), "Git aliases cannot be defined or invoked inline during a hoshin run."),
         (new Regex(@"\bgh\s+pr\s+(create|merge|edit|close|reopen|ready|review|comment)\b", RegexOptions.Compiled), "Pull requests are opened only by the change.done event, after its checks: run the hoshin done skill."),
         (new Regex(@"\bgh\s+api\b[^|;&\n]*(-X|--method)\s*['""]?(POST|PUT|PATCH|DELETE)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase), "GitHub is changed only by the change.done event: run the hoshin done skill."),
-        (new Regex(@"\bgit\b[^|;&\n]*\s--no-verify\b|" + GitPrefix + @"(?:commit|merge|am)\b(?:\s+-[a-zA-Z]+)*\s+-[a-zA-Z]*n\b|core\.hooksPath", RegexOptions.Compiled), "A repository's own git hooks always run: commit without --no-verify, and fix what they report."),
+        (new Regex(@"\bgit\b[^|;&\n]*\s--no-verify\b|" + GitPrefix + @"(?:commit|merge|am)\b[^|;&\n]*\s+-[a-zA-Z]*n\b|core\.hooksPath", RegexOptions.Compiled), "A repository's own git hooks always run: commit without --no-verify, and fix what they report."),
         (new Regex(@"\bbaseline\s+(approve|retake)\b", RegexOptions.Compiled), "Only the engineer approves a check that already fails on the base, or retakes a baseline: show them the command and stop."),
     ];
 
@@ -48,12 +64,6 @@ public sealed class GuardCommand : IHoshinCommand
     private static readonly Regex ProtectedRunDirs = new(
         @"(^|[\\/\s'""=])(\.hoshin[\\/]|\.git[\\/]|\.agents[\\/]|\.claude-plugin[\\/])",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    private static readonly HashSet<string> EditTools =
-    [
-        "Edit", "Write", "MultiEdit", "NotebookEdit",
-        "write_file", "edit_file", "write_to_file", "replace_file_content", "multi_replace_file_content",
-    ];
 
     public string Name => "guard";
     public string Usage => "guard  (a Claude Code or Antigravity PreToolUse hook: reads the hook input on standard input)";
@@ -69,15 +79,17 @@ public sealed class GuardCommand : IHoshinCommand
                 return Task.FromResult(ExitCodes.Pass);
             }
 
-            var adapter = HarnessAdapter.Default;
-            var ev = adapter.Parse(raw);
+            var ev = _adapter.Parse(raw);
             var (repo, why) = Evaluate(ev);
 
             var output = why is null
-                ? adapter.AllowOutput(ev.Harness)
-                : adapter.DenyOutput(ev.Harness, why);
+                ? _adapter.AllowOutput(ev.Harness)
+                : _adapter.DenyOutput(ev.Harness, why);
             HarnessAdapter.WriteStdoutUtf8(output);
-            HarnessAdapter.AppendTrace(repo, "guard", ev, output, why is null ? "allow" : $"deny: {why}", clock);
+            if (repo is not null)
+            {
+                _adapter.AppendTrace(repo, "guard", ev, output, why is null ? "allow" : $"deny: {why}", clock);
+            }
         }
         catch (Exception e)
         {
@@ -87,45 +99,49 @@ public sealed class GuardCommand : IHoshinCommand
         return Task.FromResult(ExitCodes.Pass);
     }
 
-    public static (WorkflowRepo? Repo, string? Reason) Evaluate(NormalizedHookEvent ev)
-    {
-        // 1. Static rules (apply even when no active run marker exists, preserving GRAMMAR.md / gate.test.mjs contract).
-        var staticReason = StaticRefusal(ev);
-        if (staticReason is not null)
-        {
-            return (null, $"hoshin: {staticReason}");
-        }
+    public (WorkflowRepo? Repo, string? Reason) Evaluate(NormalizedHookEvent ev) =>
+        Evaluate(ev, _gitWorktrees, _gitQuery, _gitStatus, _fs, _ledgerStore, _time);
 
-        // 2. Fast-path step-aware & session-aware checks: read only run.json + step.json, never WorkflowState.
-        if (string.IsNullOrWhiteSpace(ev.Cwd))
+    public static (WorkflowRepo? Repo, string? Reason) Evaluate(
+        NormalizedHookEvent ev,
+        IGitWorktrees gitWorktrees,
+        IGitQuery gitQuery,
+        IGitStatus gitStatus,
+        IFileSystem fileSystem,
+        LedgerStore ledgerStore,
+        TimeProvider timeProvider)
+    {
+        // 1. Scope first (D2): guard applies only inside a repository with an active, non-stale hoshin run for this session.
+        var cwd = string.IsNullOrWhiteSpace(ev.Cwd) ? Directory.GetCurrentDirectory() : ev.Cwd;
+        var repo = WorkflowRepo.Find(cwd, gitWorktrees, gitQuery, gitStatus, fileSystem, ledgerStore);
+        if (repo is null || !fileSystem.FileExists(repo.RunMarkerPath))
         {
             return (null, null);
         }
 
-        var repo = WorkflowRepo.Find(ev.Cwd);
-        if (repo is null || !File.Exists(repo.RunMarkerPath))
+        if (!HookSessionScope.IsRunSession(repo, ev, timeProvider.GetUtcNow(), out _, out var step))
+        {
+            return (null, null);
+        }
+
+        // 2. Static rules apply to every tool call in the active run and are traced against repo.
+        var staticReason = StaticRefusal(ev, repo);
+        if (staticReason is not null)
+        {
+            return (repo, $"hoshin: {staticReason}");
+        }
+
+        if (step is null)
         {
             return (repo, null);
         }
 
-        var marker = repo.ReadRunMarker();
-        var step = repo.ReadStep();
-        if (marker is null || step is null)
-        {
-            return (repo, null);
-        }
-
-        // Session isolation & staleness check: never lock out unrelated or newer non-workflow sessions.
-        if (!IsSessionInActiveRun(ev, marker, step))
-        {
-            return (repo, null);
-        }
-
+        // 3. Fast-path step-aware rules from step.json without recomputing WorkflowState.
         var stepReason = step switch
         {
-            { Kind: "WriteDocument" or "AwaitAccept", Task: { } document } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, $"{document}.md")], document),
-            { Kind: "Review" } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "build", "review.md")], "review"),
-            { Kind: "Fix" } => CheckWhileWriting(
+            { Kind: StepKind.WriteDocument or StepKind.AwaitAccept, Task: { } document } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, $"{document}.md")], document),
+            { Kind: StepKind.Review } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "build", "review.md")], "review"),
+            { Kind: StepKind.Fix or StepKind.AwaitAcceptFix } => CheckWhileWriting(
                 ev,
                 repo,
                 step,
@@ -135,47 +151,18 @@ public sealed class GuardCommand : IHoshinCommand
                     Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "plan.md"),
                 ],
                 "fix"),
-            _ => CheckDuringBuildStep(ev, repo, step),
+            { Kind: StepKind.Implement or StepKind.Retry } => CheckDuringBuildStep(ev, repo, step),
+            _ => null,
         };
 
         return (repo, stepReason);
-    }
-
-    private static bool IsSessionInActiveRun(NormalizedHookEvent ev, RunMarker marker, CurrentStep step)
-    {
-        if (DateTimeOffset.UtcNow - step.At > StaleStepWindow)
-        {
-            return false;
-        }
-
-        // If neither the run nor the event recorded a session ID, apply to the active run.
-        if (string.IsNullOrEmpty(marker.SessionId) || string.IsNullOrEmpty(ev.SessionId))
-        {
-            return true;
-        }
-
-        // Exact match with the owning workflow session.
-        if (string.Equals(marker.SessionId, ev.SessionId, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        // Active subagent launched for the current build task (e.g. Antigravity subagent has its own conversationId,
-        // Claude Code subagent carries agent_id).
-        if (step.Kind is "Implement" or "Retry" && (!string.IsNullOrEmpty(step.AgentId) || !string.IsNullOrEmpty(ev.SubagentCallerId)))
-        {
-            return true;
-        }
-
-        // Unrelated session: do not lock it out.
-        return false;
     }
 
     private static string? CheckDuringBuildStep(NormalizedHookEvent ev, WorkflowRepo repo, CurrentStep step)
     {
         if (ev.IsShellTool)
         {
-            var command = ev.CommandLine ?? "";
+            var command = GuardShellNormalizer.Normalize(ev.CommandLine ?? "");
             if (ActiveRunGitMutation.IsMatch(command))
             {
                 return "Edit only the working tree during a build; do not run git add, commit, reset, or push by hand—the workflow commits verified test and implementation steps for you.";
@@ -186,6 +173,15 @@ public sealed class GuardCommand : IHoshinCommand
                 return "The change's documents in .hoshin/, .agents/, .claude-plugin/, and .git/ are not edited during a build.";
             }
 
+            foreach (var target in ShellWriteTargets.Extract(command))
+            {
+                var denied = GuardStepEvaluator.CheckBuildTargetPath(target, repo, step);
+                if (denied is not null)
+                {
+                    return denied;
+                }
+            }
+
             return null;
         }
 
@@ -194,72 +190,26 @@ public sealed class GuardCommand : IHoshinCommand
             return null;
         }
 
-        var full = Path.GetFullPath(ev.FilePath, repo.Root);
-        var sep = Path.DirectorySeparatorChar;
-        if (full.Contains($"{sep}.hoshin{sep}", PathComparison)
-            || full.Contains($"{sep}.git{sep}", PathComparison)
-            || full.Contains($"{sep}.agents{sep}", PathComparison)
-            || full.Contains($"{sep}.claude-plugin{sep}", PathComparison))
-        {
-            return "The change's documents in .hoshin/, .agents/, .claude-plugin/, and .git/ are not edited during a build.";
-        }
-
-        // Red-phase enforcement: during Implement/Retry, deny production file edits until at least one test file
-        // has been created or modified in the working tree.
-        if (step is { Kind: "Implement" or "Retry", Task: not null })
-        {
-            var rel = Path.GetRelativePath(repo.Root, full).Replace('\\', '/');
-            if (!WorkflowRepo.IsTestPath(rel, step.TestPatterns, step.TaskTestFiles))
-            {
-                if (!HasModifiedTestFileInWorkingTree(repo, step))
-                {
-                    return $"Write the failing test for {step.Task} first; production files may only change after a test file has been written.";
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static bool HasModifiedTestFileInWorkingTree(WorkflowRepo repo, CurrentStep step)
-    {
-        var status = repo.Git("status", "--porcelain", "-uall");
-        if (!status.Ok || string.IsNullOrWhiteSpace(status.Output))
-        {
-            return false;
-        }
-
-        foreach (var raw in status.Output.Replace("\r\n", "\n").Split('\n', StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (raw.Length < 4)
-            {
-                continue;
-            }
-
-            var pathPart = raw[3..].Trim().Trim('"');
-            var arrow = pathPart.IndexOf(" -> ", StringComparison.Ordinal);
-            if (arrow >= 0)
-            {
-                pathPart = pathPart[(arrow + 4)..].Trim();
-            }
-
-            if (WorkflowRepo.IsTestPath(pathPart, step.TestPatterns, step.TaskTestFiles))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return GuardStepEvaluator.CheckBuildTargetPath(ev.FilePath, repo, step);
     }
 
     private static string? CheckWhileWriting(NormalizedHookEvent ev, WorkflowRepo repo, CurrentStep step, IReadOnlyList<string> allowedFiles, string label)
     {
         if (ev.IsShellTool)
         {
-            var command = ev.CommandLine ?? "";
+            var command = GuardShellNormalizer.Normalize(ev.CommandLine ?? "");
             if (ActiveRunGitMutation.IsMatch(command) || (ProtectedRunDirs.IsMatch(command) && Writes.IsMatch(command)))
             {
                 return $"While the {label} is written nothing is committed or moved by hand; it is committed for you when you end your turn.";
+            }
+
+            foreach (var target in ShellWriteTargets.Extract(command))
+            {
+                var denied = GuardStepEvaluator.CheckWriteTargetPath(target, repo, allowedFiles, label);
+                if (denied is not null)
+                {
+                    return denied;
+                }
             }
 
             return null;
@@ -270,24 +220,20 @@ public sealed class GuardCommand : IHoshinCommand
             return null;
         }
 
-        var target = Path.GetFullPath(ev.FilePath, repo.Root);
-        foreach (var allowed in allowedFiles)
-        {
-            if (string.Equals(target, Path.GetFullPath(allowed), PathComparison))
-            {
-                return null;
-            }
-        }
-
-        var rels = string.Join(", ", allowedFiles.Select(a => Path.GetRelativePath(repo.Root, Path.GetFullPath(a)).Replace('\\', '/')));
-        return $"While the {label} is written only {rels} may change.";
+        return GuardStepEvaluator.CheckWriteTargetPath(ev.FilePath, repo, allowedFiles, label);
     }
 
-    private static string? StaticRefusal(NormalizedHookEvent ev)
+    private static string? StaticRefusal(NormalizedHookEvent ev, WorkflowRepo? repo = null)
     {
-        if (ev.ToolName is not null && EditTools.Contains(ev.ToolName))
+        if (ev.IsFileWriteTool)
         {
             var path = ev.FilePath ?? "";
+            var tamperEdit = GuardTamperingProtection.CheckEditPath(path, repo);
+            if (tamperEdit is not null)
+            {
+                return tamperEdit;
+            }
+
             foreach (var (pattern, what) in Protected)
             {
                 if (pattern.IsMatch(path))
@@ -304,7 +250,13 @@ public sealed class GuardCommand : IHoshinCommand
             return null;
         }
 
-        var command = ev.CommandLine ?? "";
+        var command = GuardShellNormalizer.Normalize(ev.CommandLine ?? "");
+        var tamperShell = GuardTamperingProtection.CheckShellCommand(command, Writes, repo);
+        if (tamperShell is not null)
+        {
+            return tamperShell;
+        }
+
         foreach (var (pattern, why) in Rules)
         {
             if (pattern.IsMatch(command))

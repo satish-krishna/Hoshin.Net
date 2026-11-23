@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
 using Hoshin.Workflow.Workspace;
@@ -10,24 +11,24 @@ public sealed record RedRecordResult(RedRecord? Record, List<string> Problems);
 
 /// <summary>Runs a plan task's compile &amp; test commands at its clean test commit in HEAD and records the observed red verdict.</summary>
 public sealed class RedRecorder(
-    IGitClient? git = null,
-    PlanReader? planReader = null,
-    AppService? apps = null,
-    EventContextFactory? contextFactory = null,
-    LedgerStore? ledgerStore = null,
-    HookProcessRunner? processRunner = null)
+    IGitClient git,
+    PlanReader planReader,
+    AppService apps,
+    EventContextFactory contextFactory,
+    LedgerStore ledgerStore,
+    HookProcessRunner processRunner,
+    TimeProvider timeProvider)
 {
-    public static RedRecorder Default { get; } = new();
-
     private const int DefaultTimeoutSeconds = 600;
     private static readonly Regex PositiveInt = new(@"^[1-9]\d*$", RegexOptions.Compiled);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly PlanReader _plan = planReader ?? new PlanReader();
-    private readonly AppService _apps = apps ?? new AppService(git);
-    private readonly EventContextFactory _contextFactory = contextFactory ?? new EventContextFactory(git);
-    private readonly LedgerStore _ledger = ledgerStore ?? new LedgerStore(git);
-    private readonly HookProcessRunner _processRunner = processRunner ?? HookProcessRunner.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly PlanReader _plan = planReader ?? throw new ArgumentNullException(nameof(planReader));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly EventContextFactory _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+    private readonly LedgerStore _ledger = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
+    private readonly HookProcessRunner _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
+    private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public List<string> TaskCommits(EventContext ctx, string task)
     {
@@ -58,6 +59,7 @@ public sealed class RedRecorder(
             .ToList();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public async Task<RedRecordResult> RecordAsync(EventContext ctx, string task)
     {
         var planPath = Path.GetRelativePath(ctx.Master, Path.Combine(ctx.Folder, "plan.md")).Replace('\\', '/');
@@ -112,33 +114,53 @@ public sealed class RedRecorder(
         }
 
         var timeout = TimeoutSeconds();
-        HookProcessResult ran;
-        string outcome;
+        var (ran, outcome) = await RunAndClassifyAsync(entry, ctx.RepoPath, timeout).ConfigureAwait(false);
+
+        var record = new RedRecord(task, head, entry.Compile, entry.Test, outcome, ran.ExitCode, ran.Output, _time.GetUtcNow().ToString("O"));
+        var folder = _ledger.LedgerFolder(ctx.Master, ctx.System, ctx.Change);
+        _ledger.Update(
+            folder,
+            ctx.Repo,
+            () => LedgerStore.Empty(ctx.System, ctx.Change, ctx.Repo, ctx.RepoPath),
+            ledger =>
+            {
+                var updatedReds = new List<RedRecord>(ledger.Reds ?? []) { record };
+                return ledger with { Reds = updatedReds };
+            });
+        return new RedRecordResult(record, []);
+    }
+
+    private async Task<(HookProcessResult Result, string Outcome)> RunAndClassifyAsync(ParsedTask entry, string repoPath, int timeout)
+    {
         if (entry.Compile is not null)
         {
-            ran = await _processRunner.RunAsync(entry.Compile, ctx.RepoPath, null, "", timeout).ConfigureAwait(false);
-            if (ran.Outcome != "passed")
+            var compile = await _processRunner.RunAsync(entry.Compile, repoPath, null, "", timeout).ConfigureAwait(false);
+            if (compile.Outcome != "passed")
             {
-                outcome = ran.Outcome == "failed" ? "could-not-compile" : "could-not-run";
+                if (compile.Outcome == "could-not-run")
+                {
+                    return (compile, "could-not-run");
+                }
+
+                var classifiedCompile = RedClassifier.Classify(ToCommandResult(compile));
+                var compileOutcome = classifiedCompile.Kind == RedKind.MissingSymbol
+                    ? RedClassifier.ToRedRecordOutcome(RedKind.MissingSymbol)
+                    : "could-not-compile";
+                return (compile, compileOutcome);
             }
-            else
-            {
-                ran = await _processRunner.RunAsync(entry.Test, ctx.RepoPath, null, "", timeout).ConfigureAwait(false);
-                outcome = ran.Outcome == "failed" ? "failed" : ran.Outcome;
-            }
-        }
-        else
-        {
-            ran = await _processRunner.RunAsync(entry.Test, ctx.RepoPath, null, "", timeout).ConfigureAwait(false);
-            outcome = ran.Outcome == "failed" ? "failed" : ran.Outcome;
         }
 
-        var record = new RedRecord(task, head, entry.Compile, entry.Test, outcome, ran.ExitCode, ran.Output, DateTimeOffset.UtcNow.ToString("O"));
-        var folder = _ledger.LedgerFolder(ctx.Master, ctx.System, ctx.Change);
-        var ledger = _ledger.Read(folder, ctx.Repo) ?? LedgerStore.Empty(ctx.System, ctx.Change, ctx.Repo, ctx.RepoPath);
-        var updatedReds = new List<RedRecord>(ledger.Reds ?? []) { record };
-        _ledger.Write(folder, ledger with { Reds = updatedReds });
-        return new RedRecordResult(record, []);
+        var testRun = await _processRunner.RunAsync(entry.Test!, repoPath, null, "", timeout).ConfigureAwait(false);
+        var classifiedTest = RedClassifier.Classify(ToCommandResult(testRun));
+        return (testRun, RedClassifier.ToRedRecordOutcome(classifiedTest.Kind));
+    }
+
+    private static AllowListedCommandResult ToCommandResult(HookProcessResult run)
+    {
+        var timedOut = run.Outcome == "could-not-run" && run.ExitCode is null &&
+            run.Output.Contains("ran past its time limit", StringComparison.OrdinalIgnoreCase);
+        var exitCode = run.ExitCode ?? (run.Outcome == "passed" ? 0 : 127);
+        return new AllowListedCommandResult(exitCode, run.Output, timedOut, TimeSpan.Zero);
     }
 
     private string TypeOf(string root, string sha)

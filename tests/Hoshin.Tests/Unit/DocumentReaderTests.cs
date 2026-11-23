@@ -8,11 +8,11 @@ namespace Hoshin.Tests.Unit;
 
 public sealed class DocumentReaderTests
 {
-    private readonly SpecReader _spec = new();
-    private readonly PlanReader _plan = new();
-    private readonly BuildLogReader _buildLog = new();
-    private readonly ReviewReader _review = new();
-    private readonly IntentReader _intent = new();
+    private readonly SpecReader _spec = TestServices.SpecReader;
+    private readonly PlanReader _plan = TestServices.PlanReader;
+    private readonly BuildLogReader _buildLog = TestServices.BuildLogReader;
+    private readonly ReviewReader _review = TestServices.ReviewReader;
+    private readonly IntentReader _intent = TestServices.IntentReader;
 
     [Fact]
     public void FrontMatter_RefusesYamlWithGuidance()
@@ -218,12 +218,12 @@ public sealed class DocumentReaderTests
         try
         {
             var record = new ChangeRecord(1, "feat/PROJ-123-demo", "feat", "PROJ-123", "main", [new PullRequestRecord("app", "https://github.com/org/app/pull/7", 7, "3f2a9c1e4b7d")]);
-            var path = ChangeRecordStore.Write(dir, record);
+            var path = TestServices.ChangeRecords.Write(dir, record);
             Assert.EndsWith("change.jsonc", path);
             var text = File.ReadAllText(path);
             Assert.StartsWith("// Written by the hoshin program", text);
 
-            var loaded = ChangeRecordStore.Read(dir);
+            var loaded = TestServices.ChangeRecords.Read(dir);
             Assert.NotNull(loaded);
             Assert.Equal(record.Branch, loaded!.Branch);
             Assert.Single(loaded.PullRequests);

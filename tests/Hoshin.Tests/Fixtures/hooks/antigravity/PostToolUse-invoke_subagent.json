@@ -1,0 +1,20 @@
+{
+  "hookEventName": "PostToolUse",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "toolCall": {
+    "id": "call-sub-0001",
+    "name": "invoke_subagent",
+    "args": {
+      "TypeName": "self",
+      "Role": "Build T1",
+      "Prompt": "<!-- hoshin:T1:attempt-1:deadbeef -->\nImplement task T1 test first."
+    }
+  },
+  "toolResponse": {
+    "conversationId": "agy-sub-0001"
+  }
+}

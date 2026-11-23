@@ -8,16 +8,16 @@ public sealed record RemoveInput(string Master, string Workspace, string System,
 public sealed record RemoveOutcome(List<string> Problems, List<string> Removed, List<string> Kept);
 
 /// <summary>Removes a change's worktree copy and merged (or abandoned) local branches.</summary>
-public sealed class ChangeRemoveService(IGitClient? git = null, AppService? apps = null)
+public sealed class ChangeRemoveService(IGitClient git, AppService apps, ChangeRecordStore changeRecords)
 {
-    public static ChangeRemoveService Default { get; } = new();
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly ChangeRecordStore _changeRecords = changeRecords ?? throw new ArgumentNullException(nameof(changeRecords));
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly AppService _apps = apps ?? new AppService(git);
-
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public RemoveOutcome Remove(RemoveInput input)
     {
-        var record = ChangeRecordStore.Read(Path.Combine(input.Copy, "intent", input.System, input.Change));
+        var record = _changeRecords.Read(Path.Combine(input.Copy, "intent", input.System, input.Change));
         if (!Directory.Exists(input.Copy) || record is null)
         {
             return new RemoveOutcome([$"{input.Change} has no copy with a {ChangeRecordStore.RecordFileName} at {input.Copy}"], [], []);

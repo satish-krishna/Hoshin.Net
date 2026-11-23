@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using Hoshin.Workflow.Common;
 
 namespace Hoshin.Workflow.Git;
 
@@ -7,9 +9,10 @@ public sealed record CommandRequest(
     string WorkingDirectory,
     IReadOnlyList<string> Argv,
     string? StandardInput = null,
-    IReadOnlyDictionary<string, string>? ExtraEnvironment = null,
+    Dictionary<string, string>? ExtraEnvironment = null,
     TimeSpan? Timeout = null,
-    bool CaptureRawBytes = false);
+    bool CaptureRawBytes = false,
+    bool ClearEnvironment = false);
 
 public sealed record CommandOutcome(
     bool Started,
@@ -30,26 +33,82 @@ public interface ICommandRunner
     Task<CommandOutcome> RunAsync(CommandRequest request, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Default <see cref="ICommandRunner"/> backed by <see cref="Process"/> with UTF-8 I/O and process-tree kill on timeout.</summary>
+/// <summary>Default <see cref="ICommandRunner"/> backed by <see cref="Process"/> with UTF-8 I/O, bounded drain grace, and process-tree kill on timeout.</summary>
 public sealed class ProcessCommandRunner : ICommandRunner
 {
-    public static ProcessCommandRunner Default { get; } = new();
-
     private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+    private static readonly TimeSpan DrainGracePeriod = TimeSpan.FromSeconds(2);
 
-    public CommandOutcome Run(CommandRequest request) => RunCore(request);
+    public CommandOutcome Run(CommandRequest request) =>
+        RunAsync(request, CancellationToken.None).GetAwaiter().GetResult();
 
-    public Task<CommandOutcome> RunAsync(CommandRequest request, CancellationToken cancellationToken = default) =>
-        Task.Run(() => RunCore(request), cancellationToken);
-
-    private static CommandOutcome RunCore(CommandRequest request)
+    public async Task<CommandOutcome> RunAsync(CommandRequest request, CancellationToken cancellationToken = default)
     {
         if (request.Argv.Count == 0)
         {
             return new CommandOutcome(false, false, null, "", "", null, "empty command");
         }
 
-        var psi = new ProcessStartInfo(request.Argv[0])
+        var psi = BuildStartInfo(request);
+        using var process = new Process { StartInfo = psi };
+        if (!TryStart(process, request.Argv[0], out var startError))
+        {
+            return new CommandOutcome(false, false, null, "", "", null, startError);
+        }
+
+        using var drainCts = new CancellationTokenSource();
+        var stdoutCollector = StreamCollector.Start(process.StandardOutput.BaseStream, drainCts.Token);
+        var stderrCollector = StreamCollector.Start(process.StandardError.BaseStream, drainCts.Token);
+
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (request.Timeout.HasValue)
+        {
+            waitCts.CancelAfter(request.Timeout.Value);
+        }
+
+        _ = WriteStandardInputAsync(process.StandardInput, request.StandardInput, waitCts.Token);
+
+        var timedOut = false;
+        try
+        {
+            await process.WaitForExitAsync(waitCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            KillProcessTree(process);
+            if (cancellationToken.IsCancellationRequested)
+            {
+                await drainCts.CancelAsync().ConfigureAwait(false);
+                throw;
+            }
+
+            timedOut = true;
+            await WaitForExitBestEffortAsync(process, DrainGracePeriod).ConfigureAwait(false);
+        }
+
+        drainCts.CancelAfter(DrainGracePeriod);
+        await WaitWithGraceAsync(Task.WhenAll(stdoutCollector.Completion, stderrCollector.Completion), DrainGracePeriod).ConfigureAwait(false);
+        await drainCts.CancelAsync().ConfigureAwait(false);
+
+        var rawOut = stdoutCollector.Snapshot();
+        var rawErr = stderrCollector.Snapshot();
+        var stdout = DecodeUtf8(rawOut);
+        var stderr = DecodeUtf8(rawErr);
+
+        return new CommandOutcome(
+            Started: true,
+            TimedOut: timedOut,
+            ExitCode: timedOut ? null : TryGetExitCode(process),
+            Stdout: stdout,
+            Stderr: stderr,
+            RawStdout: request.CaptureRawBytes ? rawOut : null,
+            StartError: null);
+    }
+
+    private static ProcessStartInfo BuildStartInfo(CommandRequest request)
+    {
+        var executable = ProcessExecutable.Resolve(request.Argv[0], request.WorkingDirectory);
+        var psi = new ProcessStartInfo(executable)
         {
             WorkingDirectory = request.WorkingDirectory,
             RedirectStandardOutput = true,
@@ -57,18 +116,17 @@ public sealed class ProcessCommandRunner : ICommandRunner
             RedirectStandardInput = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            StandardErrorEncoding = Encoding.UTF8,
             StandardInputEncoding = Utf8NoBom,
         };
-
-        if (!request.CaptureRawBytes)
-        {
-            psi.StandardOutputEncoding = Encoding.UTF8;
-        }
 
         for (var i = 1; i < request.Argv.Count; i++)
         {
             psi.ArgumentList.Add(request.Argv[i]);
+        }
+
+        if (request.ClearEnvironment)
+        {
+            psi.Environment.Clear();
         }
 
         if (request.ExtraEnvironment is not null)
@@ -79,91 +137,203 @@ public sealed class ProcessCommandRunner : ICommandRunner
             }
         }
 
-        using var process = new Process { StartInfo = psi };
+        return psi;
+    }
+
+    private static bool TryStart(Process process, string argv0, out string? error)
+    {
         try
         {
             if (!process.Start())
             {
-                return new CommandOutcome(false, false, null, "", "", null, $"cannot start {request.Argv[0]}");
-            }
-        }
-        catch (System.ComponentModel.Win32Exception e)
-        {
-            var code = e.NativeErrorCode == 2 ? "ENOENT" : e.Message;
-            return new CommandOutcome(false, false, null, "", "", null, code);
-        }
-        catch (Exception e)
-        {
-            return new CommandOutcome(false, false, null, "", "", null, e.Message);
-        }
-
-        Task<byte[]?>? rawOutTask = null;
-        Task<string>? textOutTask = null;
-        if (request.CaptureRawBytes)
-        {
-            rawOutTask = Task.Run(() =>
-            {
-                using var ms = new MemoryStream();
-                process.StandardOutput.BaseStream.CopyTo(ms);
-                return (byte[]?)ms.ToArray();
-            });
-        }
-        else
-        {
-            textOutTask = process.StandardOutput.ReadToEndAsync();
-        }
-
-        var errTask = process.StandardError.ReadToEndAsync();
-
-        try
-        {
-            if (request.StandardInput is not null)
-            {
-                process.StandardInput.Write(request.StandardInput);
+                error = $"cannot start {argv0}";
+                return false;
             }
 
-            process.StandardInput.Close();
+            error = null;
+            return true;
         }
-        catch
+        catch (Win32Exception e)
         {
-            // Ignore broken pipe if child exited before reading stdin.
+            error = e.NativeErrorCode == 2 ? "ENOENT" : e.Message;
+            return false;
         }
+        catch (InvalidOperationException e)
+        {
+            error = e.Message;
+            return false;
+        }
+        catch (IOException e)
+        {
+            error = e.Message;
+            return false;
+        }
+    }
 
-        var timeoutMs = request.Timeout.HasValue
-            ? (int)Math.Min(request.Timeout.Value.TotalMilliseconds, int.MaxValue)
-            : Timeout.Infinite;
-
-        var exited = process.WaitForExit(timeoutMs);
-        var timedOut = !exited;
-        if (timedOut)
+    private static Task WriteStandardInputAsync(StreamWriter stdin, string? content, CancellationToken cancellationToken) =>
+        Task.Run(async () =>
         {
             try
             {
-                process.Kill(entireProcessTree: true);
+                if (content is not null)
+                {
+                    var bytes = Utf8NoBom.GetBytes(content);
+                    await stdin.BaseStream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+                    await stdin.BaseStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                stdin.Close();
             }
-            catch
+            catch (IOException)
             {
-                // Process may have exited between WaitForExit and Kill.
+                // Child exited before reading stdin.
             }
+            catch (ObjectDisposedException)
+            {
+                // Process disposed during timeout or cancellation.
+            }
+            catch (OperationCanceledException)
+            {
+                // Timeout or caller cancellation interrupted stdin write.
+            }
+        }, CancellationToken.None);
 
-            process.WaitForExit();
-        }
-        else
+    private static void KillProcessTree(Process process)
+    {
+        try
         {
-            process.WaitForExit();
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // Process already exited before Kill.
+        }
+        catch (Win32Exception)
+        {
+            // Process handle closed or already terminating.
+        }
+    }
+
+    private static async Task WaitForExitBestEffortAsync(Process process, TimeSpan grace)
+    {
+        using var cts = new CancellationTokenSource(grace);
+        try
+        {
+            await process.WaitForExitAsync(cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Killed child did not exit within grace period.
+        }
+        catch (InvalidOperationException)
+        {
+            // Process already disposed or exited.
+        }
+    }
+
+    private static async Task WaitWithGraceAsync(Task task, TimeSpan grace)
+    {
+        try
+        {
+            await task.WaitAsync(grace).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            // Drain grace period expired (e.g., background grandchild kept pipe open).
+        }
+        catch (OperationCanceledException)
+        {
+            // Drain cancelled.
+        }
+    }
+
+    private static int? TryGetExitCode(Process process)
+    {
+        try
+        {
+            return process.HasExited ? process.ExitCode : null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static string DecodeUtf8(byte[] bytes)
+    {
+        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+        {
+            return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
         }
 
-        var rawOut = rawOutTask?.GetAwaiter().GetResult();
-        var stdout = textOutTask is not null ? textOutTask.GetAwaiter().GetResult() : (rawOut is not null ? Encoding.UTF8.GetString(rawOut) : "");
-        var stderr = errTask.GetAwaiter().GetResult();
+        return Encoding.UTF8.GetString(bytes);
+    }
 
-        return new CommandOutcome(
-            Started: true,
-            TimedOut: timedOut,
-            ExitCode: timedOut ? null : process.ExitCode,
-            Stdout: stdout,
-            Stderr: stderr,
-            RawStdout: rawOut,
-            StartError: null);
+    private sealed class StreamCollector
+    {
+        private readonly List<byte[]> _chunks = [];
+        private int _totalLength;
+        private readonly Lock _sync = new();
+
+        public Task Completion { get; private set; } = Task.CompletedTask;
+
+        public static StreamCollector Start(Stream stream, CancellationToken cancellationToken)
+        {
+            var collector = new StreamCollector();
+            collector.Completion = Task.Run(() => collector.ReadLoopAsync(stream, cancellationToken), CancellationToken.None);
+            return collector;
+        }
+
+        public byte[] Snapshot()
+        {
+            lock (_sync)
+            {
+                var result = new byte[_totalLength];
+                var offset = 0;
+                foreach (var chunk in _chunks)
+                {
+                    Buffer.BlockCopy(chunk, 0, result, offset, chunk.Length);
+                    offset += chunk.Length;
+                }
+
+                return result;
+            }
+        }
+
+        private async Task ReadLoopAsync(Stream stream, CancellationToken cancellationToken)
+        {
+            var buffer = new byte[8192];
+            try
+            {
+                while (true)
+                {
+                    var read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    var copy = new byte[read];
+                    Buffer.BlockCopy(buffer, 0, copy, 0, read);
+                    lock (_sync)
+                    {
+                        _chunks.Add(copy);
+                        _totalLength += read;
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Drain cancelled after grace period; retain bytes already collected.
+            }
+            catch (IOException)
+            {
+                // Pipe closed during teardown.
+            }
+            catch (ObjectDisposedException)
+            {
+                // Process disposed during teardown.
+            }
+        }
     }
 }

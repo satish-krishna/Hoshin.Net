@@ -7,12 +7,16 @@ namespace Hoshin.Workflow.Changes;
 public sealed record ChangeDoc(string File, ReadResult Result);
 
 /// <summary>Cross-document validation: plan tasks against spec scenarios/rules, plan self-references, and build logs against plan tasks.</summary>
-public static class CrossChecker
+public sealed partial class CrossChecker
 {
-    public static List<Problem> CheckChange(IReadOnlyList<ChangeDoc> docs)
+    [GeneratedRegex(@"^\s*""([^""]+)""\s*:")]
+    private static partial Regex FieldLineRegex();
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected cross-checker service.")]
+    public List<Problem> CheckChange(IReadOnlyList<ChangeDoc> docs)
     {
         (ParsedSpec Doc, string File)? spec = null;
-        (ParsedPlan Doc, string File, int Layout)? plan = null;
+        (ParsedPlan Doc, string File, int Layout, System.Text.Json.JsonElement FrontMatter)? plan = null;
         var logs = new List<(ParsedBuildLog Doc, string File)>();
 
         foreach (var d in docs)
@@ -23,7 +27,7 @@ public static class CrossChecker
                     spec = (s.Document, d.File);
                     break;
                 case PlanReadResult p:
-                    plan = (p.Document, d.File, p.Layout);
+                    plan = (p.Document, d.File, p.Layout, p.FrontMatter);
                     break;
                 case BuildLogReadResult b:
                     logs.Add((b.Document, d.File));
@@ -39,7 +43,7 @@ public static class CrossChecker
 
         if (plan.Value.Layout >= 2)
         {
-            var checkSpec = IsSuperseded(plan.Value.File) ? null : spec;
+            var checkSpec = IsSuperseded(plan.Value.FrontMatter) ? null : spec;
             problems.AddRange(CheckPlan(plan.Value.Doc, plan.Value.File, checkSpec));
         }
 
@@ -53,11 +57,11 @@ public static class CrossChecker
 
     private static int FieldLine(ParsedTask task, string key)
     {
-        var re = new Regex($"^\\s*\"{Regex.Escape(key)}\"\\s*:");
         var lines = task.Text.Split('\n');
         for (var i = 0; i < lines.Length; i++)
         {
-            if (re.IsMatch(lines[i]))
+            var m = FieldLineRegex().Match(lines[i]);
+            if (m.Success && string.Equals(m.Groups[1].Value, key, StringComparison.Ordinal))
             {
                 return task.Line + i;
             }
@@ -81,6 +85,7 @@ public static class CrossChecker
         return ids;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static List<Problem> CheckPlan(ParsedPlan plan, string planFile, (ParsedSpec Doc, string File)? spec)
     {
         var problems = new List<Problem>();
@@ -194,15 +199,6 @@ public static class CrossChecker
         return problems;
     }
 
-    private static bool IsSuperseded(string file)
-    {
-        try
-        {
-            return FrontMatter.TryGetScalar(File.ReadAllText(file), file, "status") == "superseded";
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    private static bool IsSuperseded(System.Text.Json.JsonElement frontMatter) =>
+        string.Equals(Jsonc.String(frontMatter, "status"), "superseded", StringComparison.Ordinal);
 }

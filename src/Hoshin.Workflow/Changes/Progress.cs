@@ -5,12 +5,11 @@ using Hoshin.Workflow.Workspace;
 namespace Hoshin.Workflow.Changes;
 
 /// <summary>Reads a change's plan tasks and build-log progress.</summary>
-public sealed class ProgressService(PlanReader? planReader = null, BuildLogReader? buildLogReader = null)
+public sealed class ProgressService(PlanReader planReader, BuildLogReader buildLogReader, MarkerReader markerReader)
 {
-    public static ProgressService Default { get; } = new();
-
-    private readonly PlanReader _plan = planReader ?? new PlanReader();
-    private readonly BuildLogReader _buildLog = buildLogReader ?? new BuildLogReader();
+    private readonly PlanReader _plan = planReader ?? throw new ArgumentNullException(nameof(planReader));
+    private readonly BuildLogReader _buildLog = buildLogReader ?? throw new ArgumentNullException(nameof(buildLogReader));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
 
     public List<ParsedTask>? PlanTasks(string folder)
     {
@@ -25,7 +24,7 @@ public sealed class ProgressService(PlanReader? planReader = null, BuildLogReade
 
     public List<ParsedTask>? TasksOf(string text, string file)
     {
-        var marker = MarkerReader.FindMarker(file);
+        var marker = _markerReader.FindMarker(file);
         var fm = FrontMatter.Parse(text, file);
         var system = Jsonc.String(fm.Data, "system") ?? "";
         var allowed = MarkerReader.AllowedPlanRepos(marker, system);

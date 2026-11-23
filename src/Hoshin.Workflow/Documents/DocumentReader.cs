@@ -12,15 +12,15 @@ public interface IDocumentReader
 
 /// <summary>Dispatches document reading by file name (<c>spec.md</c>, <c>plan.md</c>, <c>build/&lt;repo&gt;.md</c>, <c>build/review.md</c>).</summary>
 public sealed class DocumentReader(
-    SpecReader? specReader = null,
-    PlanReader? planReader = null,
-    BuildLogReader? buildLogReader = null,
-    ReviewReader? reviewReader = null) : IDocumentReader
+    SpecReader specReader,
+    PlanReader planReader,
+    BuildLogReader buildLogReader,
+    ReviewReader reviewReader) : IDocumentReader
 {
-    private readonly SpecReader _spec = specReader ?? new SpecReader();
-    private readonly PlanReader _plan = planReader ?? new PlanReader();
-    private readonly BuildLogReader _buildLog = buildLogReader ?? new BuildLogReader();
-    private readonly ReviewReader _review = reviewReader ?? new ReviewReader();
+    private readonly SpecReader _spec = specReader ?? throw new ArgumentNullException(nameof(specReader));
+    private readonly PlanReader _plan = planReader ?? throw new ArgumentNullException(nameof(planReader));
+    private readonly BuildLogReader _buildLog = buildLogReader ?? throw new ArgumentNullException(nameof(buildLogReader));
+    private readonly ReviewReader _review = reviewReader ?? throw new ArgumentNullException(nameof(reviewReader));
 
     public DocKind KindOf(string file)
     {

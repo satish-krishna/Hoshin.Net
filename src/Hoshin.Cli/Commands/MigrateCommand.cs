@@ -1,13 +1,18 @@
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Migration;
 using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class MigrateCommand(HoshinServices services) : IHoshinCommand
+public sealed class MigrateCommand(IDocumentMigrator documentMigrator, WorkspaceMigrator migrator) : IHoshinCommand
 {
+    private readonly IDocumentMigrator _documentMigrator = documentMigrator ?? throw new ArgumentNullException(nameof(documentMigrator));
+    private readonly WorkspaceMigrator _migrator = migrator ?? throw new ArgumentNullException(nameof(migrator));
+
     public string Name => "migrate";
     public string Usage => "migrate --json [--write] [--dry-run] [--documents] [--master <path>] [--workspace <path>] [<path>...]";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Task<int> RunAsync(IReadOnlyList<string> args)
     {
         var o = OptionParser.Parse(
@@ -32,7 +37,7 @@ public sealed class MigrateCommand(HoshinServices services) : IHoshinCommand
                 ? o.Positional
                 : [Directory.GetCurrentDirectory()];
             var write = !o.Has("dry-run");
-            var docResult = services.DocumentMigrator.MigratePaths(targets, write);
+            var docResult = _documentMigrator.MigratePaths(targets, write);
 
             if (o.Has("json"))
             {
@@ -75,7 +80,7 @@ public sealed class MigrateCommand(HoshinServices services) : IHoshinCommand
             throw new UsageException();
         }
 
-        var result = services.Migrator.Migrate(
+        var result = _migrator.Migrate(
             Directory.GetCurrentDirectory(),
             new ResolveOptions(o.Get("master"), o.Get("workspace")),
             o.Has("write"));

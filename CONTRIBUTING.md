@@ -17,7 +17,7 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
 - **Scopes:** `engine`, `hooks`, `guard`, `cli`, `documents`, `changes`, `events`, `git`, `migration`, `workspace`, `skills`, `packaging`, `tests`, `docs` and `ci`. Use the narrowest scope that fits, and `workflow` when a change spans several of the library's scopes.
 - **Branches** are named `<type>/<short-description>` in lowercase kebab case, for example `fix/guard-scope`. Work from `docs/review/TASKS.md` adds the task ID: `fix/t01-guard-scope`.
 - **Commits** are `<type>(<scope>): <subject>`, for example `fix(guard): stay silent outside hoshin workspaces`.
-- **Pull request titles** use the commit format. The repository merges by squash only, and the squash commit takes the title. **[CI]** *(lands with T40)*
+- **Pull request titles** use the commit format. The repository merges by squash only, and the squash commit takes the title. **[CI]**
 - **Pull request descriptions** fill in every section of `.github/pull_request_template.md`, including the design checklist. **[review]**
 - **One concern per pull request:** one bug or one feature. Refactoring that the change needs goes in a separate commit in the same pull request, before the behavior change, so each can be reviewed alone. **[review]**
 - **Program pull requests** are the exception: a planned set of tasks, such as `docs/review/TASKS.md`, lands as one pull request with **exactly one commit per task**. The rules for those:
@@ -25,7 +25,7 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
   - every commit builds with 0 warnings and passes the fast test suite on its own;
   - the branch keeps the per-task commits so review can go one task at a time, and the pull request is then squash-merged like any other.
 
-  `docs/review/TASKS.md` ("Delivery") has the details. **[CI]** *(lands with T40)*
+  `docs/review/TASKS.md` ("Delivery") has the details. **[CI]**
 
 ## 2. How work reaches `main`
 
@@ -33,7 +33,7 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
 2. Open a pull request.
 3. Merge only when CI is green on both Linux and Windows, by squash merge.
 
-`main` should be protected for everyone, administrators included: no direct pushes, no force pushes, and the CI and conventional-names checks required on a branch that is up to date with `main`. *(lands with T32 and T40)*
+`main` should be protected for everyone, administrators included: no direct pushes, no force pushes, and the CI and conventional-names checks required on a branch that is up to date with `main`.
 
 ## 3. Design rules (SOLID)
 
@@ -41,7 +41,7 @@ Hoshin.Net is a library plus a thin CLI. Its value is that the mechanical part o
 
 ### 3.1 How the rules apply to existing code
 
-The code already has violations. They are listed in `tests/Hoshin.Tests/Architecture/baseline.json` *(lands with T39)*.
+The code already has violations. They are listed in `tests/Hoshin.Tests/Architecture/baseline.json`.
 
 - **[test]** A change may not add a violation. The architecture tests fail on any violation that isn't in the baseline.
 - **[test]** A change that fixes a violation removes its baseline entry. The tests also fail on a baseline entry that no longer violates, so the baseline only shrinks.
@@ -56,10 +56,10 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
   - **composes** other types.
 
   For example, `WorkflowEngine` decides, `AllowListedCommandRunner` talks to processes, `HarnessAdapter` adapts, and `HoshinServices` composes. **[review]**
-- **S2. Decisions are pure.** Code that decides a workflow outcome (the engine, Red classification, gates, document validation) takes values and returns values. It does no file, process, git, clock or environment access. **[test]** for `Engine/WorkflowEngine.cs` and `Engine/RedClassifier.cs` *(lands with T39)*; **[review]** elsewhere.
+- **S2. Decisions are pure.** Code that decides a workflow outcome (the engine, Red classification, gates, document validation) takes values and returns values. It does no file, process, git, clock or environment access. **[test]** for `Engine/WorkflowEngine.cs` and `Engine/RedClassifier.cs`; **[review]** elsewhere.
 - **S3. Size limits:**
-  - a source file has at most **400 lines** **[test]** *(lands with T39)*;
-  - a method has a cyclomatic complexity of at most **15** **[test]** *(lands with T33, through analyzer CA1502 and `CodeMetricsConfig.txt`)*;
+  - a source file has at most **400 lines** **[test]**;
+  - a method has a cyclomatic complexity of at most **15** **[test]** (through analyzer CA1502 and `CodeMetricsConfig.txt`);
   - a method has at most **60 lines** **[review]**.
 
   A type that needs more is doing more than one thing; split it.
@@ -76,19 +76,19 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 
 ### 3.5 Interface segregation
 
-- **I1. Small, role-shaped interfaces.** An interface has at most **10 members**, and serves one role. `IGitClient` (34 members) and `IWorkflowRunner` (13) are baselined violations. **[test]** *(lands with T39)*
+- **I1. Small, role-shaped interfaces.** An interface has at most **10 members**, and serves one role. `IGitClient` (34 members) and `IWorkflowRunner` (13) are baselined violations. **[test]**
 - **I2. Depend on what you use.** A type takes the narrowest interface that gives it what it calls. In particular:
   - no command takes `HoshinServices`;
   - no type takes a service only to pass it to another.
 
-  **[test]** for commands *(lands with T39)*; **[review]** elsewhere.
+  **[test]** for commands; **[review]** elsewhere.
 
 ### 3.6 Dependency inversion
 
-- **D1. Every outside effect goes through an injected interface:** processes, git, the file system, the clock (`TimeProvider`), environment variables, `gh` and the network. **[review]**; **[test]** for `DateTimeOffset.UtcNow` / `DateTime.Now` outside the clock adapter *(lands with T39)*.
-- **D2. Dependencies are required constructor parameters.** No optional dependency parameters (`IFoo? foo = null`), and no `?? X.Default` or `?? new X()` fallbacks. A forgotten dependency must be a compile error, not real git in a unit test. **[test]** *(lands with T39)*
-- **D3. One composition root.** `src/Hoshin.Cli/HoshinServices.cs` is the only place that creates services. Library types never `new` another service, and never read a `static Default`. `static Default` properties exist only where an external caller of the NuGet package needs a ready-made instance, and each one is documented as such. **[test]** *(lands with T39)*
-- **D4. No mutable static state.** Static fields are `readonly` and hold immutable values (compiled regexes, frozen sets). **[test]** *(lands with T39)*
+- **D1. Every outside effect goes through an injected interface:** processes, git, the file system, the clock (`TimeProvider`), environment variables, `gh` and the network. **[review]**; **[test]** for `DateTimeOffset.UtcNow` / `DateTime.Now` outside the clock adapter.
+- **D2. Dependencies are required constructor parameters.** No optional dependency parameters (`IFoo? foo = null`), and no `?? X.Default` or `?? new X()` fallbacks. A forgotten dependency must be a compile error, not real git in a unit test. **[test]**
+- **D3. One composition root.** `src/Hoshin.Cli/HoshinServices.cs` is the only place that creates services. Library types never `new` another service, and never read a `static Default`. `static Default` properties exist only where an external caller of the NuGet package needs a ready-made instance, and each one is documented as such. **[test]**
+- **D4. No mutable static state.** Static fields are `readonly` and hold immutable values (compiled regexes, frozen sets). **[test]**
 
 ### 3.7 One owner per rule
 
@@ -96,9 +96,9 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 
 ## 4. Code rules
 
-- **C1. Clean build.** `dotnet build` has 0 warnings with `TreatWarningsAsErrors` and the analyzers on. A suppression needs a comment saying why. **[CI]** *(lands with T33)*
+- **C1. Clean build.** `dotnet build` has 0 warnings with `TreatWarningsAsErrors` and the analyzers on. A suppression needs a comment saying why. **[CI]**
 - **C2. Nullable is honest.** Don't use `!` to silence a value that can really be null. Handle the null.
-- **C3. No silent catch.** No empty `catch {}`, and no `catch (Exception)` that neither logs nor rethrows. Catch the specific exception you expect, and say what happens next. **[test]** *(lands with T39)*
+- **C3. No silent catch.** No empty `catch {}`, and no `catch (Exception)` that neither logs nor rethrows. Catch the specific exception you expect, and say what happens next. **[test]**
 - **C4. Fail closed on safety decisions.** When the guard, an approval check or a Red verdict can't decide (bad input, missing state), the answer is "no", with a message. The exception is availability: a hook must never crash a session. So a hook returns a deny or block reply with an explanation, rather than throwing. **[review]**
 - **C5. No shell.** Processes start with `UseShellExecute = false` and an argument list. Command text is never concatenated. **[review]**
 - **C6. Secrets stay out of child processes.** Every child process is started with the allow-listed environment (`AllowListedCommandRunner`), except git calls that need credentials to push, which use the push allow-list. **[review]**
@@ -106,14 +106,14 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 - **C8. Atomic state writes.** Files under `.git/hoshin/` are written to a temp file and moved into place, under the shared file lock when other processes may write them. **[review]**
 - **C9. Regexes are generated.** Use `[GeneratedRegex]` for fixed patterns, and give regexes built from data a match timeout. **[review]**
 - **C10. Git output is parsed with `-z`** wherever paths are read from it. **[review]**
-- **C11. Language and formatting:** US English in code, comments and documents. Formatting follows `.editorconfig`. **[CI]** *(lands with T33)*
+- **C11. Language and formatting:** US English in code, comments and documents. Formatting follows `.editorconfig`. **[CI]**
 
 ## 5. Architecture invariants
 
 These come from `AGENTS.md`, and they are tested where possible.
 
-1. `Hoshin.Workflow` references only `Markdig` and `Gherkin`. Anything else, such as a YAML parser for migration, lives in a separate assembly referenced by `Hoshin.Cli`. **[test]** *(lands with T39)*
-2. Harness-specific code (Claude Code, Antigravity) lives only in `src/Hoshin.Cli/Hooks` and `src/Hoshin.Cli/Commands`. **[test]** *(lands with T39)*
+1. `Hoshin.Workflow` references only `Markdig` and `Gherkin`. Anything else, such as a YAML parser for migration, lives in a separate assembly referenced by `Hoshin.Cli`. **[test]**
+2. Harness-specific code (Claude Code, Antigravity) lives only in `src/Hoshin.Cli/Hooks` and `src/Hoshin.Cli/Commands`. **[test]**
 3. Hoshin documents contain no YAML. YAML appears only in migration inputs, in negative tests, and in the generated `SKILL.md` front matter. **[test]**
 4. `skills/*/procedure.md` contains judgment guidance only: no YAML, no CLI commands, no harness tool names. **[test]** (`AllSkills_PassStrictLint_NoYamlNoCliNoHarnessToolNames`)
 5. No `.agents/hooks.json` or `.claude-plugin/` in the repository root. This repository is developed outside the hoshin workflow. **[review]**
@@ -122,7 +122,7 @@ These come from `AGENTS.md`, and they are tested where possible.
 
 - **T1. Test first.** Write the test, run it, and see it fail for the reason the change addresses. Then write the code. A bug fix starts with a test that reproduces the bug. **[review]**: the pull request says which test failed first.
 - **T2. Never weaken a test to get green.** Don't skip, ignore, filter out, loosen or delete a test to make a change pass. A test may change only when the behavior it asserts is deliberately changing, and the pull request says so. **[review]**
-- **T3. Coverage of what you change.** At least **90%** of the lines a change adds or modifies in `src/` must run in a test. Branch coverage is reported, not gated. Don't hide lines from coverage (`[ExcludeFromCodeCoverage]` is allowed only on generated code). **[CI]** *(lands with T42)*
+- **T3. Coverage of what you change.** At least **90%** of the lines a change adds or modifies in `src/` must run in a test. Branch coverage is reported, not gated. Don't hide lines from coverage (`[ExcludeFromCodeCoverage]` is allowed only on generated code). **[CI]**
 - **T4. Pick the right kind of test:**
 
   | Kind | Location | Use for |
@@ -131,13 +131,13 @@ These come from `AGENTS.md`, and they are tested where possible.
   | Black-box | `tests/Hoshin.Tests/BlackBox/*.test.mjs` | The CLI contract (`CLIENTS.md`), against the built `hoshin.dll`. |
   | Golden examples | `tests/Hoshin.Tests/Examples/<kind>/2/` | Document readers. Every reader rule has a `.md` plus `.expected.json` pair. |
   | End-to-end hooks | `Unit/DualHarnessHookIntegrationTests.cs`, `Unit/AuthoringAndReviewHookTests.cs` | One scenario per lifecycle path. Don't add assertions to an existing scenario for a new edge case; write a focused test. |
-  | Architecture | `tests/Hoshin.Tests/Architecture/` *(lands with T39)* | The rules in §3–§5. |
+  | Architecture | `tests/Hoshin.Tests/Architecture/` | The rules in §3–§5. |
 
 - **T5. One behavior per test**, named for that behavior: `Guard_AllowsPush_OutsideHoshinWorkspace`, not `Guard_Works`.
 - **T6. Isolation.** A test that needs a folder gets it from `TempDir` (`Unit/TestWorkspaceHelper.cs`) or `tempDir` (`BlackBox/helpers/temp.mjs`), which clean up after themselves. Tests never touch the developer's real repositories, home directory or global git config. A test that needs a git repository builds it with `TestGitFixture`.
 - **T7. No timing guesses.** Don't use `Thread.Sleep` to wait for something to happen. Wait on the condition with a timeout.
 - **T8. Frozen fixtures.** Files under `tests/Hoshin.Tests/Fixtures/` are never edited to make a test pass. A new real document gets a new fixture.
-- **T9. Both operating systems.** Tests pass on Linux and Windows. A test that can't run on one OS says why, in its skip reason. That is allowed only for genuinely OS-specific behavior, never as a way to get green. **[CI]** *(lands with T32)*
+- **T9. Both operating systems.** Tests pass on Linux and Windows. A test that can't run on one OS says why, in its skip reason. That is allowed only for genuinely OS-specific behavior, never as a way to get green. **[CI]**
 
 To run the tests:
 
@@ -156,11 +156,11 @@ dotnet test tests/Hoshin.Tests                                                  
 
 - A procedure in `skills/<name>/procedure.md` describes judgment only. Sequencing, gating, commits and publishing belong to the library.
 - A change to a skill procedure, or to library behavior a skill relies on, needs an eval case. *(The eval harness lands with EPIC-B; until then, describe the manual check in the pull request.)*
-- `packaging/package.ps1` generates the `SKILL.md` wrappers. `accept` and `done` are user-only (`disable-model-invocation: true`). **[test]** *(lands with T02)*
+- `packaging/package.ps1` generates the `SKILL.md` wrappers. `accept` and `done` are user-only (`disable-model-invocation: true`). **[test]**
 
 ## 9. Releases
 
-- The version lives in one place, `Directory.Build.props` (`VersionPrefix`). The packager writes it into `plugin.json`. *(lands with T32)*
+- The version lives in one place, `Directory.Build.props` (`VersionPrefix`). The packager writes it into `plugin.json`.
 - Bump it by semantic versioning, and add a `CHANGELOG.md` entry naming every new command, option and field exactly.
 - Run `packaging/package.ps1` and the full test suite on both operating systems before tagging.
 

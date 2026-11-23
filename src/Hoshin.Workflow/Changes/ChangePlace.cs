@@ -20,16 +20,17 @@ public sealed record Placement(
 
 /// <summary>Discovers changes of a system across master and worktree copies, and resolves which repository holds each.</summary>
 public sealed class ChangePlacer(
-    IGitClient? git = null,
-    IWorkspaceResolver? resolver = null,
-    ChangeLocator? locator = null)
+    IGitClient git,
+    IWorkspaceResolver resolver,
+    ChangeLocator locator,
+    MarkerReader markerReader)
 {
-    public static ChangePlacer Default { get; } = new();
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly ChangeLocator _locator = locator ?? throw new ArgumentNullException(nameof(locator));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly IWorkspaceResolver _resolver = resolver ?? new WorkspaceResolver(git);
-    private readonly ChangeLocator _locator = locator ?? new ChangeLocator(git);
-
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Placement PlaceChanges(string cwd, StateOptions options, Dictionary<string, GitDirsInfo?>? dirsCache = null)
     {
         dirsCache ??= new Dictionary<string, GitDirsInfo?>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
@@ -41,7 +42,7 @@ public sealed class ChangePlacer(
 
         var master = resolution.Master;
         var workspace = resolution.Workspace;
-        var systems = MarkerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.Keys.ToList();
+        var systems = _markerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.Keys.ToList();
         string system;
         if (options.System is not null)
         {
@@ -135,7 +136,7 @@ public sealed class ChangePlacer(
         return info;
     }
 
-    private HashSet<string> ChangesIn(string top, string system, SystemRead read)
+    private static HashSet<string> ChangesIn(string top, string system, SystemRead read)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
         var baseDir = Path.Combine(top, "intent", system);

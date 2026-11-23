@@ -8,12 +8,26 @@ using Hoshin.Workflow.Workspace;
 namespace Hoshin.Workflow.Changes;
 
 /// <summary>Checks documents, cross-document references, <c>.hoshin.json</c>, <c>hooks.json</c>, and <c>change.jsonc</c>.</summary>
-public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitClient? git = null)
+public interface IDocumentCheckService
 {
-    public static DocumentCheckService Default { get; } = new();
+    List<Problem> CheckFiles(IReadOnlyList<string> files);
+}
 
-    private readonly IDocumentReader _reader = reader ?? new DocumentReader();
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+/// <summary>Checks documents, cross-document references, <c>.hoshin.json</c>, <c>hooks.json</c>, and <c>change.jsonc</c>.</summary>
+public sealed class DocumentCheckService(
+    IDocumentReader reader,
+    IGitWorktrees gitWorktrees,
+    IGitBranches gitBranches,
+    IGitQuery gitQuery,
+    MarkerReader markerReader,
+    CrossChecker crossChecker) : IDocumentCheckService
+{
+    private readonly IDocumentReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
+    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
+    private readonly IGitBranches _gitBranches = gitBranches ?? throw new ArgumentNullException(nameof(gitBranches));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
+    private readonly CrossChecker _crossChecker = crossChecker ?? throw new ArgumentNullException(nameof(crossChecker));
 
     public List<Problem> CheckFiles(IReadOnlyList<string> files)
     {
@@ -28,7 +42,7 @@ public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitCli
             }
             else
             {
-                var marker = MarkerReader.FindMarker(file);
+                var marker = _markerReader.FindMarker(file);
                 var kind = _reader.KindOf(file);
                 IReadOnlyList<string>? allowed = null;
                 string? system = null;
@@ -66,7 +80,7 @@ public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitCli
 
         foreach (var group in groups.Values)
         {
-            problems.AddRange(CrossChecker.CheckChange(group));
+            problems.AddRange(_crossChecker.CheckChange(group));
         }
 
         return ProblemFormatter.Sort(problems);
@@ -139,6 +153,7 @@ public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitCli
             .ToList();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private List<string> LayoutProblems(string file, string text)
     {
         JsonDocument doc;
@@ -162,9 +177,9 @@ public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitCli
             }
 
             var dir = Path.GetDirectoryName(Path.GetFullPath(file))!;
-            var top = _git.TopLevel(dir);
-            var baseBranch = top is null ? null : _git.BaseBranch(top);
-            var revision = top is null || baseBranch is null ? null : _git.BaseRevision(top, baseBranch);
+            var top = _gitWorktrees.TopLevel(dir);
+            var baseBranch = top is null ? null : _gitBranches.BaseBranch(top);
+            var revision = top is null || baseBranch is null ? null : _gitBranches.BaseRevision(top, baseBranch);
             if (top is null || revision is null)
             {
                 return problems;
@@ -180,7 +195,7 @@ public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitCli
                 foreach (var app in apps.EnumerateObject())
                 {
                     var normal = MarkerReader.NormalizeFolder(app.Value);
-                    if (normal is not null && normal != "." && _git.ListFiles(top, revision, normal).Count == 0)
+                    if (normal is not null && normal != "." && _gitQuery.ListFiles(top, revision, normal).Count == 0)
                     {
                         problems.Add($"app {app.Name}: the folder {normal} does not exist on the base branch {baseBranch}");
                     }

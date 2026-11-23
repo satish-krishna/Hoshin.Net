@@ -8,6 +8,7 @@ public sealed class NamingCommand : IHoshinCommand
     public string Name => "naming";
     public string Usage => "naming --json <marker> <system> [--type t --scope s --change c --title t]";
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Task<int> RunAsync(IReadOnlyList<string> args)
     {
         if (args.Count < 3 || args[0] != "--json")

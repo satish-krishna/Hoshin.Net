@@ -1,0 +1,15 @@
+{
+  "session_id": "cc-sess-0001",
+  "transcript_path": "/home/engineer/.claude/projects/workspace-repo/cc-sess-0001.jsonl",
+  "cwd": "/workspace/repo",
+  "permission_mode": "default",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "MultiEdit",
+  "tool_use_id": "toolu_01MultiEdit0001",
+  "tool_input": {
+    "file_path": "/workspace/repo/src/greet.mjs",
+    "edits": [
+      { "old_string": "Hello", "new_string": "Hi" }
+    ]
+  }
+}

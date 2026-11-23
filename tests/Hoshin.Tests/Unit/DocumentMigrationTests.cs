@@ -12,6 +12,9 @@ public sealed class DocumentMigrationTests
 {
     private const string TsHoshinRoot = @"D:\workspaces\hoshin";
 
+    private static readonly YamlToJsoncConverter Converter = new();
+    private static readonly DocumentMigrator Migrator = new(Converter);
+
     // =========================================================================
     // 1. YAML-to-JSONC converter unit tests
     // =========================================================================
@@ -31,7 +34,7 @@ public sealed class DocumentMigrationTests
             # trailing comment
             """;
 
-        var jsonc = YamlToJsoncConverter.Default.ConvertFrontMatter(yaml);
+        var jsonc = Converter.ConvertFrontMatter(yaml);
         Assert.Contains("// Top comment", jsonc);
         Assert.Contains("// schema version", jsonc);
         Assert.Contains("// Pin to upstream spec", jsonc);
@@ -70,7 +73,7 @@ public sealed class DocumentMigrationTests
               across two lines.
             """;
 
-        var jsonc = YamlToJsoncConverter.Default.ConvertBlock(yaml);
+        var jsonc = Converter.ConvertBlock(yaml);
         Assert.True(Jsonc.TryParse(jsonc, out var parsed, out var err), err);
         var obj = parsed!.Value;
 
@@ -98,7 +101,7 @@ public sealed class DocumentMigrationTests
                 pushed: "0123456"
             """;
 
-        var jsonc = DocumentMigrator.Default.MigrateChangeYamlText(changeYml);
+        var jsonc = Migrator.MigrateChangeYamlText(changeYml);
         Assert.StartsWith("// Written by the hoshin program", jsonc);
         Assert.Contains("// Opened by change.done", jsonc);
         Assert.True(Jsonc.TryParse(jsonc, out var parsed, out var err), err);
@@ -157,7 +160,7 @@ public sealed class DocumentMigrationTests
             None.
             """;
 
-        var migrated = DocumentMigrator.Default.MigrateMarkdownText(intentMd, "intent/demo/c1/intent.md", out var changed);
+        var migrated = Migrator.MigrateMarkdownText(intentMd, "intent/demo/c1/intent.md", out var changed);
         Assert.True(changed);
         Assert.StartsWith("```jsonc\n", migrated);
         Assert.Contains("// Intent metadata", migrated);
@@ -165,7 +168,7 @@ public sealed class DocumentMigrationTests
         Assert.Empty(new IntentReader().Check(migrated, "intent.md", "demo"));
 
         // Second pass is strictly idempotent.
-        var second = DocumentMigrator.Default.MigrateMarkdownText(migrated, "intent/demo/c1/intent.md", out var changedAgain);
+        var second = Migrator.MigrateMarkdownText(migrated, "intent/demo/c1/intent.md", out var changedAgain);
         Assert.False(changedAgain);
         Assert.Equal(migrated, second);
     }
@@ -199,7 +202,7 @@ public sealed class DocumentMigrationTests
             ```
             """;
 
-        var migrated = DocumentMigrator.Default.MigrateMarkdownText(layout1Spec, "spec.md", out var changed);
+        var migrated = Migrator.MigrateMarkdownText(layout1Spec, "spec.md", out var changed);
         Assert.True(changed);
         Assert.StartsWith("```jsonc\n", migrated);
 
@@ -227,7 +230,7 @@ public sealed class DocumentMigrationTests
         Assert.Equal([["amount"], ["5"]], r2.Scenarios[0].Examples);
 
         // Idempotent on second pass.
-        var second = DocumentMigrator.Default.MigrateMarkdownText(migrated, "spec.md", out var changed2);
+        var second = Migrator.MigrateMarkdownText(migrated, "spec.md", out var changed2);
         Assert.False(changed2);
         Assert.Equal(migrated, second);
     }
@@ -269,10 +272,10 @@ public sealed class DocumentMigrationTests
             - **Tests:** verify T2 after T1
             """;
 
-        var migrated = DocumentMigrator.Default.MigrateMarkdownText(layout1Plan, "plan.md", out var changed);
+        var migrated = Migrator.MigrateMarkdownText(layout1Plan, "plan.md", out var changed);
         Assert.True(changed);
 
-        var read = new PlanReader().Read(migrated, "plan.md", ["app"], "demo");
+        var read = TestServices.PlanReader.Read(migrated, "plan.md", ["app"], "demo");
         Assert.Equal(2, read.Layout);
         Assert.Empty(read.Problems);
         Assert.Single(read.Document.SharedDecisions);
@@ -291,7 +294,7 @@ public sealed class DocumentMigrationTests
         Assert.Equal(["R2.1"], read.Document.Tasks[1].Covers);
 
         // Idempotent on second pass.
-        var second = DocumentMigrator.Default.MigrateMarkdownText(migrated, "plan.md", out var changed2);
+        var second = Migrator.MigrateMarkdownText(migrated, "plan.md", out var changed2);
         Assert.False(changed2);
         Assert.Equal(migrated, second);
     }
@@ -320,10 +323,10 @@ public sealed class DocumentMigrationTests
             ```
             """;
 
-        var migrated = DocumentMigrator.Default.MigrateMarkdownText(hybridLog, "build/app.md", out var changed);
+        var migrated = Migrator.MigrateMarkdownText(hybridLog, "build/app.md", out var changed);
         Assert.True(changed);
 
-        var read = new BuildLogReader().Read(migrated, "build/app.md");
+        var read = TestServices.BuildLogReader.Read(migrated, "build/app.md");
         Assert.Equal(2, read.Layout);
         Assert.Empty(read.Problems);
         Assert.Equal(3, read.Document.Entries.Count);
@@ -340,7 +343,7 @@ public sealed class DocumentMigrationTests
         Assert.Equal("written in the new layout", read.Document.Entries[2].Departure);
 
         // Idempotent on second pass.
-        var second = DocumentMigrator.Default.MigrateMarkdownText(migrated, "build/app.md", out var changed2);
+        var second = Migrator.MigrateMarkdownText(migrated, "build/app.md", out var changed2);
         Assert.False(changed2);
         Assert.Equal(migrated, second);
     }
@@ -378,10 +381,10 @@ public sealed class DocumentMigrationTests
             The toolbar overflows at 1280.
             """;
 
-        var migrated = DocumentMigrator.Default.MigrateMarkdownText(reviewMd, "build/review.md", out var changed);
+        var migrated = Migrator.MigrateMarkdownText(reviewMd, "build/review.md", out var changed);
         Assert.True(changed);
 
-        var read = new ReviewReader().Read(migrated, "build/review.md");
+        var read = TestServices.ReviewReader.Read(migrated, "build/review.md");
         Assert.Empty(read.Problems);
         Assert.Single(read.Document.Reviews);
         Assert.Equal("1234567", read.Document.Reviews[0].Commits["hoshin"]);
@@ -420,10 +423,10 @@ public sealed class DocumentMigrationTests
             Test it first.
             """;
 
-        var migratedPlan = DocumentMigrator.Default.MigrateMarkdownText(planWithYamlProse, "plan.md", out var planChanged);
+        var migratedPlan = Migrator.MigrateMarkdownText(planWithYamlProse, "plan.md", out var planChanged);
         Assert.True(planChanged);
         Assert.Contains("```yaml\nnote: not a record\n```", migratedPlan);
-        var planRead = new PlanReader().Read(migratedPlan, "plan.md", ["app"], "demo");
+        var planRead = TestServices.PlanReader.Read(migratedPlan, "plan.md", ["app"], "demo");
         Assert.Empty(planRead.Problems);
     }
 
@@ -761,7 +764,7 @@ public sealed class DocumentMigrationTests
 
     private static JsonElement RunTsRead(string tsTool, string file)
     {
-        var r = ProcessCommandRunner.Default.Run(new CommandRequest(Path.GetDirectoryName(file)!, ["node", tsTool, "read", "--json", file]));
+        var r = TestServices.CommandRunner.Run(new CommandRequest(Path.GetDirectoryName(file)!, ["node", tsTool, "read", "--json", file]));
         Assert.True(r.ExitCode == 0, $"TS read failed for {file}: {r.Stdout}\n{r.Stderr}");
         using var doc = JsonDocument.Parse(r.Stdout);
         return doc.RootElement.Clone();
@@ -847,5 +850,79 @@ public sealed class DocumentMigrationTests
                 break;
             }
         }
+    }
+
+    // =========================================================================
+    // 5. Fail-closed migration tests (T10)
+    // =========================================================================
+
+    [Theory]
+    [InlineData("undefined-alias", "version: 1\nbase: *b\nscope: demo\n")]
+    [InlineData("duplicate-keys", "version: 1\nbase: main\nbase: develop\n")]
+    [InlineData("unconsumed-after-flow-root", "{ version: 1 }\nbase: main\n")]
+    [InlineData("unconsumed-bad-indent", "version: 1\n  stray: value\nbase: main\n")]
+    [InlineData("non-flow-bracket-title", "version: 1\ntitle: [WIP] Fix\nbase: main\n")]
+    [InlineData("unclosed-quote", "version: 1\nnotes: \"unterminated\nbase: main\n")]
+    public void MigrateChangeYml_UnsupportedOrAmbiguousYaml_RefusesAndLeavesSourceUntouched(string label, string yaml)
+    {
+        using var tmp = new TempDir($"hoshin-t10-{label}-");
+        var changeYml = Path.Combine(tmp.Path, "change.yml");
+        var changeJsonc = Path.Combine(tmp.Path, "change.jsonc");
+        File.WriteAllText(changeYml, yaml);
+        var originalBytes = File.ReadAllBytes(changeYml);
+
+        // Dry-run reports refused.
+        var dry = Migrator.MigratePaths([changeYml], write: false);
+        var dryItem = Assert.Single(dry.Files);
+        Assert.True(dryItem.Status == "refused", $"[{label}] dry-run expected refused, got {dryItem.Status} ({dryItem.Detail})");
+        Assert.False(string.IsNullOrWhiteSpace(dryItem.Detail));
+        Assert.False(File.Exists(changeJsonc));
+
+        // Write mode refuses, leaves source byte-identical, and writes no target.
+        var res = Migrator.MigratePaths([changeYml], write: true);
+        var item = Assert.Single(res.Files);
+        Assert.True(item.Status == "refused", $"[{label}] write expected refused, got {item.Status} ({item.Detail})");
+        Assert.False(string.IsNullOrWhiteSpace(item.Detail));
+        Assert.True(File.Exists(changeYml), $"[{label}] source change.yml must still exist");
+        Assert.Equal(originalBytes, File.ReadAllBytes(changeYml));
+        Assert.False(File.Exists(changeJsonc), $"[{label}] change.jsonc must not be written");
+    }
+
+    [Fact]
+    public void YamlConverter_PlainScalarWithApostropheAndDoubleQuotes_StripsInlineCommentCleanly()
+    {
+        const string yaml = """
+            title: It's a "test" # note
+            system: demo
+            """;
+
+        var jsonc = Converter.ConvertFrontMatter(yaml);
+        Assert.True(Jsonc.TryParse(jsonc, out var parsed, out var err), err);
+        Assert.NotNull(parsed);
+        Assert.Equal("It's a \"test\"", parsed!.Value.GetProperty("title").GetString());
+        Assert.Contains("// note", jsonc, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MigrateMarkdown_DuplicateKeyInFrontMatter_RefusesAndLeavesFileUntouched()
+    {
+        using var tmp = new TempDir("hoshin-t10-md-");
+        var intentPath = Path.Combine(tmp.Path, "intent.md");
+        const string md = """
+            ---
+            title: One
+            title: Two
+            system: demo
+            ---
+
+            # Intent: Dup
+            """;
+        File.WriteAllText(intentPath, md);
+        var originalBytes = File.ReadAllBytes(intentPath);
+
+        var res = Migrator.MigratePaths([intentPath], write: true);
+        var item = Assert.Single(res.Files);
+        Assert.Equal("refused", item.Status);
+        Assert.Equal(originalBytes, File.ReadAllBytes(intentPath));
     }
 }

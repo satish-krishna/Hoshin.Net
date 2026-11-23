@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 
 namespace Hoshin.Workflow.Common;
@@ -43,16 +42,45 @@ public static class Jsonc
 
     private static bool IsBlank(string text)
     {
-        var bytes = Encoding.UTF8.GetBytes(text);
-        var reader = new Utf8JsonReader(bytes, ReaderOptions);
-        try
+        var i = 0;
+        while (i < text.Length)
         {
-            return !reader.Read();
-        }
-        catch (JsonException)
-        {
+            if (char.IsWhiteSpace(text[i]))
+            {
+                i++;
+                continue;
+            }
+
+            if (text[i] == '/' && i + 1 < text.Length)
+            {
+                if (text[i + 1] == '/')
+                {
+                    i += 2;
+                    while (i < text.Length && text[i] != '\n')
+                    {
+                        i++;
+                    }
+
+                    continue;
+                }
+
+                if (text[i + 1] == '*')
+                {
+                    var close = text.IndexOf("*/", i + 2, StringComparison.Ordinal);
+                    if (close < 0)
+                    {
+                        return false;
+                    }
+
+                    i = close + 2;
+                    continue;
+                }
+            }
+
             return false;
         }
+
+        return true;
     }
 
     public static string? String(JsonElement obj, string name) =>

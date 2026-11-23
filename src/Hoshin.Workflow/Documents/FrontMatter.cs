@@ -7,9 +7,10 @@ namespace Hoshin.Workflow.Documents;
 public sealed record FrontMatterData(JsonElement Data, int Layout, bool HasLayoutField, int BodyLine);
 
 /// <summary>Reads the fenced <c>```jsonc</c> front matter block on line 1 of a document. YAML front matter is refused.</summary>
-public static class FrontMatter
+public static partial class FrontMatter
 {
-    private static readonly Regex LineEndRegex = new(@"\r\n|\r|\n", RegexOptions.Compiled);
+    [GeneratedRegex(@"(\r\n|\r|\n)")]
+    private static partial Regex LineEndSplitRegex();
 
     public static FrontMatterData Parse(string text, string file) => Parse(Doc.Split(text), file);
 
@@ -93,7 +94,7 @@ public static class FrontMatter
             return 0;
         }
 
-        var parts = Regex.Split(text, @"(\r\n|\r|\n)");
+        var parts = LineEndSplitRegex().Split(text);
         var offset = 0;
         var limit = Math.Min(fence.Close * 2, parts.Length);
         for (var i = 0; i < limit; i++)

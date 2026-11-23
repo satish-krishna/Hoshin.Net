@@ -1,12 +1,40 @@
 using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Events;
+using Hoshin.Workflow.Git;
 using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
+public sealed class ChangeCommand(
+    IWorkspaceResolver resolver,
+    IGitWorktrees gitWorktrees,
+    IGitBranches gitBranches,
+    IGitQuery gitQuery,
+    MarkerReader markerReader,
+    ChangeLocator changeLocator,
+    EventRunner eventRunner,
+    ScopeRules scopeRules,
+    ChangeRenameService changeRename,
+    ChangeRemoveService changeRemove,
+    ChangeRecordStore changeRecords,
+    IPullRequestClient pullRequests,
+    AppService apps) : IHoshinCommand
 {
+    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
+    private readonly IGitBranches _gitBranches = gitBranches ?? throw new ArgumentNullException(nameof(gitBranches));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
+    private readonly ChangeLocator _changeLocator = changeLocator ?? throw new ArgumentNullException(nameof(changeLocator));
+    private readonly EventRunner _eventRunner = eventRunner ?? throw new ArgumentNullException(nameof(eventRunner));
+    private readonly ScopeRules _scopeRules = scopeRules ?? throw new ArgumentNullException(nameof(scopeRules));
+    private readonly ChangeRenameService _changeRename = changeRename ?? throw new ArgumentNullException(nameof(changeRename));
+    private readonly ChangeRemoveService _changeRemove = changeRemove ?? throw new ArgumentNullException(nameof(changeRemove));
+    private readonly ChangeRecordStore _changeRecords = changeRecords ?? throw new ArgumentNullException(nameof(changeRecords));
+    private readonly IPullRequestClient _pullRequests = pullRequests ?? throw new ArgumentNullException(nameof(pullRequests));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+
     public string Name => "change";
     public string Usage => string.Join("\n       dotnet hoshin.dll ", [
         "change start --json --system s --change c --type t --scope s [--title t] [--branch name]",
@@ -35,7 +63,7 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
 
     private (string Master, string Workspace) ResolvePlace(ParsedOptions o)
     {
-        var r = services.Resolver.Resolve(Directory.GetCurrentDirectory(), new ResolveOptions(o.Get("master"), o.Get("workspace")));
+        var r = _resolver.Resolve(Directory.GetCurrentDirectory(), new ResolveOptions(o.Get("master"), o.Get("workspace")));
         if (r.Master is null || r.Workspace is null)
         {
             throw new CouldNotRunException(string.Join('\n', r.Problems));
@@ -57,8 +85,8 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
         }
 
         var (resolvedMaster, workspace) = ResolvePlace(o);
-        var master = services.Git.MainCheckout(resolvedMaster);
-        if (!MarkerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.ContainsKey(system))
+        var master = _gitWorktrees.MainCheckout(resolvedMaster);
+        if (!_markerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.ContainsKey(system))
         {
             throw new CouldNotRunException($"the marker lists no system {system}");
         }
@@ -85,14 +113,14 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
             Repo = "master",
             RepoPath = master,
             Root = master,
-            Branch = services.Git.CurrentBranch(master),
-            Base = services.Git.BaseBranch(master),
-            Head = services.Git.CommitOf(master, "HEAD"),
-            Repos = services.ChangeLocator.SystemRepos(master, workspace, system),
+            Branch = _gitBranches.CurrentBranch(master),
+            Base = _gitBranches.BaseBranch(master),
+            Head = _gitQuery.CommitOf(master, "HEAD"),
+            Repos = _changeLocator.SystemRepos(master, workspace, system),
             Extra = extra,
         };
 
-        var outcome = await services.EventRunner.RunAsync(ctx).ConfigureAwait(false);
+        var outcome = await _eventRunner.RunAsync(ctx).ConfigureAwait(false);
         CliIo.PrintJson(outcome);
         return outcome.Outcome switch
         {
@@ -111,8 +139,8 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
         }
 
         var (master, workspace) = ResolvePlace(o);
-        var found = services.ChangeLocator.FindChange(master, workspace, change, o.Get("system"));
-        var repos = services.ChangeLocator.SystemRepos(found.Master, workspace, found.System);
+        var found = _changeLocator.FindChange(master, workspace, change, o.Get("system"));
+        var repos = _changeLocator.SystemRepos(found.Master, workspace, found.System);
         var folder = Path.Combine(found.Master, "intent", found.System, change);
         return (workspace, found.Master, found.System, change, repos, folder);
     }
@@ -127,8 +155,8 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
         }
 
         var c = Locate(o);
-        var scope = ScopeRules.ChangeScope(c.Master, c.System, c.Folder);
-        var res = services.ChangeRename.Rename(new RenameInput(c.Master, c.Workspace, c.System, c.Change, c.Repos, to, scope));
+        var scope = _scopeRules.ChangeScope(c.Master, c.System, c.Folder);
+        var res = _changeRename.Rename(new RenameInput(c.Master, c.Workspace, c.System, c.Change, c.Repos, to, scope));
         CliIo.PrintJson(new { change = c.Change, from = res.From, to, renamed = res.Renamed, problems = res.Problems });
         return res.Problems.Count == 0 ? ExitCodes.Pass : ExitCodes.Problems;
     }
@@ -138,7 +166,7 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
         var o = OptionParser.Parse(args, values: ["change", "system", "master", "workspace"], flags: ["json", "abandon"]);
         var c = Locate(o);
         var copy = Path.Combine(ChangeLocator.CopiesFolder(c.Workspace), c.Change);
-        var res = services.ChangeRemove.Remove(new RemoveInput(c.Master, c.Workspace, c.System, c.Change, c.Repos, copy, o.Has("abandon")));
+        var res = _changeRemove.Remove(new RemoveInput(c.Master, c.Workspace, c.System, c.Change, c.Repos, copy, o.Has("abandon")));
         CliIo.PrintJson(new { change = c.Change, problems = res.Problems, removed = res.Removed, kept = res.Kept });
         return res.Problems.Count == 0 ? ExitCodes.Pass : ExitCodes.Problems;
     }
@@ -147,24 +175,24 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
     {
         var o = OptionParser.Parse(args, values: ["change", "system", "master", "workspace"], flags: ["json", "refresh"]);
         var c = Locate(o);
-        var record = ChangeRecordStore.Read(c.Folder);
+        var record = _changeRecords.Read(c.Folder);
         Dictionary<string, string?>? states = o.Has("refresh") && record is not null
-            ? record.PullRequests.ToDictionary(p => p.Url, p => services.PullRequests.StateOf(c.Master, p.Url), StringComparer.Ordinal)
+            ? record.PullRequests.ToDictionary(p => p.Url, p => _pullRequests.StateOf(c.Master, p.Url), StringComparer.Ordinal)
             : null;
 
-        var single = services.Apps.IsSingleRepo(c.Master);
+        var single = _apps.IsSingleRepo(c.Master);
         var repos = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var name in c.Repos)
         {
-            var path = services.Apps.RepoPathOf(c.Master, c.Workspace, c.System, name);
+            var path = _apps.RepoPathOf(c.Master, c.Workspace, c.System, name);
             var root = single ? c.Master : path;
             var checkedOut = Directory.Exists(Path.Combine(root, ".git")) || File.Exists(Path.Combine(root, ".git"));
             repos[name] = new
             {
                 path,
                 checkedOut,
-                branch = checkedOut ? services.Git.CurrentBranch(root) : null,
-                @base = checkedOut ? services.Git.BaseBranch(root) : null,
+                branch = checkedOut ? _gitBranches.CurrentBranch(root) : null,
+                @base = checkedOut ? _gitBranches.BaseBranch(root) : null,
             };
         }
 
@@ -173,7 +201,7 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
             ["change"] = c.Change,
             ["system"] = c.System,
             ["master"] = c.Master,
-            ["branch"] = ChangeRecordStore.BranchOf(c.Folder),
+            ["branch"] = _changeRecords.BranchOf(c.Folder),
             ["record"] = record,
             ["repos"] = repos,
         };

@@ -2,6 +2,8 @@ using System.Diagnostics;
 using Hoshin.Cli.Hooks;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Events;
+using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Commands;
 
@@ -9,8 +11,23 @@ namespace Hoshin.Cli.Commands;
 /// Dual-harness lifecycle hook entry point (<c>hoshin hook &lt;start|result|subagent-stop|stop|log&gt; [--roles &lt;dir&gt;]</c>).
 /// Always exits <c>0</c> and reports any internal failure to <c>stderr</c> so hooks never crash an active session.
 /// </summary>
-public sealed class HookCommand(HoshinServices services) : IHoshinCommand
+public sealed class HookCommand(
+    HarnessAdapter hookAdapter,
+    HookOrchestrator hookOrchestrator,
+    IGitWorktrees gitWorktrees,
+    IGitQuery gitQuery,
+    IGitStatus gitStatus,
+    IFileSystem fileSystem,
+    LedgerStore ledgerStore) : IHoshinCommand
 {
+    private readonly HarnessAdapter _hookAdapter = hookAdapter ?? throw new ArgumentNullException(nameof(hookAdapter));
+    private readonly HookOrchestrator _hookOrchestrator = hookOrchestrator ?? throw new ArgumentNullException(nameof(hookOrchestrator));
+    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+    private readonly LedgerStore _ledgerStore = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
+
     public string Name => "hook";
     public string Usage => "hook start|result|subagent-stop|stop [--roles <path>]";
 
@@ -29,21 +46,21 @@ public sealed class HookCommand(HoshinServices services) : IHoshinCommand
             var o = OptionParser.Parse(args.Skip(1).ToList(), values: ["roles"]);
             var rolesRoot = o.Get("roles") ?? DefaultRolesDir();
 
-            var ev = services.HookAdapter.ReadFromStdin();
-            var repo = WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory());
+            var ev = _hookAdapter.ReadFromStdin();
+            var repo = WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _gitWorktrees, _gitQuery, _gitStatus, _fs, _ledgerStore);
 
             var (output, decision) = sub switch
             {
-                "start" => services.HookOrchestrator.HandleStart(ev, rolesRoot),
-                "result" => services.HookOrchestrator.HandleResult(ev, rolesRoot),
-                "subagent-stop" => services.HookOrchestrator.HandleSubagentStop(ev, rolesRoot),
-                "stop" => services.HookOrchestrator.HandleStop(ev, rolesRoot),
-                "log" => (services.HookAdapter.EmptyOutput(ev.Harness), "logged"),
-                _ => (services.HookAdapter.EmptyOutput(ev.Harness), $"unknown subcommand {sub}"),
+                "start" => _hookOrchestrator.HandleStart(ev, rolesRoot),
+                "result" => _hookOrchestrator.HandleResult(ev, rolesRoot),
+                "subagent-stop" => _hookOrchestrator.HandleSubagentStop(ev, rolesRoot),
+                "stop" => _hookOrchestrator.HandleStop(ev, rolesRoot),
+                "log" => (_hookAdapter.EmptyOutput(ev.Harness), "logged"),
+                _ => (_hookAdapter.EmptyOutput(ev.Harness), $"unknown subcommand {sub}"),
             };
 
             HarnessAdapter.WriteStdoutUtf8(output);
-            HarnessAdapter.AppendTrace(repo, $"hook {sub}", ev, output, decision, clock);
+            _hookAdapter.AppendTrace(repo, $"hook {sub}", ev, output, decision, clock);
         }
         catch (Exception e)
         {

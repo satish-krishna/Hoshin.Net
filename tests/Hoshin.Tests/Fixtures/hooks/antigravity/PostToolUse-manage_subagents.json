@@ -1,0 +1,20 @@
+{
+  "hookEventName": "PostToolUse",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "toolCall": {
+    "id": "call-ms-0001",
+    "name": "manage_subagents",
+    "args": {
+      "Action": "list"
+    }
+  },
+  "toolResponse": {
+    "subagents": [
+      { "conversationId": "agy-sub-0001", "state": "running" }
+    ]
+  }
+}

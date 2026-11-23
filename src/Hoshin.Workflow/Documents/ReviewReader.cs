@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
@@ -5,7 +6,7 @@ using Hoshin.Workflow.Common;
 namespace Hoshin.Workflow.Documents;
 
 /// <summary>Reads a Layout 2 review document (<c>build/review.md</c>): <c>## Review &lt;n&gt;</c> sections and <c>### F&lt;n&gt;</c> findings.</summary>
-public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
+public sealed class ReviewReader(IJsonSchemaValidator schemaValidator)
 {
     private const string HeaderSchemaName = "review-header.schema.json";
     private const string FindingSchemaName = "finding.schema.json";
@@ -16,7 +17,7 @@ public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
     private static readonly Regex AnyHeading = new(@"^#{1,3} ", RegexOptions.Compiled);
     private static readonly Regex RawKey = new(@"^\s*[\[{]*\s*(""id""\s*:\s*""F[0-9]+|""review""\s*:\s*[0-9]+)", RegexOptions.Compiled);
 
-    private readonly IJsonSchemaValidator _schema = schemaValidator ?? EmbeddedSchemaValidator.Default;
+    private readonly IJsonSchemaValidator _schema = schemaValidator ?? throw new ArgumentNullException(nameof(schemaValidator));
 
     public ReviewReadResult Read(string text, string file)
     {
@@ -45,7 +46,14 @@ public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
             var m = ReviewHeading.Match(doc.Lines[i]);
             if (m.Success)
             {
-                heads.Add((i, int.Parse(m.Groups[1].Value)));
+                if (int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var num))
+                {
+                    heads.Add((i, num));
+                }
+                else
+                {
+                    problems.Add(new Problem(file, i + 1, $"review number '{m.Groups[1].Value}' is not a valid integer"));
+                }
             }
         }
 
@@ -82,6 +90,7 @@ public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
         return new ReviewReadResult(fm.Layout, fm.Data, new ParsedReview(reviews), problems);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private ParsedReviewSection ReadSection(
         Doc doc,
         int index,
@@ -186,6 +195,7 @@ public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
         return new ParsedReviewSection(number, reviewedAt, commits, findings);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private ParsedFinding? ReadFinding(
         Doc doc,
         int index,

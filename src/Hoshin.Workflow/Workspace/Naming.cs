@@ -222,6 +222,7 @@ public static class NamingService
         return [];
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static List<string> CheckNaming(NamingSetting setting)
     {
         var problems = new List<string>();

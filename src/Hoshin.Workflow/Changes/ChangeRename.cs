@@ -8,18 +8,17 @@ public sealed record RenameInput(string Master, string Workspace, string System,
 public sealed record RenameOutcome(List<string> Problems, List<string> Renamed, string? From);
 
 /// <summary>Renames a change's branch across master and product repositories with rollback on failure.</summary>
-public sealed class ChangeRenameService(IGitClient? git = null, AppService? apps = null, BranchChecker? branches = null)
+public sealed class ChangeRenameService(IGitClient git, AppService apps, BranchChecker branches, ChangeRecordStore changeRecords)
 {
-    public static ChangeRenameService Default { get; } = new();
-
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly AppService _apps = apps ?? new AppService(git);
-    private readonly BranchChecker _branches = branches ?? new BranchChecker(git);
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly BranchChecker _branches = branches ?? throw new ArgumentNullException(nameof(branches));
+    private readonly ChangeRecordStore _changeRecords = changeRecords ?? throw new ArgumentNullException(nameof(changeRecords));
 
     public RenameOutcome Rename(RenameInput input)
     {
         var folder = Path.Combine(input.Master, "intent", input.System, input.Change);
-        var record = ChangeRecordStore.Read(folder);
+        var record = _changeRecords.Read(folder);
         if (record is null)
         {
             return new RenameOutcome(
@@ -79,7 +78,7 @@ public sealed class ChangeRenameService(IGitClient? git = null, AppService? apps
             done.Add(r);
         }
 
-        var file = ChangeRecordStore.Write(folder, record with { Branch = input.To });
+        var file = _changeRecords.Write(folder, record with { Branch = input.To });
         var header = $"docs({input.Scope}): rename branch {input.Change}";
         var committed = _git.Run(input.Master, ["commit", "--quiet", "-m", header, "-m", Committer.Trailer, "--", file]);
         if (!committed.Ok)

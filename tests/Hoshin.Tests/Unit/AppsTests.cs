@@ -7,8 +7,8 @@ namespace Hoshin.Tests.Unit;
 
 public sealed class AppsTests
 {
-    private readonly IGitClient _git = ProcessGitClient.Default;
-    private readonly AppService _apps = AppService.Default;
+    private readonly IGitClient _git = TestServices.Git;
+    private readonly AppService _apps = TestServices.Apps;
 
     private static (TestGitFixture.SingleRepoFixture Fixture, string Base) OnChange(Dictionary<string, string>? apps = null)
     {

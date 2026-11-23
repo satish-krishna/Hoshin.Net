@@ -84,8 +84,15 @@ public sealed class ExampleConformanceTests
             {
                 CopyDirectory(dir, stage);
                 var files = new List<string>();
-                if (File.Exists(Path.Combine(stage, "spec.md"))) files.Add("spec.md");
-                if (File.Exists(Path.Combine(stage, "plan.md"))) files.Add("plan.md");
+                if (File.Exists(Path.Combine(stage, "spec.md")))
+                {
+                    files.Add("spec.md");
+                }
+
+                if (File.Exists(Path.Combine(stage, "plan.md")))
+                {
+                    files.Add("plan.md");
+                }
                 var buildDir = Path.Combine(stage, "build");
                 if (Directory.Exists(buildDir))
                 {
@@ -139,10 +146,12 @@ public sealed class ExampleConformanceTests
         return (proc.ExitCode, stdout, stderr);
     }
 
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
     private static string NormalizeJson(string raw)
     {
         using var doc = JsonDocument.Parse(raw);
-        return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(doc.RootElement, IndentedJson);
     }
 
     private static void CopyDirectory(string source, string destination)

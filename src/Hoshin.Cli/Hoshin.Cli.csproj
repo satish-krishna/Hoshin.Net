@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Hoshin.Workflow\Hoshin.Workflow.csproj" />
+    <ProjectReference Include="..\Hoshin.Migration\Hoshin.Migration.csproj" />
   </ItemGroup>
 
 </Project>

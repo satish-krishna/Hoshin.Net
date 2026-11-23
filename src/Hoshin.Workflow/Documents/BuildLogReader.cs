@@ -5,7 +5,7 @@ using Hoshin.Workflow.Common;
 namespace Hoshin.Workflow.Documents;
 
 /// <summary>Reads a Layout 2 build log (<c>build/&lt;repo&gt;.md</c>): one <c>### T&lt;n&gt;</c> heading + JSONC block per finished task.</summary>
-public sealed class BuildLogReader(IJsonSchemaValidator? schemaValidator = null)
+public sealed class BuildLogReader(IJsonSchemaValidator schemaValidator)
 {
     private const string EntrySchemaName = "build-log-entry.schema.json";
 
@@ -13,7 +13,7 @@ public sealed class BuildLogReader(IJsonSchemaValidator? schemaValidator = null)
     private static readonly Regex AnyHeading = new(@"^#{1,3} ", RegexOptions.Compiled);
     private static readonly Regex RawKey = new(@"^\s*[\[{]*\s*""task""\s*:\s*""T[0-9]+", RegexOptions.Compiled);
 
-    private readonly IJsonSchemaValidator _schema = schemaValidator ?? EmbeddedSchemaValidator.Default;
+    private readonly IJsonSchemaValidator _schema = schemaValidator ?? throw new ArgumentNullException(nameof(schemaValidator));
 
     public BuildLogReadResult Read(string text, string file)
     {

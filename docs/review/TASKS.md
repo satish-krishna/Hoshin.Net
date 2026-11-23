@@ -123,57 +123,57 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 
 | ID | Priority | Title | Fixes | Needs | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| T32 | G | Cross-platform packager and CI (Linux + Windows) | §8.6 | — | open |
-| T33 | G | Warnings as errors, analyzers, complexity limit, `.editorconfig` | §8.6 | — | open |
-| T39 | G | Architecture tests with a shrinking baseline | CONTRIBUTING §3–§5 | — | open |
-| T40 | G | Conventional names check | CONTRIBUTING §1 | — | open |
-| T42 | G | Coverage gate on changed lines | CONTRIBUTING §6 T3 | T32 | open |
-| T01 | P0 | Scope the guard and hook logging to the active run | S2, H8 | D2 ✔ | open |
-| T02 | P0 | Make approval and acceptance human-only | S1 | — | open |
-| T03 | P0 | Protect harness config and hoshin state from the agent | S4, S5 | — | open |
-| T04 | P0 | Close the trivial guard bypasses, and enforce "no agent commits" in the library | S3 | — | open |
-| T05 | P0 | Read build checks from the base branch, not the working tree | S6 | — | open |
-| T06 | P0 | Protect the change folder and shell writes during a build | S7 | — | open |
-| T07 | P0 | Scope the workflow ledger to one change | E1 | — | open |
-| T08 | P0 | Commit only the task's own paths | E2, E11 | — | open |
-| T09 | P0 | Serialize evaluate-and-commit | E3 | — | open |
-| T10 | P0 | Make `migrate` fail closed | L1, L2, L3 | — | open |
-| T12 | P0 | `Jsonc.TryParse` accepts empty and comment-only text | L4 | — | open |
-| T13 | P0 | Rewrite `FrontMatterEdit.Set` on real JSONC tokens | L5 | — | open |
-| T14 | P1 | Harden `RedClassifier` | E4 | — | open |
-| T15 | P1 | Fix test-path classification and give it unit tests | E5 | — | open |
-| T16 | P1 | Resolve relative executables against the working directory | E6 | — | open |
-| T17 | P1 | Keep the environment that push, proxies and toolchains need | E7 | — | open |
-| T18 | P1 | Make `ProcessCommandRunner` timeouts hold | L6 | — | open |
-| T19 | P1 | Stop `LedgerStore` wiping a corrupt ledger; add a lock | L7 | — | open |
-| T20 | P1 | `SpecReader` uses `Doc.Fences`; handle "Scenario Template" | L8, L12 | — | open |
-| T22 | P1 | Claude Code `Stop` and `Result` act only for the run's session | S8 | — | open |
-| T23 | P1 | `setup`/`context` don't take over the run | H2 | — | open |
-| T24 | P1 | Judge only the dispatched implement subagent | H3 | — | open |
-| T25 | P1 | Report verdicts and `NeedsApproval` in the Claude async flow | H5 | — | open |
-| T26 | P1 | Separate stop counters; honor `stop_hook_active` | H6 | — | open |
-| T27 | P1 | Truncate injected text without losing the closing marker | H7 | — | open |
-| T28 | P1 | Make timeouts and the attempt cap configurable | E10 | — | open |
-| T29 | P1 | Accept `testPatterns` in `.hoshin.json` | §7 | — | open |
-| T30 | P1 | The intent brief finds the system's context files | §6 | — | open |
-| T31 | P1 | Publishing: PR, review gate, branch default, diagnostics | E8 | D4 ✔ | open |
-| T41 | P1 | Tasks with no testable behavior | §6 | D5 ✔ | open |
-| T11 | P1 | Replace the YAML converter (`Hoshin.Migration` + YamlDotNet) | L1–L3 | D3 ✔, T10 | open |
-| T34 | P1 · SOLID | Remove `?? Default` fallbacks; inject clock and file system | §8.5 (D1–D3) | T39 | open |
-| T35 | P1 · SOLID | Give commands narrow dependencies; split fat interfaces | §8.4 (I1, I2) | T34 | open |
-| T36 | P1 · SOLID | One owner for duplicated rules; enums for closed sets | E13 (O1, R1) | — | open |
-| T43 | P1 · SOLID | Split `WorkflowRunner`, `WorkflowRepo` and `HookOrchestrator` | §8.1 (S1, S3) | T34 | open |
-| A1 | P1 | Unify: `WorkflowRunner` uses `IGitClient` | §3.2 | D1 ✔, T35 | open |
-| A2 | P1 | Unify: one Red rule | §3.2 | A1, T14 | open |
-| A3 | P1 | Unify: one ledger (`LedgerStore`, per change and repo) | §3.2 | A1, T07, T19 | open |
-| A4 | P1 | Unify: `WorkflowState` from `ChangeStateService` | §3.2, §6 | A1 | open |
-| A5 | P1 | Unify: the runner fires lifecycle events and writes build logs | §6 | A3, A4 | open |
-| A6 | P1 | Unify: multi-repo builds | §6 | A5 | open |
-| A7 | P1 | Unify: start a change from `hook start` | H1 | A4 | open |
-| A8 | P1 | Unify: reject, reopen and light-track accept flows; delete the unused half | §6 | A5, A7 | open |
-| T21 | P2 | Small reader and validator fixes (batch) | L11, L12 | — | open |
-| T37 | P2 | Fix false and stale doc claims | §7 | — | open |
-| T38 | P2 | Recorded harness payload fixtures | §5.2, §9 | — | open |
+| T32 | G | Cross-platform packager and CI (Linux + Windows) | §8.6 | — | done |
+| T33 | G | Warnings as errors, analyzers, complexity limit, `.editorconfig` | §8.6 | — | done |
+| T39 | G | Architecture tests with a shrinking baseline | CONTRIBUTING §3–§5 | — | done |
+| T40 | G | Conventional names check | CONTRIBUTING §1 | — | done |
+| T42 | G | Coverage gate on changed lines | CONTRIBUTING §6 T3 | T32 | done |
+| T01 | P0 | Scope the guard and hook logging to the active run | S2, H8 | D2 ✔ | done |
+| T02 | P0 | Make approval and acceptance human-only | S1 | — | done |
+| T03 | P0 | Protect harness config and hoshin state from the agent | S4, S5 | — | done |
+| T04 | P0 | Close the trivial guard bypasses, and enforce "no agent commits" in the library | S3 | — | done |
+| T05 | P0 | Read build checks from the base branch, not the working tree | S6 | — | done |
+| T06 | P0 | Protect the change folder and shell writes during a build | S7 | — | done |
+| T07 | P0 | Scope the workflow ledger to one change | E1 | — | done |
+| T08 | P0 | Commit only the task's own paths | E2, E11 | — | done |
+| T09 | P0 | Serialize evaluate-and-commit | E3 | — | done |
+| T10 | P0 | Make `migrate` fail closed | L1, L2, L3 | — | done |
+| T12 | P0 | `Jsonc.TryParse` accepts empty and comment-only text | L4 | — | done |
+| T13 | P0 | Rewrite `FrontMatterEdit.Set` on real JSONC tokens | L5 | — | done |
+| T14 | P1 | Harden `RedClassifier` | E4 | — | done |
+| T15 | P1 | Fix test-path classification and give it unit tests | E5 | — | done |
+| T16 | P1 | Resolve relative executables against the working directory | E6 | — | done |
+| T17 | P1 | Keep the environment that push, proxies and toolchains need | E7 | — | done |
+| T18 | P1 | Make `ProcessCommandRunner` timeouts hold | L6 | — | done |
+| T19 | P1 | Stop `LedgerStore` wiping a corrupt ledger; add a lock | L7 | — | done |
+| T20 | P1 | `SpecReader` uses `Doc.Fences`; handle "Scenario Template" | L8, L12 | — | done |
+| T22 | P1 | Claude Code `Stop` and `Result` act only for the run's session | S8 | — | done |
+| T23 | P1 | `setup`/`context` don't take over the run | H2 | — | done |
+| T24 | P1 | Judge only the dispatched implement subagent | H3 | — | done |
+| T25 | P1 | Report verdicts and `NeedsApproval` in the Claude async flow | H5 | — | done |
+| T26 | P1 | Separate stop counters; honor `stop_hook_active` | H6 | — | done |
+| T27 | P1 | Truncate injected text without losing the closing marker | H7 | — | done |
+| T28 | P1 | Make timeouts and the attempt cap configurable | E10 | — | done |
+| T29 | P1 | Accept `testPatterns` in `.hoshin.json` | §7 | — | done |
+| T30 | P1 | The intent brief finds the system's context files | §6 | — | done |
+| T31 | P1 | Publishing: PR, review gate, branch default, diagnostics | E8 | D4 ✔ | done |
+| T41 | P1 | Tasks with no testable behavior | §6 | D5 ✔ | done |
+| T11 | P1 | Replace the YAML converter (`Hoshin.Migration` + YamlDotNet) | L1–L3 | D3 ✔, T10 | done |
+| T34 | P1 · SOLID | Remove `?? Default` fallbacks; inject clock and file system | §8.5 (D1–D3) | T39 | done |
+| T35 | P1 · SOLID | Give commands narrow dependencies; split fat interfaces | §8.4 (I1, I2) | T34 | done |
+| T36 | P1 · SOLID | One owner for duplicated rules; enums for closed sets | E13 (O1, R1) | — | done |
+| T43 | P1 · SOLID | Split `WorkflowRunner`, `WorkflowRepo` and `HookOrchestrator` | §8.1 (S1, S3) | T34 | done |
+| A1 | P1 | Unify: `WorkflowRunner` uses `IGitClient` | §3.2 | D1 ✔, T35 | done |
+| A2 | P1 | Unify: one Red rule | §3.2 | A1, T14 | done |
+| A3 | P1 | Unify: one ledger (`LedgerStore`, per change and repo) | §3.2 | A1, T07, T19 | done |
+| A4 | P1 | Unify: `WorkflowState` from `ChangeStateService` | §3.2, §6 | A1 | done |
+| A5 | P1 | Unify: the runner fires lifecycle events and writes build logs | §6 | A3, A4 | done |
+| A6 | P1 | Unify: multi-repo builds | §6 | A5 | done |
+| A7 | P1 | Unify: start a change from `hook start` | H1 | A4 | done |
+| A8 | P1 | Unify: reject, reopen and light-track accept flows; delete the unused half | §6 | A5, A7 | done |
+| T21 | P2 | Small reader and validator fixes (batch) | L11, L12 | — | done |
+| T37 | P2 | Fix false and stale doc claims | §7 | — | done |
+| T38 | P2 | Recorded harness payload fixtures | §5.2, §9 | — | done |
 | EPIC-B | P1 | Restore the dropped skill guidance, templates and evals | §6 | — | open (needs a human reviewer) |
 
 ---

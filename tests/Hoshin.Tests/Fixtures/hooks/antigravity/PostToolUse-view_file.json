@@ -1,0 +1,19 @@
+{
+  "hookEventName": "PostToolUse",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "toolCall": {
+    "id": "call-vf-0001",
+    "name": "view_file",
+    "args": {
+      "AbsolutePath": "/workspace/repo/.agents/skills/build/SKILL.md",
+      "IsSkillFile": true
+    }
+  },
+  "toolResponse": {
+    "content": "Read references/procedure.md"
+  }
+}

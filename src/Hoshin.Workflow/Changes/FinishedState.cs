@@ -3,11 +3,9 @@ using Hoshin.Workflow.Git;
 namespace Hoshin.Workflow.Changes;
 
 /// <summary>Determines whether each placed change is open (null), <c>rejected</c>, or <c>merged</c>.</summary>
-public sealed class FinishedChecker(IGitClient? git = null)
+public sealed class FinishedChecker(IGitClient git)
 {
-    public static FinishedChecker Default { get; } = new();
-
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
 
     public Dictionary<string, string?> FinishedOf(Placement p)
     {

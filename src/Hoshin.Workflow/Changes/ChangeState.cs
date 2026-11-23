@@ -56,25 +56,23 @@ public sealed record StateResult(string System, List<ChangeStateItem> Changes, L
 
 /// <summary>Computes full change state and skill readiness gates per GRAMMAR.md.</summary>
 public sealed class ChangeStateService(
-    IGitClient? git = null,
-    ChangePlacer? placer = null,
-    FinishedChecker? finishedChecker = null,
-    FixStateService? fixState = null,
-    ProgressService? progress = null,
-    SpecReader? specReader = null,
-    ReviewReader? reviewReader = null,
-    AppService? apps = null)
+    IGitClient git,
+    ChangePlacer placer,
+    FinishedChecker finishedChecker,
+    FixStateService fixState,
+    ProgressService progress,
+    SpecReader specReader,
+    ReviewReader reviewReader,
+    AppService apps)
 {
-    public static ChangeStateService Default { get; } = new();
-
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly ChangePlacer _placer = placer ?? new ChangePlacer(git);
-    private readonly FinishedChecker _finished = finishedChecker ?? new FinishedChecker(git);
-    private readonly FixStateService _fixState = fixState ?? new FixStateService(git);
-    private readonly ProgressService _progress = progress ?? ProgressService.Default;
-    private readonly SpecReader _spec = specReader ?? new SpecReader();
-    private readonly ReviewReader _review = reviewReader ?? new ReviewReader();
-    private readonly AppService _apps = apps ?? new AppService(git);
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly ChangePlacer _placer = placer ?? throw new ArgumentNullException(nameof(placer));
+    private readonly FinishedChecker _finished = finishedChecker ?? throw new ArgumentNullException(nameof(finishedChecker));
+    private readonly FixStateService _fixState = fixState ?? throw new ArgumentNullException(nameof(fixState));
+    private readonly ProgressService _progress = progress ?? throw new ArgumentNullException(nameof(progress));
+    private readonly SpecReader _spec = specReader ?? throw new ArgumentNullException(nameof(specReader));
+    private readonly ReviewReader _review = reviewReader ?? throw new ArgumentNullException(nameof(reviewReader));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
 
     private sealed record RepositoryFacts(List<string> Uncommitted, string? From, List<TrailerCommit> Trailers);
 
@@ -144,6 +142,7 @@ public sealed class ChangeStateService(
         return new StateResult(place.System, changes, problems);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private ChangeStateItem ComputeOne(
         SystemRead read,
         Dictionary<string, GitDirsInfo?> dirsCache,
@@ -430,6 +429,7 @@ public sealed class ChangeStateService(
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private (Dictionary<string, List<string>>? Commits, List<string>? Untasked, List<string>? Uncommitted) RepositoryWork(
         string top,
         string workspace,
@@ -534,6 +534,7 @@ public sealed class ChangeStateService(
         return true;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static ReadinessMap ComputeReadiness(
         string change,
         string track,
@@ -610,7 +611,7 @@ public sealed class ChangeStateService(
             (dirtyLog.Key is not null ? $"The build log for `{dirtyLog.Key}` has uncommitted changes; rerun the build for `{dirtyLog.Key}` to commit them." : null);
 
         var allLogged = tasks is not null && unloggedRepos.Count == 0;
-        var uncommittedDoc = new[] { "intent", "spec", "plan" }.FirstOrDefault(Uncommitted);
+        var uncommittedDoc = AuthoringDocs.FirstOrDefault(Uncommitted);
         var rejectStop =
             (d.Intent.HeadStatus == "rejected" ? $"`{change}` is closed: its intent was rejected." : null) ??
             (buildLogs.Count > 0 || review.Committed > 0 || review.Draft != "none" ? $"`{change}` has build work (a build log or a review), so it is not rejected. The engineer settles that work first." : null) ??
@@ -624,6 +625,8 @@ public sealed class ChangeStateService(
             Done: new SkillReadiness(review.Committed > 0 && allLogged, null, []),
             Reject: new SkillReadiness(false, rejectStop, []));
     }
+
+    private static readonly string[] AuthoringDocs = ["intent", "spec", "plan"];
 
     private static string? PinValue(string? text, string file, string field)
     {

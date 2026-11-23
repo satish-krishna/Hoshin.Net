@@ -1,10 +1,13 @@
+using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class ListCommand(HoshinServices services) : IHoshinCommand
+public sealed class ListCommand(ChangeListService changeList) : IHoshinCommand
 {
+    private readonly ChangeListService _changeList = changeList ?? throw new ArgumentNullException(nameof(changeList));
+
     public string Name => "list";
     public string Usage => "list --json [--system <s>] [--master <path>] [--workspace <path>]";
 
@@ -16,7 +19,7 @@ public sealed class ListCommand(HoshinServices services) : IHoshinCommand
             throw new UsageException();
         }
 
-        var result = services.ChangeList.List(
+        var result = _changeList.List(
             Directory.GetCurrentDirectory(),
             new ResolveOptions(o.Get("master"), o.Get("workspace")),
             o.Get("system"));

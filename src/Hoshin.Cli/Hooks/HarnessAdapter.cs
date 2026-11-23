@@ -33,22 +33,23 @@ public sealed record NormalizedHookEvent(
     bool? FullyIdle,
     bool ContinuationActive,
     string? ToolError,
-    JsonElement RawInput)
+    JsonElement RawInput,
+    string? SubagentPrompt = null,
+    string? LastAssistantMessage = null)
 {
     public bool IsAntigravity => Harness == HookHarness.Antigravity;
 
     public string HarnessName => IsAntigravity ? "antigravity" : "claude-code";
 
-    public bool IsShellTool => ToolName is "Bash" or "run_command";
+    public bool IsShellTool => HarnessTools.IsShellTool(ToolName);
 
-    public bool IsFileWriteTool => ToolName is "Edit" or "Write" or "MultiEdit" or "NotebookEdit"
-        or "write_file" or "edit_file" or "write_to_file" or "replace_file_content" or "multi_replace_file_content";
+    public bool IsFileWriteTool => HarnessTools.IsFileWriteTool(ToolName);
 
-    public bool IsSkillReadTool => ToolName is "view_file" or "read_file";
+    public bool IsSkillReadTool => HarnessTools.IsSkillReadTool(ToolName);
 
-    public bool IsSubagentLaunchTool => ToolName is "Agent" or "Task" or "invoke_subagent";
+    public bool IsSubagentLaunchTool => HarnessTools.IsSubagentLaunchTool(ToolName);
 
-    public bool IsTaskManageTool => ToolName is "manage_task" or "manage_subagents";
+    public bool IsTaskManageTool => HarnessTools.IsTaskManageTool(ToolName);
 }
 
 /// <summary>Normalizes Claude Code and Antigravity hook stdin payloads and formats harness-specific stdout responses.</summary>
@@ -73,9 +74,9 @@ public interface IHookAdapter
 /// Dual-harness adapter auto-detecting Claude Code (<c>snake_case</c>) and Google Antigravity (<c>camelCase</c>) payloads,
 /// handling both CLI and IDE Antigravity tool names and reading/writing raw UTF-8 streams safely on Windows.
 /// </summary>
-public sealed class HarnessAdapter : IHookAdapter
+public sealed class HarnessAdapter(TimeProvider timeProvider) : IHookAdapter
 {
-    public static HarnessAdapter Default { get; } = new();
+    private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public NormalizedHookEvent ReadFromStdin()
     {
@@ -84,6 +85,7 @@ public sealed class HarnessAdapter : IHookAdapter
         return Parse(raw);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public NormalizedHookEvent Parse(string rawJson)
     {
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(rawJson) ? "{}" : rawJson);
@@ -122,6 +124,11 @@ public sealed class HarnessAdapter : IHookAdapter
         var fullyIdle = Bool(root, "fullyIdle");
         var continuationActive = Flag(root, "continuationActive") || Flag(root, "stop_hook_active");
         var toolError = Str(root, "error");
+        var subagentPrompt = ToolInputAny(root, "prompt", "Prompt");
+        var lastAssistantMessage = Str(root, "last_assistant_message")
+            ?? Str(root, "lastAssistantMessage")
+            ?? Str(root, "assistantMessage")
+            ?? Str(root, "finalResponse");
 
         return new NormalizedHookEvent(
             harness,
@@ -144,7 +151,9 @@ public sealed class HarnessAdapter : IHookAdapter
             fullyIdle,
             continuationActive,
             toolError,
-            root);
+            root,
+            subagentPrompt,
+            lastAssistantMessage);
     }
 
     public string? EmptyOutput(HookHarness harness) => harness == HookHarness.Antigravity ? "{}" : null;
@@ -182,9 +191,9 @@ public sealed class HarnessAdapter : IHookAdapter
         stdout.Flush();
     }
 
-    public static void AppendTrace(WorkflowRepo? repo, string command, NormalizedHookEvent ev, string? output, string decision, Stopwatch clock)
+    public void AppendTrace(WorkflowRepo? repo, string command, NormalizedHookEvent ev, string? output, string decision, Stopwatch clock)
     {
-        if (repo is null)
+        if (repo is null || !File.Exists(repo.RunMarkerPath))
         {
             return;
         }
@@ -196,7 +205,7 @@ public sealed class HarnessAdapter : IHookAdapter
             using (var w = new Utf8JsonWriter(ms))
             {
                 w.WriteStartObject();
-                w.WriteString("at", DateTimeOffset.UtcNow);
+                w.WriteString("at", _time.GetUtcNow());
                 w.WriteString("harness", ev.HarnessName);
                 w.WriteString("command", command);
                 w.WriteString("event", ev.EventName);

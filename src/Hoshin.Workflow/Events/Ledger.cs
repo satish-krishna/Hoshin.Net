@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Events;
@@ -52,13 +54,41 @@ public sealed record RepoLedger(
     [property: JsonPropertyName("runs")] List<EventRecord> Runs,
     [property: JsonPropertyName("gateBlocks")] Dictionary<string, int> GateBlocks,
     [property: JsonPropertyName("approvals"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<BaselineApproval>? Approvals = null,
-    [property: JsonPropertyName("reds"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<RedRecord>? Reds = null);
+    [property: JsonPropertyName("reds"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<RedRecord>? Reds = null,
+    [property: JsonPropertyName("issued"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowIssued>? Issued = null,
+    [property: JsonPropertyName("verdicts"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowVerdict>? Verdicts = null,
+    [property: JsonPropertyName("baselines"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowBaselineRun>? Baselines = null,
+    [property: JsonPropertyName("checks"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowCheckRun>? Checks = null,
+    [property: JsonPropertyName("reviews"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowReviewRun>? Reviews = null,
+    [property: JsonPropertyName("workflowApprovals"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowApproval>? WorkflowApprovals = null,
+    [property: JsonPropertyName("published"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowPublished>? Published = null,
+    [property: JsonPropertyName("activeSubagent"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActiveSubagent? ActiveSubagent = null)
+{
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowIssued> WorkflowIssued => Issued ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowVerdict> WorkflowVerdicts => Verdicts ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowBaselineRun> WorkflowBaselines => Baselines ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowCheckRun> WorkflowChecks => Checks ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowReviewRun> WorkflowReviews => Reviews ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowApproval> WorkflowApprovalRecords => WorkflowApprovals ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowPublished> WorkflowPublishedRecords => Published ?? [];
+}
 
 /// <summary>Atomic per-repository ledger storage in <c>&lt;git-common-dir&gt;/hoshin/&lt;system&gt;/&lt;change&gt;/&lt;repo&gt;.json</c>.</summary>
-public sealed class LedgerStore(IGitClient? git = null)
+public sealed class LedgerStore(IGitWorktrees git, IFileSystem fileSystem)
 {
-    public static LedgerStore Default { get; } = new();
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -66,7 +96,8 @@ public sealed class LedgerStore(IGitClient? git = null)
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+    private readonly IGitWorktrees _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
     public string LedgerFolder(string master, string system, string change) =>
         _git.GitPath(master, Path.Combine("hoshin", system, change), common: true);
@@ -74,30 +105,31 @@ public sealed class LedgerStore(IGitClient? git = null)
     public RepoLedger? Read(string folder, string repo)
     {
         var file = Path.Combine(folder, $"{repo}.json");
-        if (!File.Exists(file))
+        if (!_fs.FileExists(file))
         {
             return null;
         }
 
         try
         {
-            return JsonSerializer.Deserialize<RepoLedger>(File.ReadAllText(file), JsonOptions);
+            var parsed = JsonSerializer.Deserialize<RepoLedger>(_fs.ReadAllText(file), JsonOptions);
+            return parsed ?? throw new CouldNotRunException($"{file} is not valid JSON: file contains null");
         }
-        catch
+        catch (JsonException e)
         {
-            return null;
+            throw new CouldNotRunException($"{file} is not valid JSON: {e.Message.Split('\n')[0]}");
         }
     }
 
     public List<RepoLedger> ReadAll(string folder)
     {
-        if (!Directory.Exists(folder))
+        if (!_fs.DirectoryExists(folder))
         {
             return [];
         }
 
         var list = new List<RepoLedger>();
-        foreach (var file in Directory.GetFiles(folder, "*.json").OrderBy(f => Path.GetFileName(f), StringComparer.Ordinal))
+        foreach (var file in _fs.EnumerateFiles(folder, "*.json").OrderBy(f => Path.GetFileName(f), StringComparer.Ordinal))
         {
             var repo = Path.GetFileNameWithoutExtension(file);
             var ledger = Read(folder, repo);
@@ -112,14 +144,29 @@ public sealed class LedgerStore(IGitClient? git = null)
 
     public void Write(string folder, RepoLedger ledger)
     {
-        Directory.CreateDirectory(folder);
+        _fs.CreateDirectory(folder);
         var file = Path.Combine(folder, $"{ledger.Repo}.json");
-        var temp = $"{file}.{Environment.ProcessId}.tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(ledger, JsonOptions) + "\n");
-        File.Move(temp, file, overwrite: true);
+        _fs.WriteAllTextAtomic(file, JsonSerializer.Serialize(ledger, JsonOptions) + "\n");
     }
 
-    public static RepoLedger Empty(string system, string change, string repo, string path) =>
+    public RepoLedger Update(string folder, string repo, Func<RepoLedger, RepoLedger> transform) =>
+        Update(
+            folder,
+            repo,
+            () => throw new CouldNotRunException($"{Path.Combine(folder, $"{repo}.json")} does not exist"),
+            transform);
+
+    public RepoLedger Update(string folder, string repo, Func<RepoLedger> createDefault, Func<RepoLedger, RepoLedger> transform)
+    {
+        _fs.CreateDirectory(folder);
+        using var gate = FileLock.Acquire(Path.Combine(folder, $"{repo}.lock"), TimeSpan.FromSeconds(10));
+        var current = Read(folder, repo) ?? createDefault();
+        var updated = transform(current);
+        Write(folder, updated);
+        return updated;
+    }
+
+    public static RepoLedger Empty(string system = "default", string change = "default", string repo = "master", string path = "") =>
         new(1, system, change, repo, path, [], new Dictionary<string, int>(StringComparer.Ordinal));
 
     public static EventRecord? Latest(RepoLedger? ledger, string eventName, string? key, string? subject = null)

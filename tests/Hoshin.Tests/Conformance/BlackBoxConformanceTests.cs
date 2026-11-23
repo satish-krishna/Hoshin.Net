@@ -47,7 +47,7 @@ public abstract class BlackBoxConformanceTestsBase
             ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1",
         };
 
-        var result = ProcessCommandRunner.Default.Run(new CommandRequest(
+        var result = new ProcessCommandRunner().Run(new CommandRequest(
             WorkingDirectory: BlackBoxDir,
             Argv: ["node", "--test", suitePath],
             ExtraEnvironment: env,

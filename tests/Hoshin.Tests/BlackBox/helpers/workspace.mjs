@@ -147,18 +147,20 @@ export function run(cwd, args, extraEnv = {}) {
   return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '', lines, json: lines[lines.length - 1] };
 }
 
-/** Runs `dotnet hoshin.dll` with every git invocation counted via HOSHIN_GIT_COUNT_FILE. */
+/** Runs `dotnet hoshin.dll` with every git invocation counted via native GIT_TRACE2_EVENT. */
 export function runCounted(cwd, args) {
   const dir = tempDir('hoshin-count-');
-  const file = join(dir, 'count.txt');
+  const file = join(dir, 'trace2.jsonl');
   try {
     const r = spawnSync(dotnet, [program, ...args], {
       cwd,
       encoding: 'utf8',
-      env: { ...env, HOSHIN_GIT_COUNT_FILE: file },
+      env: { ...env, GIT_TRACE2_EVENT: file },
     });
     const gitCount = existsSync(file)
-      ? readFileSync(file, 'utf8').split('\n').filter(Boolean).reduce((sum, n) => sum + Number(n), 0)
+      ? readFileSync(file, 'utf8')
+          .split('\n')
+          .filter((line) => line.includes('"event":"start"')).length
       : 0;
     const lines = jsonLines(r.stdout ?? '');
     return { status: r.status, json: lines[lines.length - 1], stderr: r.stderr ?? '', gitCount };

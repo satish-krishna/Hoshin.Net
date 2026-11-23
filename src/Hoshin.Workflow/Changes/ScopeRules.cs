@@ -8,18 +8,22 @@ using Hoshin.Workflow.Workspace;
 namespace Hoshin.Workflow.Changes;
 
 /// <summary>Commit scope resolution and branch commit-rule verification.</summary>
-public static class ScopeRules
+public sealed class ScopeRules(ChangeRecordStore changeRecords, MarkerReader markerReader, IFileSystem fileSystem)
 {
     private static readonly Regex HeaderRegex = new(@"^[a-z]+\(([^)\s]+)\)!?: \S", RegexOptions.Compiled);
 
-    public static string ChangeScope(string master, string system, string folder, IReadOnlyList<string>? markers = null)
+    private readonly ChangeRecordStore _changeRecords = changeRecords ?? throw new ArgumentNullException(nameof(changeRecords));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+
+    public string ChangeScope(string master, string system, string folder, IReadOnlyList<string>? markers = null)
     {
         var intent = Path.Combine(folder, "intent.md");
-        if (File.Exists(intent))
+        if (_fs.FileExists(intent))
         {
             try
             {
-                var scope = Jsonc.String(FrontMatter.Parse(File.ReadAllText(intent), intent).Data, "scope");
+                var scope = Jsonc.String(FrontMatter.Parse(_fs.ReadAllText(intent), intent).Data, "scope");
                 if (!string.IsNullOrEmpty(scope) && NamingService.CheckScope(scope).Count == 0)
                 {
                     return scope;
@@ -31,7 +35,7 @@ public static class ScopeRules
             }
         }
 
-        var recorded = ChangeRecordStore.Read(folder)?.Scope;
+        var recorded = _changeRecords.Read(folder)?.Scope;
         if (!string.IsNullOrEmpty(recorded) && NamingService.CheckScope(recorded).Count == 0)
         {
             return recorded;
@@ -40,13 +44,13 @@ public static class ScopeRules
         return SystemScope(master, system, markers);
     }
 
-    public static string SystemScope(string master, string system, IReadOnlyList<string>? markers = null)
+    public string SystemScope(string master, string system, IReadOnlyList<string>? markers = null)
     {
         try
         {
             var markerNames = markers ?? MarkerConstants.DefaultMarkers;
-            var file = MarkerReader.MarkerFileIn(master, markerNames) ?? Path.Combine(master, markerNames[0]);
-            using var doc = JsonDocument.Parse(File.ReadAllText(file));
+            var file = _markerReader.MarkerFileIn(master, markerNames) ?? Path.Combine(master, markerNames[0]);
+            using var doc = JsonDocument.Parse(_fs.ReadAllText(file));
             if (doc.RootElement.ValueKind == JsonValueKind.Object &&
                 doc.RootElement.TryGetProperty("systems", out var systems) &&
                 systems.ValueKind == JsonValueKind.Object &&

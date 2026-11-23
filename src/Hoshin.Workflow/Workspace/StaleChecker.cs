@@ -18,21 +18,19 @@ public sealed record RepoStaleness(
 
 public sealed record StaleResult(string System, List<RepoStaleness> Repos, List<string> Problems);
 
-public sealed record StaleOptions(string System, IReadOnlyList<string>? Repos = null, string? Master = null, string? Workspace = null);
+public sealed record StaleOptions(string System, List<string>? Repos = null, string? Master = null, string? Workspace = null);
 
 /// <summary>Computes staleness of each repository/app context file against git commits.</summary>
 public sealed class StaleChecker(
-    IGitClient? git = null,
-    IWorkspaceResolver? resolver = null,
-    ChangeLocator? locator = null,
-    AppService? apps = null)
+    IGitClient git,
+    IWorkspaceResolver resolver,
+    ChangeLocator locator,
+    AppService apps)
 {
-    public static StaleChecker Default { get; } = new();
-
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly IWorkspaceResolver _resolver = resolver ?? new WorkspaceResolver(git);
-    private readonly ChangeLocator _locator = locator ?? new ChangeLocator(git);
-    private readonly AppService _apps = apps ?? new AppService(git);
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly ChangeLocator _locator = locator ?? throw new ArgumentNullException(nameof(locator));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
 
     public StaleResult Check(string cwd, StaleOptions options)
     {

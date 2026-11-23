@@ -1,0 +1,20 @@
+{
+  "session_id": "cc-sess-0001",
+  "transcript_path": "/home/engineer/.claude/projects/workspace-repo/cc-sess-0001.jsonl",
+  "cwd": "/workspace/repo",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Agent",
+  "tool_use_id": "toolu_01AgentAsync0001",
+  "tool_input": {
+    "subagent_type": "general-purpose",
+    "description": "Build T1",
+    "run_in_background": true,
+    "prompt": "<!-- hoshin:T1:attempt-1:deadbeef -->\nImplement task T1 test first."
+  },
+  "tool_response": {
+    "isAsync": true,
+    "status": "async_launched",
+    "agentId": "agent-0001"
+  }
+}

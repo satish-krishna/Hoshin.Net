@@ -24,10 +24,8 @@ public sealed record HookConfig(
     List<string> Problems);
 
 /// <summary>Parses and merges base-branch hook configurations from <c>.hoshin.json</c> and <c>intent/&lt;system&gt;/hooks.json</c>.</summary>
-public sealed class HookConfigService(IGitClient? git = null)
+public sealed class HookConfigService(IGitBranches gitBranches, IGitQuery gitQuery)
 {
-    public static HookConfigService Default { get; } = new();
-
     public static readonly string[] Events =
         ["change.start", "doc.accept", "build.start", "task.done", "build.finish", "review.finish", "change.done"];
 
@@ -49,19 +47,20 @@ public sealed class HookConfigService(IGitClient? git = null)
     private static readonly HashSet<string> HookFields = ["id", "when", "run", "repos", "apps", "timeout", "blocking", "onFailure"];
     private static readonly Regex HookIdRegex = new(@"^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+    private readonly IGitBranches _gitBranches = gitBranches ?? throw new ArgumentNullException(nameof(gitBranches));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
 
     public HookConfig ReadFromBaseBranch(string master, string system)
     {
-        var baseBranch = _git.BaseBranch(master);
-        var revision = baseBranch is null ? null : _git.BaseRevision(master, baseBranch);
+        var baseBranch = _gitBranches.BaseBranch(master);
+        var revision = baseBranch is null ? null : _gitBranches.BaseRevision(master, baseBranch);
         if (revision is null)
         {
             return new HookConfig(null, [], 3, []);
         }
 
-        var markerText = _git.ShowFile(master, revision, MarkerConstants.FileName);
-        var systemText = _git.ShowFile(master, revision, $"intent/{system}/hooks.json");
+        var markerText = _gitQuery.ShowFile(master, revision, MarkerConstants.FileName);
+        var systemText = _gitQuery.ShowFile(master, revision, $"intent/{system}/hooks.json");
         var parsed = ParseConfig(markerText, systemText, system);
         return parsed with { Revision = revision };
     }
@@ -184,6 +183,7 @@ public sealed class HookConfigService(IGitClient? git = null)
         return systems.EnumerateObject().SelectMany(p => NamesOf(p.Value)).ToList();
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private static (List<HookDefinition> Hooks, List<string> Problems) ParseHooks(
         JsonElement? value,
         string layer,

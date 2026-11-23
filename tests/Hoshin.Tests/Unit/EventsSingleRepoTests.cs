@@ -10,9 +10,9 @@ namespace Hoshin.Tests.Unit;
 public sealed class EventsSingleRepoTests
 {
     private const string Name = "2026-11-02-wave";
-    private readonly EventContextFactory _factory = EventContextFactory.Default;
-    private readonly AppService _apps = AppService.Default;
-    private readonly LedgerStore _ledger = LedgerStore.Default;
+    private readonly EventContextFactory _factory = TestServices.Default.EventContext;
+    private readonly AppService _apps = TestServices.Apps;
+    private readonly LedgerStore _ledger = TestServices.Ledger;
 
     private static (TestGitFixture.SingleRepoFixture Fixture, string Copy) Started()
     {

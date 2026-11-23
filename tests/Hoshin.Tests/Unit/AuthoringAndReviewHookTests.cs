@@ -31,7 +31,7 @@ public sealed class AuthoringAndReviewHookTests
         }
 
         var env = new Dictionary<string, string>(TestGitFixture.GitEnv) { ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1" };
-        var res = ProcessCommandRunner.Default.Run(new CommandRequest(
+        var res = TestServices.CommandRunner.Run(new CommandRequest(
             WorkingDirectory: cwd,
             Argv: ["dotnet", .. args],
             StandardInput: JsonSerializer.Serialize(payload),
@@ -432,8 +432,8 @@ public sealed class AuthoringAndReviewHookTests
         var (_, acceptPlan, _) = RunHook(repoDir, "hook start", StartPayload(harness, repoDir, session + "-a3", "accept"));
         var acceptPlanText = ExtractStartText(harness, acceptPlan);
         Assert.Contains("plan is accepted", acceptPlanText);
-        var repo = WorkflowRepo.Find(repoDir)!;
-        Assert.IsType<Implement>(WorkflowEngine.Next(WorkflowState.Read(repo)!));
+        var repo = TestServices.FindRepo(repoDir)!;
+        Assert.IsType<Implement>(WorkflowEngine.Next(TestServices.ReadState(repo)!));
     }
 
     // =========================================================================
@@ -474,13 +474,12 @@ public sealed class AuthoringAndReviewHookTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var head = repo.Head();
-        repo.WithLedger(l =>
+        repo.UpdateLedger(l => l with
         {
-            l.Verdicts.Add(new WorkflowVerdict("T1", 1, head, true, "observed", [], DateTimeOffset.UtcNow));
-            l.Checks.Add(new WorkflowCheckRun(head, true, "ok", DateTimeOffset.UtcNow));
-            return 0;
+            Verdicts = [new WorkflowVerdict("T1", 1, head, true, "observed", [], DateTimeOffset.UtcNow)],
+            Checks = [new WorkflowCheckRun(head, true, "ok", DateTimeOffset.UtcNow)],
         });
 
         var session = $"rev-{harness}";
@@ -545,7 +544,7 @@ public sealed class AuthoringAndReviewHookTests
 
         var committed = AssertBlockedStop(harness, RunHook(repoDir, "hook stop", StopPayload(harness, repoDir, session)).Stdout);
         Assert.Contains("review is committed", committed);
-        var reviewRun = Assert.Single(repo.ReadLedger().Reviews);
+        var reviewRun = Assert.Single(repo.ReadLedger().WorkflowReviews);
         Assert.Equal(1, reviewRun.ReviewNumber);
         Assert.Equal(1, reviewRun.FindingCount);
         Assert.Equal(0, reviewRun.HighCount);
@@ -729,10 +728,9 @@ public sealed class AuthoringAndReviewHookTests
     public void Packager_EmitsOneLineSkillWrappersForAll10SkillsInBothBundles()
     {
         using var outDir = new TempDir("hoshin-pkg-");
-        IReadOnlyList<string> argv = OperatingSystem.IsWindows()
-            ? ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path]
-            : ["pwsh", "-NoProfile", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path];
-        var res = ProcessCommandRunner.Default.Run(new CommandRequest(
+        IReadOnlyList<string> argv =
+            ["pwsh", "-NoProfile", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path];
+        var res = TestServices.CommandRunner.Run(new CommandRequest(
             WorkingDirectory: RepoRoot,
             Argv: argv,
             Timeout: TimeSpan.FromMinutes(3)));
@@ -783,11 +781,37 @@ public sealed class AuthoringAndReviewHookTests
 
                 var wrapperText = File.ReadAllText(skillMd);
                 Assert.Contains("Read `references/procedure.md` and follow it.", wrapperText);
+                if (skill is "accept" or "done")
+                {
+                    Assert.Contains("disable-model-invocation: true", wrapperText);
+                }
+                else
+                {
+                    Assert.DoesNotContain("disable-model-invocation: true", wrapperText);
+                }
 
                 // Verbatim copy check.
                 var srcProc = File.ReadAllText(Path.Combine(SkillsDir, skill, "procedure.md"));
                 Assert.Equal(srcProc, File.ReadAllText(refProc));
             }
         }
+    }
+
+    [Fact]
+    public void Packager_WritesVersionFromParameterIntoPluginJson()
+    {
+        using var outDir = new TempDir("hoshin-pkg-ver-");
+        IReadOnlyList<string> argv =
+            ["pwsh", "-NoProfile", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path, "-Version", "9.8.7"];
+        var res = TestServices.CommandRunner.Run(new CommandRequest(
+            WorkingDirectory: RepoRoot,
+            Argv: argv,
+            Timeout: TimeSpan.FromMinutes(3)));
+        Assert.True(res.Ok, $"package.ps1 failed:\n{res.Stdout}\n{res.Stderr}");
+
+        var pluginJsonPath = Path.Combine(outDir.Path, "claude-code", ".claude-plugin", "plugin.json");
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(pluginJsonPath));
+        Assert.Equal("9.8.7", doc.RootElement.GetProperty("version").GetString());
+        Assert.True(File.Exists(Path.Combine(outDir.Path, "nuget", "Hoshin.Workflow.9.8.7.nupkg")));
     }
 }

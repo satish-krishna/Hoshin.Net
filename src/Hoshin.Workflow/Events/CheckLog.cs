@@ -15,20 +15,22 @@ public sealed class CheckLog
     private readonly string _event;
     private readonly string _repo;
     private readonly List<string> _problems;
+    private readonly TimeProvider _time;
     private bool _reported;
 
-    public CheckLog(string file, string eventName, string repo, List<string> problems)
+    public CheckLog(string file, string eventName, string repo, List<string> problems, TimeProvider timeProvider)
     {
         RunId = Guid.NewGuid().ToString();
         _file = file;
         _event = eventName;
         _repo = repo;
         _problems = problems;
+        _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public string RunId { get; }
 
-    public static string ChecksFile(IGitClient git, string master, string system, string change) =>
+    public static string ChecksFile(IGitWorktrees git, string master, string system, string change) =>
         Path.Combine(git.GitPath(master, Path.Combine("hoshin", system, change), common: true), "checks.jsonl");
 
     public static bool IsCheck(string eventName, HookDefinition hook) =>
@@ -40,7 +42,7 @@ public sealed class CheckLog
             ["run"] = RunId,
             ["event"] = _event,
             ["repo"] = _repo,
-            ["at"] = DateTimeOffset.UtcNow.ToString("O"),
+            ["at"] = _time.GetUtcNow().ToString("O"),
             ["type"] = "check-start",
             ["check"] = check,
             ["phase"] = phase,
@@ -54,7 +56,7 @@ public sealed class CheckLog
             ["run"] = RunId,
             ["event"] = _event,
             ["repo"] = _repo,
-            ["at"] = DateTimeOffset.UtcNow.ToString("O"),
+            ["at"] = _time.GetUtcNow().ToString("O"),
             ["type"] = "check-end",
             ["check"] = check,
             ["phase"] = phase,

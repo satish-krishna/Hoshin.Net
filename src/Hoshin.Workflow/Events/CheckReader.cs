@@ -59,9 +59,10 @@ public static class CheckReader
         public DateTimeOffset? At { get; init; }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static ReadChecksResult Read(string file, string? repoFilter = null, DateTimeOffset? now = null, Func<int, bool>? pidAlive = null)
     {
-        var currentTime = now ?? DateTimeOffset.UtcNow;
+        var currentTime = now ?? TimeProvider.System.GetUtcNow();
         var alive = pidAlive ?? IsPidAlive;
         var problems = new List<string>();
         if (!File.Exists(file))

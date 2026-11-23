@@ -7,15 +7,17 @@ namespace Hoshin.Workflow.Events.Steps;
 
 /// <summary><c>change.start</c>: creates the change branch, worktree copy, and initial <c>change.jsonc</c> commit.</summary>
 public sealed class ChangeStartStep(
-    IGitClient? git = null,
-    AppService? apps = null,
-    BranchChecker? branchChecker = null) : IEventStep
+    IGitClient git,
+    AppService apps,
+    BranchChecker branchChecker,
+    ChangeRecordStore changeRecords) : IEventStep
 {
     private static readonly Regex ChangeNameRegex = new(@"^\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly AppService _apps = apps ?? new AppService(git);
-    private readonly BranchChecker _branches = branchChecker ?? new BranchChecker(git);
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly BranchChecker _branches = branchChecker ?? throw new ArgumentNullException(nameof(branchChecker));
+    private readonly ChangeRecordStore _changeRecords = changeRecords ?? throw new ArgumentNullException(nameof(changeRecords));
 
     public string EventName => "change.start";
     public bool ReusePassed => false;
@@ -133,7 +135,7 @@ public sealed class ChangeStartStep(
         Directory.CreateDirectory(folder);
         var type = ctx.Extra["type"];
         var scope = ctx.Extra["scope"];
-        var file = ChangeRecordStore.Write(folder, new ChangeRecord(1, branchName, type, scope, baseBranch, []));
+        var file = _changeRecords.Write(folder, new ChangeRecord(1, branchName, type, scope, baseBranch, []));
         var header = $"docs({scope}): start change {ctx.Change}";
         var committed = _git.CommitPaths(copy, [file], [header, Committer.Trailer]);
         if (!committed.Ok)
@@ -185,11 +187,11 @@ public sealed class ChangeStartStep(
         return (NamingService.RenderNaming(naming.Setting, values).Branch, []);
     }
 
-    private static (bool Exists, ChangeRecord? Record) ExistingCopy(EventContext ctx)
+    private (bool Exists, ChangeRecord? Record) ExistingCopy(EventContext ctx)
     {
         var copy = CopyOf(ctx);
         var exists = Directory.Exists(copy);
-        var record = exists ? ChangeRecordStore.Read(Path.Combine(copy, "intent", ctx.System, ctx.Change)) : null;
+        var record = exists ? _changeRecords.Read(Path.Combine(copy, "intent", ctx.System, ctx.Change)) : null;
         return (exists, record);
     }
 }

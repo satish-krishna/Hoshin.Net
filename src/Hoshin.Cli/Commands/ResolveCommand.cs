@@ -3,8 +3,10 @@ using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class ResolveCommand(HoshinServices services) : IHoshinCommand
+public sealed class ResolveCommand(IWorkspaceResolver resolver) : IHoshinCommand
 {
+    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+
     public string Name => "resolve";
     public string Usage => "resolve --json [--master <path>] [--workspace <path>]";
 
@@ -38,7 +40,7 @@ public sealed class ResolveCommand(HoshinServices services) : IHoshinCommand
             }
         }
 
-        var r = services.Resolver.Resolve(Directory.GetCurrentDirectory(), new ResolveOptions(master, workspace));
+        var r = _resolver.Resolve(Directory.GetCurrentDirectory(), new ResolveOptions(master, workspace));
         CliIo.PrintJson(new
         {
             workspace = r.Workspace,

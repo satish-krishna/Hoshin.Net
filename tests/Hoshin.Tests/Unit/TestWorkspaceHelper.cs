@@ -97,7 +97,7 @@ internal static class TestGitFixture
         # Intent: Greeting
         """;
 
-    public static readonly IReadOnlyDictionary<string, string> GitEnv = new Dictionary<string, string>
+    public static readonly Dictionary<string, string> GitEnv = new()
     {
         ["GIT_AUTHOR_NAME"] = "t",
         ["GIT_AUTHOR_EMAIL"] = "t@example.com",
@@ -109,7 +109,7 @@ internal static class TestGitFixture
 
     public static string Git(string cwd, params string[] args)
     {
-        var r = ProcessCommandRunner.Default.Run(new CommandRequest(cwd, ["git", .. args], ExtraEnvironment: GitEnv));
+        var r = TestServices.CommandRunner.Run(new CommandRequest(cwd, ["git", .. args], ExtraEnvironment: GitEnv));
         Assert.Equal(0, r.ExitCode);
         return r.Stdout.Trim();
     }
@@ -164,6 +164,8 @@ internal static class TestGitFixture
         public void Dispose() => Temp.Dispose();
     }
 
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
     public static WorkspaceFixture CreateWorkspace(object? markerExtra = null, string[]? repos = null, bool built = false)
     {
         var temp = new TempDir("hoshin-ws-");
@@ -187,7 +189,7 @@ internal static class TestGitFixture
         var folder = $"intent/demo/{ChangeName}";
         var masterFiles = new Dictionary<string, string>
         {
-            [".hoshin.json"] = JsonSerializer.Serialize(markerObj, new JsonSerializerOptions { WriteIndented = true }) + "\n",
+            [".hoshin.json"] = JsonSerializer.Serialize(markerObj, IndentedJson) + "\n",
             [$"{folder}/intent.md"] = IntentText + "\n",
         };
         if (built)
@@ -227,7 +229,7 @@ internal static class TestGitFixture
                 version = 1,
                 layout = "single-repo",
                 systems = new { demo = new { apps = appMap } },
-            }, new JsonSerializerOptions { WriteIndented = true }) + "\n",
+            }, IndentedJson) + "\n",
             ["intent/demo/policies.md"] = "# Policies\n",
         };
         foreach (var folder in appMap.Values)
@@ -252,7 +254,7 @@ internal static class TestGitFixture
     {
         var dll = Path.Combine(AppContext.BaseDirectory, "hoshin.dll");
         var env = new Dictionary<string, string>(GitEnv) { ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1" };
-        var result = ProcessCommandRunner.Default.Run(new CommandRequest(cwd, ["dotnet", dll, .. args], ExtraEnvironment: env));
+        var result = TestServices.CommandRunner.Run(new CommandRequest(cwd, ["dotnet", dll, .. args], ExtraEnvironment: env));
         JsonElement? lastJson = null;
         foreach (var line in result.Stdout.Replace("\r\n", "\n").Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {

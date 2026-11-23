@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
@@ -33,20 +34,20 @@ public sealed record FixInput(
 
 /// <summary>Computes where a light-track fix stands per the 8-row fix-state table in GRAMMAR.md.</summary>
 public sealed class FixStateService(
-    IGitClient? git = null,
-    PlanReader? planReader = null,
-    BuildLogReader? buildLogReader = null)
+    IGitClient git,
+    PlanReader planReader,
+    BuildLogReader buildLogReader,
+    MarkerReader markerReader)
 {
-    public static FixStateService Default { get; } = new();
-
     private static readonly string[] Documents = ["intent", "spec", "plan"];
     private static readonly HashSet<string> OwnLines = ["status", "source_intent_commit", "source_spec_commit", "accepted_in_advance"];
     private static readonly Regex JsoncFieldLine = new(@"^\s*""([A-Za-z_][A-Za-z0-9_]*)""\s*:\s*(.+?)\s*,?\s*(?://.*)?$", RegexOptions.Compiled);
     private static readonly Regex HunkRegex = new(@"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,\d+)? @@", RegexOptions.Compiled);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly PlanReader _plan = planReader ?? new PlanReader();
-    private readonly BuildLogReader _buildLog = buildLogReader ?? new BuildLogReader();
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly PlanReader _plan = planReader ?? throw new ArgumentNullException(nameof(planReader));
+    private readonly BuildLogReader _buildLog = buildLogReader ?? throw new ArgumentNullException(nameof(buildLogReader));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
 
     public static string? StatusOf(string text, string file) => FrontMatter.TryGetScalar(text, file, "status");
 
@@ -152,6 +153,7 @@ public sealed class FixStateService(
             }
         }).ToList();
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public FixStateResult ComputeFromInput(FixInput input)
     {
         var paths = Documents.Select(d => $"{input.Prefix}{d}.md").ToArray();
@@ -243,6 +245,7 @@ public sealed class FixStateService(
         return new FixStateResult(RowOf(facts), facts);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     private bool OnlyOwnLines(string top, string path, string headText, string workingText)
     {
         var args = new List<string> { "diff", "HEAD" };
@@ -298,10 +301,10 @@ public sealed class FixStateService(
                 }
 
                 inHunks = true;
-                oldStart = int.Parse(hunk.Groups[1].Value);
-                oldCount = hunk.Groups[2].Success ? int.Parse(hunk.Groups[2].Value) : 1;
+                oldStart = int.Parse(hunk.Groups[1].Value, CultureInfo.InvariantCulture);
+                oldCount = hunk.Groups[2].Success ? int.Parse(hunk.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
                 nextOld = oldStart;
-                nextNew = int.Parse(hunk.Groups[3].Value);
+                nextNew = int.Parse(hunk.Groups[3].Value, CultureInfo.InvariantCulture);
                 added = 0;
                 continue;
             }
@@ -375,7 +378,7 @@ public sealed class FixStateService(
         PlanReadResult? planResult;
         try
         {
-            var marker = MarkerReader.FindMarker(planFile);
+            var marker = _markerReader.FindMarker(planFile);
             var fm = FrontMatter.Parse(planText, planFile);
             var system = Jsonc.String(fm.Data, "system") ?? "";
             planResult = _plan.Read(planText, planFile, MarkerReader.AllowedPlanRepos(marker, system), system);

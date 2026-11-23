@@ -1,7 +1,8 @@
 name: conventional
 
-# Squash merges use the pull request title as the commit on main, so PR titles and branch names
-# must follow Conventional Commits (see AGENTS.md).
+# Squash merges use the pull request title as the commit on main, and reviewers step through
+# program pull requests one commit at a time, so PR titles, branch names, commit headers, and
+# program Task trailers must follow CONTRIBUTING.md §1.
 
 on:
   pull_request:
@@ -15,19 +16,75 @@ jobs:
     name: conventional names
     runs-on: ubuntu-latest
     steps:
-      - name: Check pull request title and branch name
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check pull request title, branch name, commit headers, and program task trailers
         env:
+          # Passed through env, never interpolated into the script: all PR metadata is untrusted input.
           TITLE: ${{ github.event.pull_request.title }}
           BRANCH: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
+          set -euo pipefail
           types='feat|fix|docs|test|refactor|perf|build|ci|chore'
+          title_re="^($types)\([a-z0-9]+(-[a-z0-9]+)*\)!?:\ [^[:space:]].*$"
+          branch_re="^($types)/[a-z0-9]+(-[a-z0-9]+)*$"
           status=0
-          if ! [[ "$TITLE" =~ ^($types)\([a-z0-9]+(-[a-z0-9]+)*\)!?:\ [^[:space:]].*$ ]]; then
-            echo "::error::Pull request title '$TITLE' is not '<type>(<scope>): <subject>' with a type of $types and a lowercase kebab-case scope."
+
+          if ! [[ "$TITLE" =~ $title_re ]]; then
+            echo "::error::Pull request title '$TITLE' is not '<type>(<scope>): <subject>' with a type of $types and a lowercase kebab-case scope (CONTRIBUTING.md §1)."
             status=1
           fi
-          if ! [[ "$BRANCH" =~ ^($types)/[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
-            echo "::error::Branch '$BRANCH' is not '<type>/<short-description>' in lowercase kebab case with a type of $types."
+
+          if ! [[ "$BRANCH" =~ $branch_re ]]; then
+            echo "::error::Branch '$BRANCH' is not '<type>/<short-description>' in lowercase kebab case with a type of $types (CONTRIBUTING.md §1)."
             status=1
           fi
+
+          range="origin/$BASE_REF..$HEAD_SHA"
+          mapfile -t shas < <(git log --reverse --format=%H "$range")
+          if [ "${#shas[@]}" -eq 0 ]; then
+            echo "::error::No commits found in range $range."
+            exit 1
+          fi
+
+          declare -A valid_tasks=()
+          if [ "$BRANCH" = "fix/review-findings" ]; then
+            while IFS= read -r task_id; do
+              [ -n "$task_id" ] && valid_tasks["$task_id"]=1
+            done < <(sed -n 's/^| \([TA][0-9][0-9]*\|EPIC-[A-Z0-9-]*\) |.*/\1/p' docs/review/TASKS.md)
+          fi
+
+          declare -A seen_tasks=()
+          for sha in "${shas[@]}"; do
+            subject=$(git show -s --format=%s "$sha")
+            if ! [[ "$subject" =~ $title_re ]]; then
+              echo "::error::Commit $sha header '$subject' is not '<type>(<scope>): <subject>' (CONTRIBUTING.md §1)."
+              status=1
+            fi
+
+            if [ "$BRANCH" = "fix/review-findings" ]; then
+              mapfile -t trailers < <(git show -s --format='%(trailers:key=Task,valueonly)' "$sha" | sed '/^[[:space:]]*$/d')
+              if [ "${#trailers[@]}" -ne 1 ]; then
+                echo "::error::Commit $sha on $BRANCH must have exactly one 'Task: <id>' trailer (found ${#trailers[@]})."
+                status=1
+                continue
+              fi
+
+              task_id="${trailers[0]}"
+              if [ -z "${valid_tasks[$task_id]:-}" ]; then
+                echo "::error::Commit $sha Task trailer '$task_id' is not an ID listed in docs/review/TASKS.md."
+                status=1
+              elif [ -n "${seen_tasks[$task_id]:-}" ]; then
+                echo "::error::Commit $sha reuses Task ID '$task_id' already claimed by commit ${seen_tasks[$task_id]}."
+                status=1
+              else
+                seen_tasks["$task_id"]="$sha"
+              fi
+            fi
+          done
+
           exit $status

@@ -17,17 +17,20 @@ public sealed record ChangeRecord(
     List<PullRequestRecord> PullRequests);
 
 /// <summary>Reads, validates, and writes a change's <c>change.jsonc</c> record.</summary>
-public static class ChangeRecordStore
+public sealed class ChangeRecordStore(IFileSystem fileSystem)
 {
     public const string RecordFileName = "change.jsonc";
+
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
     public static readonly string[] CommitTypes =
         ["feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert"];
 
     private static readonly HashSet<string> AllowedFields = ["version", "branch", "type", "scope", "base", "pullRequests"];
     private static readonly Regex HttpUrl = new(@"^https?://", RegexOptions.Compiled);
-    private static readonly Regex CommitSha = new(@"^[0-9a-f]{7,40}$", RegexOptions.Compiled);
+    private static readonly Regex CommitSha = new(@"^[0-9a-f]{7,40}\z", RegexOptions.Compiled);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static List<string> RecordProblems(JsonElement? raw)
     {
         if (raw is not { ValueKind: JsonValueKind.Object } obj)
@@ -102,17 +105,17 @@ public static class ChangeRecordStore
         return problems;
     }
 
-    public static ChangeRecord? Read(string folder)
+    public ChangeRecord? Read(string folder)
     {
         var file = Path.Combine(folder, RecordFileName);
-        if (!File.Exists(file))
+        if (!_fs.FileExists(file))
         {
             return null;
         }
 
-        if (!Jsonc.TryParse(File.ReadAllText(file), out var raw, out _) || raw is null)
+        if (!Jsonc.TryParse(_fs.ReadAllText(file), out var raw, out var error) || raw is null)
         {
-            return null;
+            throw new CouldNotRunException($"{file} is not valid JSONC: {error ?? "empty file"}");
         }
 
         if (RecordProblems(raw).Count > 0)
@@ -177,15 +180,15 @@ public static class ChangeRecordStore
         return "// Written by the hoshin program (change start, change rename, change.done); do not edit by hand.\n" + json + "\n";
     }
 
-    public static string Write(string folder, ChangeRecord record)
+    public string Write(string folder, ChangeRecord record)
     {
-        Directory.CreateDirectory(folder);
+        _fs.CreateDirectory(folder);
         var file = Path.Combine(folder, RecordFileName);
-        File.WriteAllText(file, Serialize(record));
+        _fs.WriteAllTextAtomic(file, Serialize(record));
         return file;
     }
 
-    public static string BranchOf(string folder)
+    public string BranchOf(string folder)
     {
         var record = Read(folder);
         if (record is not null)
@@ -194,11 +197,11 @@ public static class ChangeRecordStore
         }
 
         var older = Path.Combine(folder, "branch.md");
-        if (File.Exists(older))
+        if (_fs.FileExists(older))
         {
             try
             {
-                var branch = Jsonc.String(FrontMatter.Parse(File.ReadAllText(older), older).Data, "branch");
+                var branch = Jsonc.String(FrontMatter.Parse(_fs.ReadAllText(older), older).Data, "branch");
                 if (!string.IsNullOrEmpty(branch))
                 {
                     return branch;
