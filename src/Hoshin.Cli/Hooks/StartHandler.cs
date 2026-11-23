@@ -9,6 +9,7 @@ internal sealed class StartHandler(
     ITaskEvaluator tasks,
     IApprovalRecorder approvals,
     IDocumentCommitter documents,
+    IChangeStarter changeStarter,
     WorkflowAdvancer advancer,
     IFileSystem fileSystem,
     TimeProvider timeProvider)
@@ -17,6 +18,7 @@ internal sealed class StartHandler(
     private readonly ITaskEvaluator _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
     private readonly IApprovalRecorder _approvals = approvals ?? throw new ArgumentNullException(nameof(approvals));
     private readonly IDocumentCommitter _documents = documents ?? throw new ArgumentNullException(nameof(documents));
+    private readonly IChangeStarter _changeStarter = changeStarter ?? throw new ArgumentNullException(nameof(changeStarter));
     private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -105,6 +107,11 @@ internal sealed class StartHandler(
             }
         }
 
+        if (ResolveOrStartChange(ev, ref repo, invocation, out var earlyResponse))
+        {
+            return earlyResponse;
+        }
+
         var state = _advancer.ReadState(repo, rolesRoot, out var error);
         if (state is null)
         {
@@ -121,10 +128,112 @@ internal sealed class StartHandler(
         return DispatchSkill(ev, repo, state, invocation, rolesRoot);
     }
 
+    private bool ResolveOrStartChange(
+        NormalizedHookEvent ev,
+        ref WorkflowRepo repo,
+        SkillInvocation invocation,
+        out (string? Output, string Decision) earlyResponse)
+    {
+        earlyResponse = default;
+        var invoked = invocation.Skill;
+        var rawArgs = (ev.CommandArgs ?? invocation.Args ?? "").Trim();
+
+        var openChanges = _changeStarter.ListOpenChanges(repo);
+        if (TryMatchOpenChange(openChanges, rawArgs) is { } matched)
+        {
+            repo = _advancer.ResolveRepoAt(matched.MasterRoot, matched.ChangeFolder) ?? repo;
+            return false;
+        }
+
+        if (HasPinnedActiveRun(repo))
+        {
+            return false;
+        }
+
+        if (ShouldStartNewChange(repo, invoked, rawArgs, openChanges.Count))
+        {
+            return TryStartNewChange(ev, ref repo, invoked, rawArgs, out earlyResponse);
+        }
+
+        if (openChanges.Count > 1)
+        {
+            var names = string.Join(", ", openChanges.Select(c => c.Change));
+            earlyResponse = EmitStartContext(
+                ev,
+                repo,
+                $"Multiple open changes exist in this workspace: {names}. Ask the engineer which change they want to work on, then end your turn.",
+                $"{invoked}: ambiguous ({openChanges.Count} open changes)");
+            return true;
+        }
+
+        if (openChanges.Count == 1)
+        {
+            repo = _advancer.ResolveRepoAt(openChanges[0].MasterRoot, openChanges[0].ChangeFolder) ?? repo;
+        }
+
+        return false;
+    }
+
+    private bool HasPinnedActiveRun(WorkflowRepo repo) =>
+        _fs.FileExists(repo.RunMarkerPath)
+        && HookSessionScope.IsActiveNonStale(repo.ReadRunMarker(), repo.ReadStep(), _time.GetUtcNow())
+        && !string.IsNullOrWhiteSpace(repo.ReadRunMarker()?.ChangeFolder);
+
+    private bool ShouldStartNewChange(WorkflowRepo repo, string invoked, string rawArgs, int openCount)
+    {
+        if (invoked is not ("intent" or "fix") || !_changeStarter.HasWorkspaceMarker(repo))
+        {
+            return false;
+        }
+
+        return openCount == 0 || rawArgs.Length > 0;
+    }
+
+    private bool TryStartNewChange(
+        NormalizedHookEvent ev,
+        ref WorkflowRepo repo,
+        string invoked,
+        string rawArgs,
+        out (string? Output, string Decision) earlyResponse)
+    {
+        earlyResponse = default;
+        var started = _changeStarter.StartFromHook(repo.Root, invoked, rawArgs);
+        if (!started.Ok)
+        {
+            earlyResponse = EmitStartContext(
+                ev,
+                repo,
+                $"Could not start a new change: {started.Error}. Tell the engineer, then end your turn.",
+                $"{invoked}: change.start failed");
+            return true;
+        }
+
+        repo = _advancer.ResolveRepoAt(started.CopyRoot!, started.ChangeFolder) ?? repo;
+        return false;
+    }
+
+    private static OpenChangeOption? TryMatchOpenChange(IReadOnlyList<OpenChangeOption> openChanges, string rawArgs)
+    {
+        if (string.IsNullOrWhiteSpace(rawArgs) || openChanges.Count == 0)
+        {
+            return null;
+        }
+
+        var token = rawArgs.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)[0];
+        var exact = openChanges.Where(c => string.Equals(c.Change, token, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (exact.Count == 1)
+        {
+            return exact[0];
+        }
+
+        var bySlug = openChanges.Where(c => c.Change.EndsWith("-" + token, StringComparison.OrdinalIgnoreCase)).ToList();
+        return bySlug.Count == 1 ? bySlug[0] : null;
+    }
+
     private void StartRun(WorkflowRepo repo, NormalizedHookEvent ev)
     {
         _fs.CreateDirectory(repo.HoshinDir);
-        repo.WriteRunMarker(new RunMarker(_time.GetUtcNow(), ev.SessionId, ev.HarnessName, repo.ChangeFolder));
+        repo.WriteRunMarker(new RunMarker(_time.GetUtcNow(), ev.SessionId, ev.HarnessName, repo.ChangeFolder, repo.ChangeKey));
         StopCounterStore.ResetAll(repo);
     }
 

@@ -36,6 +36,9 @@ internal sealed class WorkflowAdvancer(
     public WorkflowRepo? ResolveRepo(NormalizedHookEvent ev) =>
         WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _gitWorktrees, _gitQuery, _gitStatus, _fs, _ledgerStore);
 
+    public WorkflowRepo? ResolveRepoAt(string directory, string? explicitChangeFolder = null) =>
+        WorkflowRepo.Find(directory, _gitWorktrees, _gitQuery, _gitStatus, _fs, _ledgerStore, explicitChangeFolder);
+
     public WorkflowState? ReadState(WorkflowRepo repo, string? rolesRoot, out string? error)
     {
         error = null;

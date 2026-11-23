@@ -98,6 +98,7 @@ internal static class TestServices
             ledger,
             WorkflowStateReader,
             Default.WorkflowEventBridge,
+            Default.ChangeStarter,
             timeProvider ?? Time);
     }
 

@@ -3,7 +3,10 @@ using Hoshin.Workflow.Common;
 
 namespace Hoshin.Workflow.Engine;
 
-/// <summary>Resolves the active change folder for a repository (explicit path, active <c>run.json</c>, <c>.hoshin/</c>, or <c>intent/&lt;system&gt;/&lt;change&gt;/</c>).</summary>
+/// <summary>A change folder discovered under <c>intent/&lt;system&gt;/&lt;change&gt;/</c>.</summary>
+public sealed record DiscoveredChangeFolder(string System, string Change, string Folder);
+
+/// <summary>Resolves the active change folder for a repository without guessing by sort order when multiple changes exist.</summary>
 public static class ChangeFolderResolver
 {
     private static readonly string[] ChangeMarkerFiles = ["change.jsonc", "plan.md", "intent.md", "spec.md"];
@@ -30,7 +33,44 @@ public static class ChangeFolderResolver
             return dotHoshin;
         }
 
-        return FindFirstIntentChange(root, fs) ?? dotHoshin;
+        var changes = ListIntentChanges(root, fs);
+        return changes.Count == 1 ? changes[0].Folder : dotHoshin;
+    }
+
+    public static List<DiscoveredChangeFolder> ListIntentChanges(string root, IFileSystem fs)
+    {
+        ArgumentNullException.ThrowIfNull(fs);
+        var intentRoot = Path.Combine(root, "intent");
+        if (!fs.DirectoryExists(intentRoot))
+        {
+            return [];
+        }
+
+        var found = new List<DiscoveredChangeFolder>();
+        foreach (var sysDir in fs.EnumerateDirectories(intentRoot).OrderBy(d => d, StringComparer.Ordinal))
+        {
+            var sysName = Path.GetFileName(sysDir);
+            if (sysName.Equals("hooks", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var chDir in fs.EnumerateDirectories(sysDir).OrderBy(d => d, StringComparer.Ordinal))
+            {
+                var chName = Path.GetFileName(chDir);
+                if (chName is "context" or "hooks")
+                {
+                    continue;
+                }
+
+                if (HasAnyDocument(chDir, fs, includeSpec: true))
+                {
+                    found.Add(new DiscoveredChangeFolder(sysName, chName, chDir));
+                }
+            }
+        }
+
+        return found;
     }
 
     private static string? TryReadPinnedFolder(string commonDir, IFileSystem fs)
@@ -52,50 +92,6 @@ public static class ChangeFolderResolver
         catch (Exception e) when (e is IOException or JsonException)
         {
             // Ignore corrupt or unreadable run marker.
-        }
-
-        return null;
-    }
-
-    private static string? FindFirstIntentChange(string root, IFileSystem fs)
-    {
-        var intentRoot = Path.Combine(root, "intent");
-        if (!fs.DirectoryExists(intentRoot))
-        {
-            return null;
-        }
-
-        foreach (var sysDir in fs.EnumerateDirectories(intentRoot).OrderBy(d => d, StringComparer.Ordinal))
-        {
-            if (Path.GetFileName(sysDir).Equals("hooks", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var candidate = FindFirstChangeInSystem(sysDir, fs);
-            if (candidate is not null)
-            {
-                return candidate;
-            }
-        }
-
-        return null;
-    }
-
-    private static string? FindFirstChangeInSystem(string sysDir, IFileSystem fs)
-    {
-        foreach (var chDir in fs.EnumerateDirectories(sysDir).OrderByDescending(d => d, StringComparer.Ordinal))
-        {
-            var chName = Path.GetFileName(chDir);
-            if (chName is "context" or "hooks")
-            {
-                continue;
-            }
-
-            if (HasAnyDocument(chDir, fs, includeSpec: true))
-            {
-                return chDir;
-            }
         }
 
         return null;
