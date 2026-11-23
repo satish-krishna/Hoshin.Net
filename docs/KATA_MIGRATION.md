@@ -17,6 +17,7 @@ Hoshin v2.0.0 replaces the TypeScript CLI (`node <plugin>/tools/hoshin.ts`) with
 | **Document layouts** | Layouts 1 and 2 (YAML record blocks) | Layout 2 JSONC only | Run `dotnet hoshin.dll migrate <master> --json` (or `hoshin migrate --json --write`) once per legacy repository; refuse Layout 1 until migrated. |
 | **Record blocks** | ```` ```yaml ```` blocks inside `plan.md`, `build/*.md`, `build/review.md` | ```` ```jsonc ```` blocks | Update any Kata-side conformance fixture or parser reading record blocks directly. |
 | **Plugin layout** | Claude Code only (`.claude-plugin/`) | Dual-harness: `.claude-plugin/` (Claude Code) and `.agents/` (Antigravity) | Detect `lib/hoshin.dll` alongside `skills/build/SKILL.md` and `.claude-plugin/plugin.json` (`version >= 2.0.0`). |
+| **Red classification (`red record`)** | Exit-code-only rule (`compile` non-zero always `could-not-compile`; `test` non-zero always `failed`) | Unified `RedClassifier`: missing-target-symbol compile errors (`CS0246`, `TS2304`, Rust `E0425`, etc.) count as `failed` (observed Red); syntax errors map to `could-not-compile`; exit 126/127 and missing third-party modules map to `could-not-run` | Wire field names and enum values (`failed`, `passed`, `could-not-compile`, `could-not-run`) are unchanged; expect strongly-typed missing-symbol failures to report `outcome: "failed"` (exit `0`). |
 
 ---
 

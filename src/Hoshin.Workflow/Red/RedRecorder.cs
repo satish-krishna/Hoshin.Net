@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
 using Hoshin.Workflow.Workspace;
@@ -113,26 +114,7 @@ public sealed class RedRecorder(
         }
 
         var timeout = TimeoutSeconds();
-        HookProcessResult ran;
-        string outcome;
-        if (entry.Compile is not null)
-        {
-            ran = await _processRunner.RunAsync(entry.Compile, ctx.RepoPath, null, "", timeout).ConfigureAwait(false);
-            if (ran.Outcome != "passed")
-            {
-                outcome = ran.Outcome == "failed" ? "could-not-compile" : "could-not-run";
-            }
-            else
-            {
-                ran = await _processRunner.RunAsync(entry.Test, ctx.RepoPath, null, "", timeout).ConfigureAwait(false);
-                outcome = ran.Outcome == "failed" ? "failed" : ran.Outcome;
-            }
-        }
-        else
-        {
-            ran = await _processRunner.RunAsync(entry.Test, ctx.RepoPath, null, "", timeout).ConfigureAwait(false);
-            outcome = ran.Outcome == "failed" ? "failed" : ran.Outcome;
-        }
+        var (ran, outcome) = await RunAndClassifyAsync(entry, ctx.RepoPath, timeout).ConfigureAwait(false);
 
         var record = new RedRecord(task, head, entry.Compile, entry.Test, outcome, ran.ExitCode, ran.Output, _time.GetUtcNow().ToString("O"));
         var folder = _ledger.LedgerFolder(ctx.Master, ctx.System, ctx.Change);
@@ -146,6 +128,39 @@ public sealed class RedRecorder(
                 return ledger with { Reds = updatedReds };
             });
         return new RedRecordResult(record, []);
+    }
+
+    private async Task<(HookProcessResult Result, string Outcome)> RunAndClassifyAsync(ParsedTask entry, string repoPath, int timeout)
+    {
+        if (entry.Compile is not null)
+        {
+            var compile = await _processRunner.RunAsync(entry.Compile, repoPath, null, "", timeout).ConfigureAwait(false);
+            if (compile.Outcome != "passed")
+            {
+                if (compile.Outcome == "could-not-run")
+                {
+                    return (compile, "could-not-run");
+                }
+
+                var classifiedCompile = RedClassifier.Classify(ToCommandResult(compile));
+                var compileOutcome = classifiedCompile.Kind == RedKind.MissingSymbol
+                    ? RedClassifier.ToRedRecordOutcome(RedKind.MissingSymbol)
+                    : "could-not-compile";
+                return (compile, compileOutcome);
+            }
+        }
+
+        var testRun = await _processRunner.RunAsync(entry.Test!, repoPath, null, "", timeout).ConfigureAwait(false);
+        var classifiedTest = RedClassifier.Classify(ToCommandResult(testRun));
+        return (testRun, RedClassifier.ToRedRecordOutcome(classifiedTest.Kind));
+    }
+
+    private static AllowListedCommandResult ToCommandResult(HookProcessResult run)
+    {
+        var timedOut = run.Outcome == "could-not-run" && run.ExitCode is null &&
+            run.Output.Contains("ran past its time limit", StringComparison.OrdinalIgnoreCase);
+        var exitCode = run.ExitCode ?? (run.Outcome == "passed" ? 0 : 127);
+        return new AllowListedCommandResult(exitCode, run.Output, timedOut, TimeSpan.Zero);
     }
 
     private string TypeOf(string root, string sha)

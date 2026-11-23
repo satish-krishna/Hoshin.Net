@@ -104,6 +104,16 @@ public static partial class RedClassifier
         return new RedClassification(RedKind.AssertionFailure, true, "observed");
     }
 
+    /// <summary>Maps a <see cref="RedKind"/> onto the <c>hoshin red record</c> wire outcome values preserved by CLIENTS.md.</summary>
+    public static string ToRedRecordOutcome(RedKind kind) => kind switch
+    {
+        RedKind.AssertionFailure or RedKind.MissingSymbol => "failed",
+        RedKind.PassedUnexpectedly => "passed",
+        RedKind.SyntaxError => "could-not-compile",
+        RedKind.CouldNotRun or RedKind.TimedOut => "could-not-run",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown red kind."),
+    };
+
     private static RedClassification? TryClassifyModuleNotFound(string output, IReadOnlyList<string>? prodPaths)
     {
         if (!ModuleNotFoundSignalRegex().IsMatch(output))
