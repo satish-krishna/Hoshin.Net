@@ -53,36 +53,36 @@ public sealed class WorkflowNextTests
         // 1. No intent & no plan -> WriteIntent
         var s1 = MakeState(intent: MissingDoc("intent"), spec: MissingDoc("spec"), planDoc: MissingDoc("plan"), plan: SamplePlan(hasPlan: false));
         var step1 = Assert.IsType<WriteDocument>(WorkflowEngine.Next(s1));
-        Assert.Equal("intent", step1.Document);
+        Assert.Equal(WorkflowDocument.Intent, step1.Document);
 
         // 2. Uncommitted intent -> still WriteIntent
         var s1b = s1 with { Intent = Doc("intent", "draft", inHead: false, uncommitted: true) };
-        Assert.Equal("intent", Assert.IsType<WriteDocument>(WorkflowEngine.Next(s1b)).Document);
+        Assert.Equal(WorkflowDocument.Intent, Assert.IsType<WriteDocument>(WorkflowEngine.Next(s1b)).Document);
 
         // 3. Committed draft intent -> AwaitAccept(intent)
         var s2 = s1 with { Intent = Doc("intent", "draft", inHead: true, uncommitted: false) };
         var step2 = Assert.IsType<AwaitAccept>(WorkflowEngine.Next(s2));
-        Assert.Equal("intent", step2.Document);
+        Assert.Equal(WorkflowDocument.Intent, step2.Document);
 
         // 4. Accepted intent, missing spec -> WriteSpec
         var s3 = s2 with { Intent = Doc("intent", "accepted") };
         var step3 = Assert.IsType<WriteDocument>(WorkflowEngine.Next(s3));
-        Assert.Equal("spec", step3.Document);
+        Assert.Equal(WorkflowDocument.Spec, step3.Document);
 
         // 5. Committed draft spec -> AwaitAccept(spec)
         var s4 = s3 with { Spec = Doc("spec", "draft") };
         var step4 = Assert.IsType<AwaitAccept>(WorkflowEngine.Next(s4));
-        Assert.Equal("spec", step4.Document);
+        Assert.Equal(WorkflowDocument.Spec, step4.Document);
 
         // 6. Accepted spec, missing plan -> WritePlan
         var s5 = s4 with { Spec = Doc("spec", "accepted") };
         var step5 = Assert.IsType<WriteDocument>(WorkflowEngine.Next(s5));
-        Assert.Equal("plan", step5.Document);
+        Assert.Equal(WorkflowDocument.Plan, step5.Document);
 
         // 7. Committed draft plan -> AwaitAccept(plan)
         var s6 = s5 with { Plan = SamplePlan(hasPlan: true), PlanDoc = Doc("plan", "draft") };
         var step6 = Assert.IsType<AwaitAccept>(WorkflowEngine.Next(s6));
-        Assert.Equal("plan", step6.Document);
+        Assert.Equal(WorkflowDocument.Plan, step6.Document);
 
         // 8. Accepted plan -> Implement T1 (attempt 1)
         var s7 = s6 with { PlanDoc = Doc("plan", "accepted") };

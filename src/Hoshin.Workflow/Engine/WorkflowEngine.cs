@@ -41,12 +41,12 @@ public sealed record WorkflowState(
             repo.CodeHead());
     }
 
-    public WorkflowDocState Document(string name) => name switch
+    public WorkflowDocState Document(WorkflowDocument document) => document switch
     {
-        "intent" => Intent,
-        "spec" => Spec,
-        "plan" => PlanDoc,
-        _ => new WorkflowDocState(Path.Combine(ChangeFolder, $"{name}.md"), false, false, false, null, null),
+        WorkflowDocument.Intent => Intent,
+        WorkflowDocument.Spec => Spec,
+        WorkflowDocument.Plan => PlanDoc,
+        _ => throw new ArgumentOutOfRangeException(nameof(document), document, "Unknown workflow document."),
     };
 }
 
@@ -81,7 +81,7 @@ public static class WorkflowEngine
 
             if (state.PlanDoc.InHead && state.PlanDoc.HeadStatus == "draft")
             {
-                return new AwaitAccept("plan", state.PlanDoc.Path, state.Head);
+                return new AwaitAccept(WorkflowDocument.Plan, state.PlanDoc.Path, state.Head);
             }
         }
 
@@ -149,28 +149,29 @@ public static class WorkflowEngine
 
     private static Step? NextAuthoring(WorkflowState state)
     {
-        foreach (var name in new[] { "intent", "spec", "plan" })
+        foreach (var document in new[] { WorkflowDocument.Intent, WorkflowDocument.Spec, WorkflowDocument.Plan })
         {
-            var doc = state.Document(name);
+            var doc = state.Document(document);
             if (!doc.Exists || doc.Uncommitted || !doc.InHead)
             {
-                var brief = name switch
+                var brief = document switch
                 {
-                    "intent" => WorkflowBriefs.Intent(state),
-                    "spec" => WorkflowBriefs.Spec(state),
-                    _ => WorkflowBriefs.Plan(state),
+                    WorkflowDocument.Intent => WorkflowBriefs.Intent(state),
+                    WorkflowDocument.Spec => WorkflowBriefs.Spec(state),
+                    WorkflowDocument.Plan => WorkflowBriefs.Plan(state),
+                    _ => throw new ArgumentOutOfRangeException(nameof(state)),
                 };
-                return new WriteDocument(name, doc.Path, brief);
+                return new WriteDocument(document, doc.Path, brief);
             }
 
             switch (doc.HeadStatus)
             {
                 case "rejected":
-                    return new Done(false, $"the {name} is rejected");
+                    return new Done(false, $"the {document.ToWireName()} is rejected");
                 case "accepted":
                     continue;
                 default:
-                    return new AwaitAccept(name, doc.Path, state.Head);
+                    return new AwaitAccept(document, doc.Path, state.Head);
             }
         }
 
@@ -216,7 +217,7 @@ public static class WorkflowEngine
 
     public static string? OwnerOf(Step step) => step switch
     {
-        WriteDocument w => w.Document,
+        WriteDocument w => w.Document.ToWireName(),
         AwaitAccept or NeedsApproval => "accept",
         ReviewDocument => "review",
         WriteFix => "fix",
@@ -226,16 +227,16 @@ public static class WorkflowEngine
 
     public static string Describe(Step step) => step switch
     {
-        WriteDocument { Document: "intent" } => "writing the intent (`intent`)",
-        WriteDocument { Document: "spec" } => "writing the spec from the accepted intent (`spec`)",
-        WriteDocument { Document: "plan" } => "writing the plan from the accepted spec (`plan`)",
-        AwaitAccept a => $"accepting the {a.Document}, which is committed at {a.Path} (`accept`)",
+        WriteDocument { Document: WorkflowDocument.Intent } => "writing the intent (`intent`)",
+        WriteDocument { Document: WorkflowDocument.Spec } => "writing the spec from the accepted intent (`spec`)",
+        WriteDocument { Document: WorkflowDocument.Plan } => "writing the plan from the accepted spec (`plan`)",
+        AwaitAccept a => $"accepting the {a.Document.ToWireName()}, which is committed at {a.Path} (`accept`)",
         ReviewDocument => "reviewing the built change (`review`)",
         WriteFix => "drafting the light-track fix documents (`fix`)",
         NeedsApproval => "approving the built change (`accept`)",
         Implement or Retry or RunChecks or Publish => "building the accepted plan (`build`)",
         Done d => $"nothing: the change is finished ({d.Outcome})",
-        _ => step.Kind,
+        _ => step.Kind.ToString(),
     };
 
     public static string Short(string sha) => sha.Length > 7 ? sha[..7] : sha;

@@ -32,9 +32,6 @@ public sealed partial class WorkflowRunner(
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();
 
-    private static readonly StringComparison PathComparison =
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-
     private readonly IAllowListedCommandRunner _runner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
     private readonly IPullRequestClient _pullRequests = pullRequests ?? throw new ArgumentNullException(nameof(pullRequests));
     private readonly IntentReader _intentReader = intentReader ?? throw new ArgumentNullException(nameof(intentReader));
@@ -93,8 +90,8 @@ public sealed partial class WorkflowRunner(
         {
             var document = step switch
             {
-                WriteDocument w => w.Document,
-                AwaitAccept a => a.Document,
+                WriteDocument w => w.Document.ToWireName(),
+                AwaitAccept a => a.Document.ToWireName(),
                 ReviewDocument => "review",
                 WriteFix => "fix",
                 _ => null,
@@ -212,7 +209,7 @@ public sealed partial class WorkflowRunner(
                 now));
         }
 
-        var protectedHits = changed.Where(c => IsProtectedPath(c.Path, repo.Root, repo.ChangeFolder)).Select(c => c.Path).ToList();
+        var protectedHits = changed.Where(c => ProtectedPaths.IsProtectedDuringBuild(c.Path, repo.Root, repo.ChangeFolder)).Select(c => c.Path).ToList();
         if (protectedHits.Count > 0)
         {
             return RecordVerdict(repo, new WorkflowVerdict(
@@ -381,11 +378,12 @@ public sealed partial class WorkflowRunner(
     /// Auto-wraps bare line-1 JSONC front matter in <c>```jsonc ... ```</c> fences if needed, validates the document,
     /// writes upstream source pins (<c>source_intent_commit</c> / <c>source_spec_commit</c>), and commits it alone.
     /// </summary>
-    public (IReadOnlyList<Problem> Problems, string? Commit) CommitDocument(WorkflowRepo repo, WorkflowState state, string name)
+    public (IReadOnlyList<Problem> Problems, string? Commit) CommitDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document)
     {
-        var path = state.Document(name).Path;
+        var name = document.ToWireName();
+        var path = state.Document(document).Path;
         var relative = Path.GetRelativePath(repo.Root, path).Replace('\\', '/');
-        var rawText = File.ReadAllText(path);
+        var rawText = _fs.ReadAllText(path);
 
         // Auto-wrap bare line-1 JSONC object into ```jsonc fences before validation/commit.
         var wrapped = TryAutoWrapBareJsonFrontMatter(rawText);
@@ -395,12 +393,12 @@ public sealed partial class WorkflowRunner(
             rawText = wrapped;
         }
 
-        List<Problem> problems = name switch
+        List<Problem> problems = document switch
         {
-            "intent" => _intentReader.Check(rawText, relative, state.Plan.Scope),
-            "spec" => CheckSpecDocument(rawText, relative),
-            "plan" => CheckPlanDocument(rawText, relative, state.Spec.Exists ? state.Spec.Path : null),
-            _ => [new Problem(relative, 1, $"unknown document kind {name}")],
+            WorkflowDocument.Intent => _intentReader.Check(rawText, relative, state.Plan.Scope),
+            WorkflowDocument.Spec => CheckSpecDocument(rawText, relative),
+            WorkflowDocument.Plan => CheckPlanDocument(rawText, relative, state.Spec.Exists ? state.Spec.Path : null),
+            _ => [new Problem(relative, 1, $"unknown document kind {document}")],
         };
 
         if (problems.Count > 0)
@@ -408,7 +406,7 @@ public sealed partial class WorkflowRunner(
             return (problems, null);
         }
 
-        if (name == "spec" && state.Intent.InHead)
+        if (document == WorkflowDocument.Spec && state.Intent.InHead)
         {
             var intentRel = Path.GetRelativePath(repo.Root, state.Intent.Path).Replace('\\', '/');
             var sha = repo.Git("log", "-1", "--format=%H", "--", intentRel).Output.Trim();
@@ -417,7 +415,7 @@ public sealed partial class WorkflowRunner(
                 _frontMatterEdit.Set(path, "source_intent_commit", sha);
             }
         }
-        else if (name == "plan" && state.Spec.InHead)
+        else if (document == WorkflowDocument.Plan && state.Spec.InHead)
         {
             var specRel = Path.GetRelativePath(repo.Root, state.Spec.Path).Replace('\\', '/');
             var sha = repo.Git("log", "-1", "--format=%H", "--", specRel).Output.Trim();
@@ -578,9 +576,10 @@ public sealed partial class WorkflowRunner(
             : ([new Problem(planRel, 1, $"could not commit fix draft: {Squash(commit.Tail(5))}")], null);
     }
 
-    public string? AcceptDocument(WorkflowRepo repo, WorkflowState state, string name)
+    public string? AcceptDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document)
     {
-        var path = state.Document(name).Path;
+        var name = document.ToWireName();
+        var path = state.Document(document).Path;
         var relative = Path.GetRelativePath(repo.Root, path).Replace('\\', '/');
         _frontMatterEdit.Set(path, "status", "accepted");
         repo.Git("add", "--", relative);
@@ -742,24 +741,6 @@ public sealed partial class WorkflowRunner(
         {
             return [new Problem(file, 1, e.Message)];
         }
-    }
-
-    private static bool IsProtectedPath(string relativePath, string repoRoot, string changeFolder)
-    {
-        var norm = relativePath.Replace('\\', '/').TrimStart('/');
-        if (norm.Equals(".hoshin.json", PathComparison)
-            || norm.StartsWith(".hoshin/", PathComparison)
-            || norm.StartsWith(".git/", PathComparison)
-            || norm.StartsWith(".agents/", PathComparison)
-            || norm.StartsWith(".claude-plugin/", PathComparison))
-        {
-            return true;
-        }
-
-        var changeRel = Path.GetRelativePath(repoRoot, changeFolder).Replace('\\', '/').Trim('/');
-        return changeRel.Length > 0
-            && !changeRel.StartsWith("..", StringComparison.Ordinal)
-            && (norm.Equals(changeRel, PathComparison) || norm.StartsWith(changeRel + "/", PathComparison));
     }
 
     private static WorkflowVerdict RecordVerdict(WorkflowRepo repo, WorkflowVerdict verdict)

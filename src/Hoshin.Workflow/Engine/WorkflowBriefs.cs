@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Documents;
 
 namespace Hoshin.Workflow.Engine;
 
@@ -11,20 +12,6 @@ namespace Hoshin.Workflow.Engine;
 public static class WorkflowBriefs
 {
     public const int MaxInjectedChars = 9800;
-
-    private const string DefaultImplementProcedure = """
-        # Implement one task, test first
-
-        You are building one small task in an existing codebase. The brief below names the task, the test command that proves it, and what to hand back.
-
-        1. Read the code the task touches and the tests next to it before writing anything. Match the style you find.
-        2. Write the test that proves the task, and only that test. Run the task's test command and confirm it fails for the reason the task describes: a failing assertion or a missing target symbol, never a syntax error.
-        3. Write the smallest change to the production code that makes the test pass. Do not weaken or remove the test to make it pass.
-        4. Run the task's test command again and confirm it passes. Run related tests too, if they are quick, and leave them passing.
-        5. Leave your changes in the working tree without committing or pushing; the workflow records the test and implementation commits for you after verification.
-
-        Keep the change inside what the task asks for. If the task cannot be done as written, stop after step 1 and say why in your reply instead of guessing.
-        """;
 
     public static AgentTask Implement(WorkflowState state, WorkflowTask task, int attempt, IReadOnlyList<string> handoff)
     {
@@ -98,7 +85,8 @@ public static class WorkflowBriefs
         b.AppendLine(CultureInfo.InvariantCulture, $"{{ \"title\": \"<short title>\", \"system\": \"{systemName}\", \"author\": \"<name and role>\", \"date\": \"<YYYY-MM-DD>\", \"status\": \"draft\", \"scope\": \"{state.Plan.Scope}\" }}");
         b.AppendLine("```");
         b.AppendLine();
-        b.AppendLine("Then include these headings in order, each with content: `# Intent: <title>`, `## Problem`, `## Proposed outcome`, `## Affected users and systems`, `## Constraints`, `## Decisions`, `## Open questions`.");
+        var headings = string.Join(", ", IntentReader.RequiredHeadings.Select(h => $"`{h}`"));
+        b.AppendLine(CultureInfo.InvariantCulture, $"Then include these headings in order, each with content: `# Intent: <title>`, {headings}.");
         b.AppendLine();
         b.AppendLine("Edit no other file and do not commit: the file is committed for you when you end your turn.");
         return b.ToString();
@@ -231,7 +219,7 @@ public static class WorkflowBriefs
             }
         }
 
-        // Fallback to embedded procedure or built-in default.
+        // Load embedded skills/<role>/procedure.md resource; fail loudly if missing.
         var asm = typeof(WorkflowBriefs).Assembly;
         var suffix = $".skills.{role}.procedure.md";
         var resName = asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
@@ -245,9 +233,7 @@ public static class WorkflowBriefs
             }
         }
 
-        return role.Equals("implement", StringComparison.OrdinalIgnoreCase)
-            ? DefaultImplementProcedure
-            : $"Follow the {role} role instructions provided in context.";
+        throw new InvalidOperationException($"Embedded role procedure not found for role '{role}' (expected resource ending with '{suffix}').");
     }
 
     public static string TruncateIfNeeded(string text, int maxChars = MaxInjectedChars) =>

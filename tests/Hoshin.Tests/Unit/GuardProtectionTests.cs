@@ -44,7 +44,7 @@ public sealed class GuardProtectionTests
         var repo = TestServices.FindRepo(repoDir)!;
         var now = DateTimeOffset.UtcNow;
         repo.WriteRunMarker(new RunMarker(now, sessionId, "claude-code", repo.ChangeFolder));
-        repo.WriteStep(new CurrentStep("NeedsApproval", null, 0, repo.Head(), now, SessionId: sessionId, ChangeFolder: repo.ChangeFolder));
+        repo.WriteStep(new CurrentStep(StepKind.NeedsApproval, null, 0, repo.Head(), now, SessionId: sessionId, ChangeFolder: repo.ChangeFolder));
         return (tmp, repoDir, repo);
     }
 

@@ -57,12 +57,6 @@ public sealed class GuardCommand(
         @"(^|[\\/\s'""=])(\.hoshin[\\/]|\.git[\\/]|\.agents[\\/]|\.claude-plugin[\\/])",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static readonly HashSet<string> EditTools =
-    [
-        "Edit", "Write", "MultiEdit", "NotebookEdit",
-        "write_file", "edit_file", "write_to_file", "replace_file_content", "multi_replace_file_content",
-    ];
-
     public string Name => "guard";
     public string Usage => "guard  (a Claude Code or Antigravity PreToolUse hook: reads the hook input on standard input)";
 
@@ -134,9 +128,9 @@ public sealed class GuardCommand(
         // 3. Fast-path step-aware rules from step.json without recomputing WorkflowState.
         var stepReason = step switch
         {
-            { Kind: "WriteDocument" or "AwaitAccept", Task: { } document } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, $"{document}.md")], document),
-            { Kind: "Review" } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "build", "review.md")], "review"),
-            { Kind: "Fix" } => CheckWhileWriting(
+            { Kind: StepKind.WriteDocument or StepKind.AwaitAccept, Task: { } document } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, $"{document}.md")], document),
+            { Kind: StepKind.Review } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "build", "review.md")], "review"),
+            { Kind: StepKind.Fix } => CheckWhileWriting(
                 ev,
                 repo,
                 step,
@@ -146,7 +140,7 @@ public sealed class GuardCommand(
                     Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "plan.md"),
                 ],
                 "fix"),
-            { Kind: "Implement" or "Retry" } => CheckDuringBuildStep(ev, repo, step),
+            { Kind: StepKind.Implement or StepKind.Retry } => CheckDuringBuildStep(ev, repo, step),
             _ => null,
         };
 
@@ -220,7 +214,7 @@ public sealed class GuardCommand(
 
     private static string? StaticRefusal(NormalizedHookEvent ev, WorkflowRepo? repo = null)
     {
-        if (ev.ToolName is not null && EditTools.Contains(ev.ToolName))
+        if (ev.IsFileWriteTool)
         {
             var path = ev.FilePath ?? "";
             var tamperEdit = GuardTamperingProtection.CheckEditPath(path, repo);

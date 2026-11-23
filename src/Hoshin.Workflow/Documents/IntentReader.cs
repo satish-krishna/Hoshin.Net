@@ -8,7 +8,7 @@ namespace Hoshin.Workflow.Documents;
 /// <summary>Checks an <c>intent.md</c> document: line-1 JSONC front matter fields, required sections, and no leftover template placeholders.</summary>
 public sealed class IntentReader
 {
-    public static readonly string[] RequiredSections =
+    public static readonly string[] RequiredHeadings =
     [
         "## Problem",
         "## Proposed outcome",
@@ -73,7 +73,7 @@ public sealed class IntentReader
         }
 
         var last = -1;
-        foreach (var section in RequiredSections)
+        foreach (var section in RequiredHeadings)
         {
             var at = Enumerable.Range(0, doc.Lines.Length)
                 .FirstOrDefault(i => doc.Heading[i] && doc.Lines[i].TrimEnd() == section, -1);

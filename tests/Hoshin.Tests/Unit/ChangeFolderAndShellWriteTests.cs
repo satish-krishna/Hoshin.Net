@@ -79,7 +79,7 @@ public sealed class ChangeFolderAndShellWriteTests
 
         var now = DateTimeOffset.UtcNow;
         repo.WriteRunMarker(new RunMarker(now, "s1", "claude-code", repo.ChangeFolder));
-        repo.WriteStep(new CurrentStep("Implement", "T1", 1, repo.Head(), now, SessionId: "s1", ChangeFolder: repo.ChangeFolder, TestPatterns: WorkflowPlan.DefaultTestPatterns));
+        repo.WriteStep(new CurrentStep(StepKind.Implement, "T1", 1, repo.Head(), now, SessionId: "s1", ChangeFolder: repo.ChangeFolder, TestPatterns: WorkflowPlan.DefaultTestPatterns));
 
         string? EvalShell(string command)
         {
@@ -128,7 +128,7 @@ public sealed class ChangeFolderAndShellWriteTests
 
         var now = DateTimeOffset.UtcNow;
         repo.WriteRunMarker(new RunMarker(now, "s1", "claude-code", repo.ChangeFolder));
-        repo.WriteStep(new CurrentStep("WriteDocument", "intent", 0, repo.Head(), now, SessionId: "s1", ChangeFolder: repo.ChangeFolder));
+        repo.WriteStep(new CurrentStep(StepKind.WriteDocument, "intent", 0, repo.Head(), now, SessionId: "s1", ChangeFolder: repo.ChangeFolder));
 
         var denyProd = TestServices.EvaluateGuard(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {

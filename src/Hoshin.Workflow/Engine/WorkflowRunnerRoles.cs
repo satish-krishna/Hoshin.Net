@@ -37,11 +37,11 @@ public interface IPublisher
 /// <summary>Validates, pins, commits, and accepts change documents.</summary>
 public interface IDocumentCommitter
 {
-    (IReadOnlyList<Problem> Problems, string? Commit) CommitDocument(WorkflowRepo repo, WorkflowState state, string name);
+    (IReadOnlyList<Problem> Problems, string? Commit) CommitDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document);
 
     (IReadOnlyList<Problem> Problems, string? Commit) CommitReview(WorkflowRepo repo, WorkflowState state);
 
     (IReadOnlyList<Problem> Problems, string? Commit) CommitFixDocuments(WorkflowRepo repo, WorkflowState state);
 
-    string? AcceptDocument(WorkflowRepo repo, WorkflowState state, string name);
+    string? AcceptDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document);
 }

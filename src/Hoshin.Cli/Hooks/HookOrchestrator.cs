@@ -55,7 +55,7 @@ public sealed class HookOrchestrator(
         {
             var existingMarker = repo.ReadRunMarker();
             var existingStep = repo.ReadStep();
-            if (existingStep is { Kind: "Implement" or "Retry" or "NeedsApproval" } &&
+            if (existingStep is { Kind: StepKind.Implement or StepKind.Retry or StepKind.NeedsApproval } &&
                 HookSessionScope.IsActiveNonStale(existingMarker, existingStep, _time.GetUtcNow()) &&
                 !HookSessionScope.IsParentRunSession(existingMarker!, ev))
             {
@@ -145,7 +145,7 @@ public sealed class HookOrchestrator(
                     var commit = _documents.AcceptDocument(repo, state, a.Document);
                     prefix = commit is null
                         ? "The acceptance could not be committed.\n\n"
-                        : $"The {a.Document} is accepted, committed as {WorkflowEngine.Short(commit)}.\n\n";
+                        : $"The {a.Document.ToWireName()} is accepted, committed as {WorkflowEngine.Short(commit)}.\n\n";
                     break;
             }
         }
@@ -153,7 +153,7 @@ public sealed class HookOrchestrator(
         var step = Advance(repo, rolesRoot, ev.SessionId);
         if (invoked == "accept" && step is WriteDocument nextWrite)
         {
-            return EmitStartContext(ev, repo, prefix + $"Tell the person the next step is {WorkflowEngine.Describe(step)}. Then end your turn.", $"accept: next {step.Kind} {nextWrite.Document}");
+            return EmitStartContext(ev, repo, prefix + $"Tell the person the next step is {WorkflowEngine.Describe(step)}. Then end your turn.", $"accept: next {step.Kind} {nextWrite.Document.ToWireName()}");
         }
 
         if (invoked == "accept" && step is Implement)
@@ -184,9 +184,9 @@ public sealed class HookOrchestrator(
             return (_adapter.EmptyOutput(ev.Harness), "not the run session");
         }
 
-        if (current is not { Kind: "Implement" or "Retry", Task: not null })
+        if (current is not { Kind: StepKind.Implement or StepKind.Retry, Task: not null })
         {
-            return (_adapter.EmptyOutput(ev.Harness), $"step is {current?.Kind ?? "none"}");
+            return (_adapter.EmptyOutput(ev.Harness), $"step is {current?.Kind.ToString() ?? "none"}");
         }
 
         if (ev.IsAntigravity && ev.IsTaskManageTool)
@@ -306,7 +306,7 @@ public sealed class HookOrchestrator(
             hasReport = true;
         }
 
-        if (current?.Kind == "Review")
+        if (current?.Kind == StepKind.Review)
         {
             if (hasReport)
             {
@@ -320,7 +320,7 @@ public sealed class HookOrchestrator(
             return StopWhileReviewing(ev, repo, rolesRoot);
         }
 
-        if (current?.Kind == "Fix")
+        if (current?.Kind == StepKind.Fix)
         {
             return StopWhileFixing(ev, repo, rolesRoot);
         }
@@ -369,13 +369,14 @@ public sealed class HookOrchestrator(
     private (string? Output, string Decision) StopWhileWriting(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot, WriteDocument write)
     {
         var state = ReadState(repo, rolesRoot, out _)!;
+        var docName = write.Document.ToWireName();
         var doc = state.Document(write.Document);
         var shown = Path.GetRelativePath(repo.Root, write.Path).Replace('\\', '/');
 
         if (!doc.Exists || (!doc.Uncommitted && doc.InHead))
         {
             ClearTurnFiles(repo);
-            return (_adapter.EmptyOutput(ev.Harness), $"allow: waiting, {write.Document} unchanged");
+            return (_adapter.EmptyOutput(ev.Harness), $"allow: waiting, {docName} unchanged");
         }
 
         var (problems, commit) = _documents.CommitDocument(repo, state, write.Document);
@@ -383,25 +384,25 @@ public sealed class HookOrchestrator(
         {
             if (StopCounterStore.EndsWithQuestion(ev.LastAssistantMessage))
             {
-                StopCounterStore.Reset(repo, $"write-{write.Document}");
-                return (_adapter.EmptyOutput(ev.Harness), $"allow: assistant asked a question while writing {write.Document}");
+                StopCounterStore.Reset(repo, $"write-{docName}");
+                return (_adapter.EmptyOutput(ev.Harness), $"allow: assistant asked a question while writing {docName}");
             }
 
-            var blocks = StopCounterStore.Next(repo, $"write-{write.Document}", ev.ContinuationActive);
+            var blocks = StopCounterStore.Next(repo, $"write-{docName}", ev.ContinuationActive);
             if (blocks > MaxStopBlocks)
             {
                 return (blocks == MaxStopBlocks + 1
-                    ? _adapter.SystemMessageOutput(ev.Harness, $"hoshin: the {write.Document} still has problems after {MaxStopBlocks} tries; it stays uncommitted.")
+                    ? _adapter.SystemMessageOutput(ev.Harness, $"hoshin: the {docName} still has problems after {MaxStopBlocks} tries; it stays uncommitted.")
                     : _adapter.EmptyOutput(ev.Harness), $"gave up after {MaxStopBlocks} blocks");
             }
 
             var list = string.Join("\n", problems.Select(p => $"- line {p.Line}: {p.Message}"));
-            return (_adapter.BlockStopOutput(ev.Harness, $"The {write.Document} at {shown} cannot be committed yet:\n{list}\nFix the file, or if you are still interviewing, ask your next question. Then end your turn."), $"block {blocks}: {write.Document} has {problems.Count} problems");
+            return (_adapter.BlockStopOutput(ev.Harness, $"The {docName} at {shown} cannot be committed yet:\n{list}\nFix the file, or if you are still interviewing, ask your next question. Then end your turn."), $"block {blocks}: {docName} has {problems.Count} problems");
         }
 
         StopCounterStore.ResetAll(repo);
         var next = Advance(repo, rolesRoot, ev.SessionId);
-        return (_adapter.BlockStopOutput(ev.Harness, $"The {write.Document} draft is committed as {WorkflowEngine.Short(commit)}. Tell the person it is ready to review at {shown}, and that `{HookInstructions.SkillCommand("accept", ev.Harness)}` accepts it. Then end your turn."), $"committed {WorkflowEngine.Short(commit)}; next {next.Kind}");
+        return (_adapter.BlockStopOutput(ev.Harness, $"The {docName} draft is committed as {WorkflowEngine.Short(commit)}. Tell the person it is ready to review at {shown}, and that `{HookInstructions.SkillCommand("accept", ev.Harness)}` accepts it. Then end your turn."), $"committed {WorkflowEngine.Short(commit)}; next {next.Kind}");
     }
 
     private (string? Output, string Decision) StopWhileReviewing(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot)

@@ -44,7 +44,7 @@ public sealed class GuardBypassAndHeadEnforcementTests
         var repo = TestServices.FindRepo(repoDir)!;
         var now = DateTimeOffset.UtcNow;
         repo.WriteRunMarker(new RunMarker(now, "s1", "claude-code", repo.ChangeFolder));
-        repo.WriteStep(new CurrentStep("NeedsApproval", null, 0, repo.Head(), now, SessionId: "s1", ChangeFolder: repo.ChangeFolder));
+        repo.WriteStep(new CurrentStep(StepKind.NeedsApproval, null, 0, repo.Head(), now, SessionId: "s1", ChangeFolder: repo.ChangeFolder));
         return (tmp, repoDir, repo);
     }
 

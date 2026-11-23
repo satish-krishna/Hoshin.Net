@@ -41,16 +41,15 @@ public sealed record NormalizedHookEvent(
 
     public string HarnessName => IsAntigravity ? "antigravity" : "claude-code";
 
-    public bool IsShellTool => ToolName is "Bash" or "run_command";
+    public bool IsShellTool => HarnessTools.IsShellTool(ToolName);
 
-    public bool IsFileWriteTool => ToolName is "Edit" or "Write" or "MultiEdit" or "NotebookEdit"
-        or "write_file" or "edit_file" or "write_to_file" or "replace_file_content" or "multi_replace_file_content";
+    public bool IsFileWriteTool => HarnessTools.IsFileWriteTool(ToolName);
 
-    public bool IsSkillReadTool => ToolName is "view_file" or "read_file";
+    public bool IsSkillReadTool => HarnessTools.IsSkillReadTool(ToolName);
 
-    public bool IsSubagentLaunchTool => ToolName is "Agent" or "Task" or "invoke_subagent";
+    public bool IsSubagentLaunchTool => HarnessTools.IsSubagentLaunchTool(ToolName);
 
-    public bool IsTaskManageTool => ToolName is "manage_task" or "manage_subagents";
+    public bool IsTaskManageTool => HarnessTools.IsTaskManageTool(ToolName);
 }
 
 /// <summary>Normalizes Claude Code and Antigravity hook stdin payloads and formats harness-specific stdout responses.</summary>

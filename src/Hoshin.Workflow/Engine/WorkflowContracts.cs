@@ -60,62 +60,100 @@ public sealed record AgentTask(string Role, string Task, int Attempt, string Ins
     public string Prompt => $"{Instructions.Trim()}\n\n---\n\n{Brief.Trim()}\n";
 }
 
+/// <summary>Closed set of authoring documents in the change pipeline.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<WorkflowDocument>))]
+public enum WorkflowDocument
+{
+    Intent,
+    Spec,
+    Plan,
+}
+
+public static class WorkflowDocumentExtensions
+{
+    public static string ToWireName(this WorkflowDocument document) => document switch
+    {
+        WorkflowDocument.Intent => "intent",
+        WorkflowDocument.Spec => "spec",
+        WorkflowDocument.Plan => "plan",
+        _ => throw new ArgumentOutOfRangeException(nameof(document), document, "Unknown workflow document."),
+    };
+
+    public static string FileName(this WorkflowDocument document) => $"{document.ToWireName()}.md";
+}
+
+/// <summary>Closed set of workflow state machine step kinds serialized to <c>.git/hoshin/step.json</c>.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<StepKind>))]
+public enum StepKind
+{
+    WriteDocument,
+    AwaitAccept,
+    Review,
+    Fix,
+    Implement,
+    Retry,
+    RunChecks,
+    NeedsApproval,
+    Publish,
+    Done,
+}
+
 /// <summary>The single step <see cref="WorkflowEngine.Next"/> returns. Hosts switch on the concrete type.</summary>
 public abstract record Step
 {
-    public abstract string Kind { get; }
+    public abstract StepKind Kind { get; }
 }
 
-public sealed record WriteDocument(string Document, string Path, string Brief) : Step
+public sealed record WriteDocument(WorkflowDocument Document, string Path, string Brief) : Step
 {
-    public override string Kind => "WriteDocument";
+    public override StepKind Kind => StepKind.WriteDocument;
 }
 
-public sealed record AwaitAccept(string Document, string Path, string Head) : Step
+public sealed record AwaitAccept(WorkflowDocument Document, string Path, string Head) : Step
 {
-    public override string Kind => "AwaitAccept";
+    public override StepKind Kind => StepKind.AwaitAccept;
 }
 
 /// <summary>The built change is being reviewed and findings written to <c>build/review.md</c>.</summary>
 public sealed record ReviewDocument(string Path, string Head, string Brief) : Step
 {
-    public override string Kind => "Review";
+    public override StepKind Kind => StepKind.Review;
 }
 
 /// <summary>Light-track fix drafting (<c>intent.md</c>, <c>spec.md</c>, <c>plan.md</c> together, capped at 1 repo and 3 tasks).</summary>
 public sealed record WriteFix(string ChangeFolder, string Brief) : Step
 {
-    public override string Kind => "Fix";
+    public override StepKind Kind => StepKind.Fix;
 }
 
 public sealed record Implement(AgentTask Agent) : Step
 {
-    public override string Kind => "Implement";
+    public override StepKind Kind => StepKind.Implement;
 }
 
 public sealed record Retry(AgentTask Agent, IReadOnlyList<string> Handoff) : Step
 {
-    public override string Kind => "Retry";
+    public override StepKind Kind => StepKind.Retry;
 }
 
 public sealed record RunChecks(string Head) : Step
 {
-    public override string Kind => "RunChecks";
+    public override StepKind Kind => StepKind.RunChecks;
 }
 
 public sealed record NeedsApproval(string Head, string Reason) : Step
 {
-    public override string Kind => "NeedsApproval";
+    public override StepKind Kind => StepKind.NeedsApproval;
 }
 
 public sealed record Publish(string Head, string Ref) : Step
 {
-    public override string Kind => "Publish";
+    public override StepKind Kind => StepKind.Publish;
 }
 
 public sealed record Done(bool Success, string Outcome) : Step
 {
-    public override string Kind => "Done";
+    public override StepKind Kind => StepKind.Done;
 }
 
 /// <summary>Where an attempt started, so failed attempts stay clean and retries have a known baseline.</summary>
@@ -174,7 +212,7 @@ public sealed class WorkflowLedger
 /// recomputes <see cref="WorkflowState"/> and isolates unrelated sessions.
 /// </summary>
 public sealed record CurrentStep(
-    string Kind,
+    StepKind Kind,
     string? Task,
     int Attempt,
     string? StartHead,

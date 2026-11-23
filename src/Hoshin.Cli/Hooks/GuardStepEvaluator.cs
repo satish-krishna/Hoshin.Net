@@ -16,25 +16,19 @@ public static class GuardStepEvaluator
     public static string? CheckBuildTargetPath(string filePath, WorkflowRepo repo, CurrentStep step)
     {
         var full = Path.GetFullPath(filePath, repo.Root);
-        var sep = Path.DirectorySeparatorChar;
-        if (full.Contains($"{sep}.hoshin{sep}", PathComparison)
-            || full.Contains($"{sep}.git{sep}", PathComparison)
-            || full.Contains($"{sep}.agents{sep}", PathComparison)
-            || full.Contains($"{sep}.claude-plugin{sep}", PathComparison))
+        if (ProtectedPaths.IsProtectedDirectoryPath(full))
         {
             return "The change's documents in .hoshin/, .agents/, .claude-plugin/, and .git/ are not edited during a build.";
         }
 
-        var changeFolder = Path.GetFullPath(step.ChangeFolder ?? repo.ChangeFolder).TrimEnd(sep, Path.AltDirectorySeparatorChar);
-        if (string.Equals(full, changeFolder, PathComparison)
-            || full.StartsWith(changeFolder + sep, PathComparison))
+        if (ProtectedPaths.IsInsideChangeFolder(full, step.ChangeFolder ?? repo.ChangeFolder))
         {
             return "The change folder's documents (intent, spec, plan, change.jsonc) are not edited during a build.";
         }
 
         // Red-phase enforcement: during Implement/Retry, deny production file edits until at least one test file
         // has been created or modified in the working tree (unless the task has no test, in which case test files are denied).
-        if (step is { Kind: "Implement" or "Retry", Task: not null })
+        if (step is { Kind: StepKind.Implement or StepKind.Retry, Task: not null })
         {
             var rel = Path.GetRelativePath(repo.Root, full).Replace('\\', '/');
             var isTest = WorkflowRepo.IsTestPath(rel, step.TestPatterns, step.TaskTestFiles);

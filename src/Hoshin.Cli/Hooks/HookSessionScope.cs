@@ -28,7 +28,7 @@ internal static class HookSessionScope
 
     public static bool IsRegisteredSubagent(WorkflowRepo repo, CurrentStep? step, NormalizedHookEvent ev)
     {
-        if (step is not { Kind: "Implement" or "Retry" })
+        if (step is not { Kind: StepKind.Implement or StepKind.Retry })
         {
             return false;
         }

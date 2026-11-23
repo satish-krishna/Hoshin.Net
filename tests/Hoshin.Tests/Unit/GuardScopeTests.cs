@@ -59,7 +59,7 @@ public sealed class GuardScopeTests
         var repo = TestServices.FindRepo(repoDir)!;
         var staleTime = DateTimeOffset.UtcNow.AddHours(-25);
         repo.WriteRunMarker(new RunMarker(staleTime, "s1", "claude-code", repo.ChangeFolder));
-        repo.WriteStep(new CurrentStep("NeedsApproval", null, 0, null, staleTime, SessionId: "s1", ChangeFolder: repo.ChangeFolder));
+        repo.WriteStep(new CurrentStep(StepKind.NeedsApproval, null, 0, null, staleTime, SessionId: "s1", ChangeFolder: repo.ChangeFolder));
 
         var (_, guardOut, _) = RunCli(repoDir, ["guard"], new
         {
