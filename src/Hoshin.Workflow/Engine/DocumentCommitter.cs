@@ -167,6 +167,74 @@ public sealed class DocumentCommitter(
         return commit.Ok ? commit.Sha : null;
     }
 
+    public IReadOnlyList<string> AcceptFixDocuments(WorkflowRepo repo, WorkflowState state)
+    {
+        var commits = new List<string>();
+        foreach (var document in new[] { WorkflowDocument.Intent, WorkflowDocument.Spec, WorkflowDocument.Plan })
+        {
+            var doc = state.Document(document);
+            if (doc.InHead && doc.HeadStatus == "accepted" && !doc.Uncommitted)
+            {
+                continue;
+            }
+
+            if (document == WorkflowDocument.Spec)
+            {
+                var intentRel = Path.GetRelativePath(repo.Root, state.Intent.Path).Replace('\\', '/');
+                var intentSha = _gitQuery.LastCommitForPath(repo.Root, intentRel);
+                if (!string.IsNullOrEmpty(intentSha))
+                {
+                    _frontMatterEdit.Set(doc.Path, "source_intent_commit", intentSha);
+                }
+            }
+            else if (document == WorkflowDocument.Plan)
+            {
+                var specRel = Path.GetRelativePath(repo.Root, state.Spec.Path).Replace('\\', '/');
+                var specSha = _gitQuery.LastCommitForPath(repo.Root, specRel);
+                if (!string.IsNullOrEmpty(specSha))
+                {
+                    _frontMatterEdit.Set(doc.Path, "source_spec_commit", specSha);
+                }
+            }
+
+            var sha = AcceptDocument(repo, state, document);
+            if (sha is null)
+            {
+                break;
+            }
+
+            commits.Add(sha);
+        }
+
+        return commits;
+    }
+
+    public string? ReopenDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document)
+    {
+        var name = document.ToWireName();
+        var path = state.Document(document).Path;
+        var relative = Path.GetRelativePath(repo.Root, path).Replace('\\', '/');
+        _frontMatterEdit.Set(path, "status", "draft");
+        var verb = state.IsLightTrack ? "reopen fix" : $"reopen {name}";
+        var commit = _gitCommitter.CommitPaths(
+            repo.Root,
+            [relative],
+            [$"docs({state.Plan.Scope}): {verb} {state.Plan.Change}", "Generated-By: hoshin"]);
+        return commit.Ok ? commit.Sha : null;
+    }
+
+    public string? RejectIntent(WorkflowRepo repo, WorkflowState state)
+    {
+        var path = state.Intent.Path;
+        var relative = Path.GetRelativePath(repo.Root, path).Replace('\\', '/');
+        _frontMatterEdit.Set(path, "status", "rejected");
+        var commit = _gitCommitter.CommitPaths(
+            repo.Root,
+            [relative],
+            [$"docs({state.Plan.Scope}): reject intent {state.Plan.Change}", "Generated-By: hoshin"]);
+        return commit.Ok ? commit.Sha : null;
+    }
+
     private string ReadAndAutoWrap(string path)
     {
         var rawText = _fs.ReadAllText(path);

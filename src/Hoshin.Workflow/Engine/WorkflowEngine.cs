@@ -1,94 +1,22 @@
 using Hoshin.Workflow.Changes;
-using Hoshin.Workflow.Events;
 
 namespace Hoshin.Workflow.Engine;
 
 /// <summary>
-/// Pure snapshot of where a workflow run stands, computed from <see cref="ChangeStateService"/>, git, JSONC change documents,
-/// and the unified <see cref="RepoLedger"/> in <c>.git/hoshin/</c>. Holds nothing owned by any specific harness.
-/// </summary>
-public sealed record WorkflowState(
-    string RepoRoot,
-    string ChangeFolder,
-    WorkflowPlan Plan,
-    string Head,
-    RepoLedger Ledger,
-    string? SkillsRoot,
-    WorkflowDocState Intent,
-    WorkflowDocState Spec,
-    WorkflowDocState PlanDoc,
-    string? CodeHead = null,
-    ChangeStateItem? ChangeState = null,
-    Dictionary<string, RepoLedger>? RepoLedgers = null,
-    Dictionary<string, string>? RepoPaths = null)
-{
-    public string EffectiveCodeHead => string.IsNullOrWhiteSpace(CodeHead) ? Head : CodeHead;
-
-    public IReadOnlyList<WorkflowVerdict> VerdictsForTask(WorkflowTask task)
-    {
-        if (!string.IsNullOrWhiteSpace(task.Repo)
-            && RepoLedgers is not null
-            && RepoLedgers.TryGetValue(task.Repo, out var repoLedger))
-        {
-            var repoVerdicts = repoLedger.WorkflowVerdicts.Where(v => v.Task == task.Id).ToList();
-            if (repoVerdicts.Count > 0)
-            {
-                return repoVerdicts;
-            }
-        }
-
-        return Ledger.WorkflowVerdicts.Where(v => v.Task == task.Id).ToList();
-    }
-
-    public string RepositoryPathFor(WorkflowTask task) =>
-        !string.IsNullOrWhiteSpace(task.Repo)
-        && RepoPaths is not null
-        && RepoPaths.TryGetValue(task.Repo, out var path)
-            ? path
-            : RepoRoot;
-
-    public WorkflowDocState Document(WorkflowDocument document) => document switch
-    {
-        WorkflowDocument.Intent => Intent,
-        WorkflowDocument.Spec => Spec,
-        WorkflowDocument.Plan => PlanDoc,
-        _ => throw new ArgumentOutOfRangeException(nameof(document), document, "Unknown workflow document."),
-    };
-}
-
-/// <summary>
 /// The single pure state machine for the entire change lifecycle:
-/// <c>WriteIntent → AwaitAccept(intent) → WriteSpec → AwaitAccept(spec) → WritePlan → AwaitAccept(plan) → Implement/Retry → RunChecks → Review → NeedsApproval → Publish → Done</c>.
-/// All step ordering, retry caps, and skill gate rules live strictly here.
+/// <c>WriteIntent → AwaitAccept(intent) → WriteSpec → AwaitAccept(spec) → WritePlan → AwaitAccept(plan) → Implement/Retry → RunChecks → Review → NeedsApproval → Publish → Done</c>
+/// plus the light-track <c>fix</c> lifecycle (<c>WriteFix → AwaitAcceptFix → Implement/Retry → ...</c>), <c>reject</c>, and <c>reopen</c>.
+/// All step ordering, retry caps, and skill gate rules live strictly here (and in <see cref="WorkflowGate"/>).
 /// </summary>
 public static class WorkflowEngine
 {
     public const int MaxAttempts = 3;
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static Step Next(WorkflowState state)
     {
-        // Authoring pipeline runs when an intent exists or no plan exists yet.
-        if (state.Intent.Exists || !state.Plan.HasPlan)
+        if (NextAuthoringPhase(state) is { } authoring)
         {
-            var authoring = NextAuthoring(state);
-            if (authoring is not null)
-            {
-                return authoring;
-            }
-        }
-        else if (state.PlanDoc.Exists)
-        {
-            // Direct plan-based change: still honor explicit draft/rejected status on plan.md.
-            if (state.PlanDoc.HeadStatus == "rejected")
-            {
-                return new Done(false, "the plan is rejected");
-            }
-
-            if (state.PlanDoc.InHead && state.PlanDoc.HeadStatus == "draft")
-            {
-                return new AwaitAccept(WorkflowDocument.Plan, state.PlanDoc.Path, state.Head);
-            }
+            return authoring;
         }
 
         if (NextScheduledTaskStep(state) is { } taskStep)
@@ -96,6 +24,137 @@ public static class WorkflowEngine
             return taskStep;
         }
 
+        return NextPostBuild(state);
+    }
+
+    /// <summary>
+    /// Computes the next step when a specific skill initiates a run (for example <c>fix</c> entering the light track on a fresh change),
+    /// keeping every <see cref="Step"/> construction strictly inside <see cref="WorkflowEngine"/>.
+    /// </summary>
+    public static Step NextForSkill(WorkflowState state, string? invokedSkill)
+    {
+        if (string.Equals(invokedSkill, "fix", StringComparison.OrdinalIgnoreCase)
+            && !state.IsLightTrack
+            && !state.Intent.Exists
+            && !state.Plan.HasPlan)
+        {
+            return Next(state with { IsLightTrack = true });
+        }
+
+        return Next(state);
+    }
+
+    /// <summary>
+    /// Gate check: returns <c>null</c> if <paramref name="skill"/> may act at the current <see cref="Next"/> step;
+    /// when <see cref="WorkflowState.ChangeState"/> is present, refuses with <see cref="ReadinessMap"/>'s exact
+    /// <see cref="SkillReadiness.Stop"/> reason before falling back to step-owner gating.
+    /// </summary>
+    public static string? Gate(WorkflowState state, string skill) => WorkflowGate.Evaluate(state, skill);
+
+    /// <summary>Pure gate for light-track <c>fix --accept</c> driven by <see cref="FixStateResult"/> rows 1–8.</summary>
+    public static string? GateFixAccept(WorkflowState state) => WorkflowGate.EvaluateFixAccept(state);
+
+    private static Step? NextAuthoringPhase(WorkflowState state)
+    {
+        if (state.IsLightTrack)
+        {
+            return NextFix(state);
+        }
+
+        if (state.Intent.Exists || !state.Plan.HasPlan)
+        {
+            return NextAuthoring(state);
+        }
+
+        return NextDirectPlan(state);
+    }
+
+    private static Step? NextDirectPlan(WorkflowState state)
+    {
+        if (!state.PlanDoc.Exists)
+        {
+            return null;
+        }
+
+        if (state.PlanDoc.HeadStatus == "rejected")
+        {
+            return new Done(false, "the plan is rejected");
+        }
+
+        return state.PlanDoc.InHead && state.PlanDoc.HeadStatus == "draft"
+            ? new AwaitAccept(WorkflowDocument.Plan, state.PlanDoc.Path, state.Head)
+            : null;
+    }
+
+    private static Step? NextFix(WorkflowState state)
+    {
+        if (state.ChangeState?.Fix is { } fix)
+        {
+            return fix.Row switch
+            {
+                1 => new Done(false, "the intent is rejected"),
+                2 => new Done(false, "the light-track fix documents are in an inconsistent state; resolve them before continuing"),
+                3 => new WriteFix(state.ChangeFolder, WorkflowBriefs.Fix(state)),
+                4 or 5 or 6 => new AwaitAcceptFix(state.ChangeFolder, state.Head, FirstUnacceptedFromFacts(fix.Facts)),
+                7 => fix.Facts.Built
+                    ? new Done(false, "the light-track fix has build work with unaccepted documents; revise or reopen before continuing")
+                    : new AwaitAcceptFix(state.ChangeFolder, state.Head, FirstUnacceptedFromFacts(fix.Facts)),
+                8 => null,
+                _ => new WriteFix(state.ChangeFolder, WorkflowBriefs.Fix(state)),
+            };
+        }
+
+        if (state.Intent.HeadStatus == "rejected")
+        {
+            return new Done(false, "the intent is rejected");
+        }
+
+        var docs = new[] { state.Intent, state.Spec, state.PlanDoc };
+        if (docs.Any(d => !d.Exists || d.Uncommitted || !d.InHead))
+        {
+            return new WriteFix(state.ChangeFolder, WorkflowBriefs.Fix(state));
+        }
+
+        if (docs.Any(d => d.HeadStatus != "accepted"))
+        {
+            return new AwaitAcceptFix(state.ChangeFolder, state.Head, FirstUnacceptedFromDocs(state));
+        }
+
+        return null;
+    }
+
+    private static WorkflowDocument FirstUnacceptedFromFacts(FixFacts facts)
+    {
+        if (!facts.Intent.InHead || facts.Intent.HeadStatus != "accepted")
+        {
+            return WorkflowDocument.Intent;
+        }
+
+        if (!facts.Spec.InHead || facts.Spec.HeadStatus != "accepted")
+        {
+            return WorkflowDocument.Spec;
+        }
+
+        return WorkflowDocument.Plan;
+    }
+
+    private static WorkflowDocument FirstUnacceptedFromDocs(WorkflowState state)
+    {
+        if (state.Intent.HeadStatus != "accepted")
+        {
+            return WorkflowDocument.Intent;
+        }
+
+        if (state.Spec.HeadStatus != "accepted")
+        {
+            return WorkflowDocument.Spec;
+        }
+
+        return WorkflowDocument.Plan;
+    }
+
+    private static Step NextPostBuild(WorkflowState state)
+    {
         var codeHead = state.EffectiveCodeHead;
         var check = state.Ledger.WorkflowChecks.LastOrDefault(c => c.Head == codeHead);
         if (check is null)
@@ -146,14 +205,7 @@ public static class WorkflowEngine
             var doc = state.Document(document);
             if (!doc.Exists || doc.Uncommitted || !doc.InHead)
             {
-                var brief = document switch
-                {
-                    WorkflowDocument.Intent => WorkflowBriefs.Intent(state),
-                    WorkflowDocument.Spec => WorkflowBriefs.Spec(state),
-                    WorkflowDocument.Plan => WorkflowBriefs.Plan(state),
-                    _ => throw new ArgumentOutOfRangeException(nameof(state)),
-                };
-                return new WriteDocument(document, doc.Path, brief);
+                return WriteDocumentFor(state, document, doc.Path);
             }
 
             switch (doc.HeadStatus)
@@ -195,86 +247,6 @@ public static class WorkflowEngine
             _ => throw new ArgumentOutOfRangeException(nameof(document)),
         };
         return new WriteDocument(document, path, brief);
-    }
-
-    /// <summary>
-    /// Gate check: returns <c>null</c> if <paramref name="skill"/> may act at the current <see cref="Next"/> step;
-    /// when <see cref="WorkflowState.ChangeState"/> is present, refuses with <see cref="ReadinessMap"/>'s exact
-    /// <see cref="SkillReadiness.Stop"/> reason before falling back to step-owner gating.
-    /// </summary>
-    public static string? Gate(WorkflowState state, string skill)
-    {
-        var normalized = skill.ToLowerInvariant();
-        if (normalized is "setup" or "context")
-        {
-            return null;
-        }
-
-        if (state.ChangeState is { Ready: var ready })
-        {
-            if (ReadinessStop(state, ready, normalized) is { } stop)
-            {
-                return stop;
-            }
-
-            if (IsReadyCandidate(ready, normalized))
-            {
-                return null;
-            }
-        }
-
-        var step = Next(state);
-        if (normalized == "review" && step is RunChecks or NeedsApproval or Publish)
-        {
-            return null;
-        }
-
-        if (normalized == "fix" && step is WriteDocument or AwaitAccept)
-        {
-            return null;
-        }
-
-        if (normalized == "done" && step is NeedsApproval or Publish)
-        {
-            return null;
-        }
-
-        var owner = OwnerOf(step);
-        if (string.Equals(owner, normalized, StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        return $"`{skill}` cannot run on this change now. The next step is {Describe(step)}.";
-    }
-
-    private static string? ReadinessStop(WorkflowState state, ReadinessMap ready, string skill) => skill switch
-    {
-        "spec" => ready.Spec.Stop,
-        "plan" => ready.Plan.Stop,
-        "build" => ready.Build.Stop,
-        "review" => ReviewReadinessStop(state, ready),
-        "reject" => ready.Reject.Stop,
-        "done" => ready.Build.Stop,
-        _ => null,
-    };
-
-    private static string? ReviewReadinessStop(WorkflowState state, ReadinessMap ready)
-    {
-        if (ready.Build.Stop is not null)
-        {
-            return ready.Build.Stop;
-        }
-
-        if (ready.Review.Stop is null)
-        {
-            return null;
-        }
-
-        var allPassedInLedger = state.Plan.Tasks.Count > 0
-            && state.Plan.Tasks.All(t => state.VerdictsForTask(t).Any(v => v.Passed));
-        var isOnlyUnloggedTasks = ready.Review.Stop.StartsWith("These tasks have no build log entry yet:", StringComparison.Ordinal);
-        return allPassedInLedger && isOnlyUnloggedTasks ? null : ready.Review.Stop;
     }
 
     private static Step? NextScheduledTaskStep(WorkflowState state)
@@ -324,17 +296,10 @@ public static class WorkflowEngine
             : new Retry(WorkflowBriefs.Implement(state, nextTask, attempt, verdicts[^1].Reasons), verdicts[^1].Reasons);
     }
 
-    private static bool IsReadyCandidate(ReadinessMap ready, string skill) => skill switch
-    {
-        "spec" => ready.Spec.Candidate && ready.Spec.Stop is null,
-        "plan" => ready.Plan.Candidate && ready.Plan.Stop is null,
-        _ => false,
-    };
-
     public static string? OwnerOf(Step step) => step switch
     {
         WriteDocument w => w.Document.ToWireName(),
-        AwaitAccept or NeedsApproval => "accept",
+        AwaitAccept or AwaitAcceptFix or NeedsApproval => "accept",
         ReviewDocument => "review",
         WriteFix => "fix",
         Implement or Retry or RunChecks or Publish => "build",
@@ -347,6 +312,7 @@ public static class WorkflowEngine
         WriteDocument { Document: WorkflowDocument.Spec } => "writing the spec from the accepted intent (`spec`)",
         WriteDocument { Document: WorkflowDocument.Plan } => "writing the plan from the accepted spec (`plan`)",
         AwaitAccept a => $"accepting the {a.Document.ToWireName()}, which is committed at {a.Path} (`accept`)",
+        AwaitAcceptFix f => $"accepting the light-track fix documents starting from {f.NextDocument.ToWireName()} (`accept` or `fix --accept`)",
         ReviewDocument => "reviewing the built change (`review`)",
         WriteFix => "drafting the light-track fix documents (`fix`)",
         NeedsApproval => "approving the built change (`accept`)",

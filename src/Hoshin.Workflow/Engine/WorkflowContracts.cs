@@ -91,6 +91,7 @@ public enum StepKind
 {
     WriteDocument,
     AwaitAccept,
+    AwaitAcceptFix,
     Review,
     Fix,
     Implement,
@@ -115,6 +116,12 @@ public sealed record WriteDocument(WorkflowDocument Document, string Path, strin
 public sealed record AwaitAccept(WorkflowDocument Document, string Path, string Head) : Step
 {
     public override StepKind Kind => StepKind.AwaitAccept;
+}
+
+/// <summary>Committed light-track fix documents awaiting human acceptance (<c>accept</c> or <c>fix --accept</c>).</summary>
+public sealed record AwaitAcceptFix(string ChangeFolder, string Head, WorkflowDocument NextDocument) : Step
+{
+    public override StepKind Kind => StepKind.AwaitAcceptFix;
 }
 
 /// <summary>The built change is being reviewed and findings written to <c>build/review.md</c>.</summary>

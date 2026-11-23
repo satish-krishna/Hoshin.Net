@@ -3,10 +3,9 @@ using Hoshin.Workflow.Engine;
 
 namespace Hoshin.Cli.Hooks;
 
-/// <summary>Handles <c>hoshin hook start</c> (skill detection, human-only approval/acceptance enforcement, gate checks, and step dispatch).</summary>
+/// <summary>Handles <c>hoshin hook start</c> (skill detection, human-only approval/acceptance/rejection/reopen enforcement, gate checks, and step dispatch).</summary>
 internal sealed class StartHandler(
     IHookAdapter adapter,
-    ITaskEvaluator tasks,
     IApprovalRecorder approvals,
     IDocumentCommitter documents,
     IChangeStarter changeStarter,
@@ -15,10 +14,9 @@ internal sealed class StartHandler(
     TimeProvider timeProvider)
 {
     private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
-    private readonly ITaskEvaluator _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
     private readonly IApprovalRecorder _approvals = approvals ?? throw new ArgumentNullException(nameof(approvals));
     private readonly IDocumentCommitter _documents = documents ?? throw new ArgumentNullException(nameof(documents));
-    private readonly IChangeStarter _changeStarter = changeStarter ?? throw new ArgumentNullException(nameof(changeStarter));
+    private readonly StartChangeResolver _changes = new(changeStarter, advancer, fileSystem, timeProvider);
     private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -88,13 +86,16 @@ internal sealed class StartHandler(
         string? rolesRoot)
     {
         var invoked = invocation.Skill;
-        if (invoked is "accept" or "done" && invocation.Source != SkillInvocationSource.User)
+        var rawArgs = (ev.CommandArgs ?? invocation.Args ?? "").Trim();
+        var isFixAccept = IsFixAcceptCommand(invoked, rawArgs);
+
+        if (RequiresHumanInvocation(invoked, isFixAccept) && invocation.Source != SkillInvocationSource.User)
         {
-            var cmd = HookInstructions.SkillCommand("accept", ev.Harness);
+            var cmd = FormatHumanOnlyCommand(invoked, isFixAccept, ev.Harness);
             return EmitStartContext(
                 ev,
                 repo,
-                $"Only the engineer can approve or accept a change. Ask the engineer to type `{cmd}`, then end your turn.",
+                $"Only the engineer can approve, accept, reopen, or reject a change. Ask the engineer to type `{cmd}`, then end your turn.",
                 $"{invoked}: refused model-sourced invocation");
         }
 
@@ -107,7 +108,7 @@ internal sealed class StartHandler(
             }
         }
 
-        if (ResolveOrStartChange(ev, ref repo, invocation, out var earlyResponse))
+        if (_changes.TryResolveOrStart(ev, ref repo, invocation, isFixAccept, EmitStartContext, out var earlyResponse))
         {
             return earlyResponse;
         }
@@ -118,117 +119,27 @@ internal sealed class StartHandler(
             return EmitStartContext(ev, repo, error ?? "There is no change plan in this repository. Tell the engineer, then end your turn.", "no plan");
         }
 
-        var gate = WorkflowEngine.Gate(state, invoked);
+        var gate = isFixAccept ? WorkflowEngine.GateFixAccept(state) : WorkflowEngine.Gate(state, invoked);
         if (gate is not null)
         {
             return EmitStartContext(ev, repo, gate + " Tell the person who asked, in one or two sentences, then end your turn.", $"{invoked}: refused, next is {WorkflowEngine.Next(state).Kind}");
         }
 
         StartRun(repo, ev);
-        return DispatchSkill(ev, repo, state, invocation, rolesRoot);
+        return DispatchSkill(ev, repo, state, invocation, isFixAccept, rolesRoot);
     }
 
-    private bool ResolveOrStartChange(
-        NormalizedHookEvent ev,
-        ref WorkflowRepo repo,
-        SkillInvocation invocation,
-        out (string? Output, string Decision) earlyResponse)
-    {
-        earlyResponse = default;
-        var invoked = invocation.Skill;
-        var rawArgs = (ev.CommandArgs ?? invocation.Args ?? "").Trim();
+    private static bool RequiresHumanInvocation(string invoked, bool isFixAccept) =>
+        invoked is "accept" or "done" or "reject" or "reopen" || isFixAccept;
 
-        var openChanges = _changeStarter.ListOpenChanges(repo);
-        if (TryMatchOpenChange(openChanges, rawArgs) is { } matched)
-        {
-            repo = _advancer.ResolveRepoAt(matched.MasterRoot, matched.ChangeFolder) ?? repo;
-            return false;
-        }
+    private static string FormatHumanOnlyCommand(string invoked, bool isFixAccept, HookHarness harness) =>
+        isFixAccept
+            ? $"{HookInstructions.SkillCommand("fix", harness)} --accept"
+            : HookInstructions.SkillCommand(invoked is "reject" or "reopen" ? invoked : "accept", harness);
 
-        if (HasPinnedActiveRun(repo))
-        {
-            return false;
-        }
-
-        if (ShouldStartNewChange(repo, invoked, rawArgs, openChanges.Count))
-        {
-            return TryStartNewChange(ev, ref repo, invoked, rawArgs, out earlyResponse);
-        }
-
-        if (openChanges.Count > 1)
-        {
-            var names = string.Join(", ", openChanges.Select(c => c.Change));
-            earlyResponse = EmitStartContext(
-                ev,
-                repo,
-                $"Multiple open changes exist in this workspace: {names}. Ask the engineer which change they want to work on, then end your turn.",
-                $"{invoked}: ambiguous ({openChanges.Count} open changes)");
-            return true;
-        }
-
-        if (openChanges.Count == 1)
-        {
-            repo = _advancer.ResolveRepoAt(openChanges[0].MasterRoot, openChanges[0].ChangeFolder) ?? repo;
-        }
-
-        return false;
-    }
-
-    private bool HasPinnedActiveRun(WorkflowRepo repo) =>
-        _fs.FileExists(repo.RunMarkerPath)
-        && HookSessionScope.IsActiveNonStale(repo.ReadRunMarker(), repo.ReadStep(), _time.GetUtcNow())
-        && !string.IsNullOrWhiteSpace(repo.ReadRunMarker()?.ChangeFolder);
-
-    private bool ShouldStartNewChange(WorkflowRepo repo, string invoked, string rawArgs, int openCount)
-    {
-        if (invoked is not ("intent" or "fix") || !_changeStarter.HasWorkspaceMarker(repo))
-        {
-            return false;
-        }
-
-        return openCount == 0 || rawArgs.Length > 0;
-    }
-
-    private bool TryStartNewChange(
-        NormalizedHookEvent ev,
-        ref WorkflowRepo repo,
-        string invoked,
-        string rawArgs,
-        out (string? Output, string Decision) earlyResponse)
-    {
-        earlyResponse = default;
-        var started = _changeStarter.StartFromHook(repo.Root, invoked, rawArgs);
-        if (!started.Ok)
-        {
-            earlyResponse = EmitStartContext(
-                ev,
-                repo,
-                $"Could not start a new change: {started.Error}. Tell the engineer, then end your turn.",
-                $"{invoked}: change.start failed");
-            return true;
-        }
-
-        repo = _advancer.ResolveRepoAt(started.CopyRoot!, started.ChangeFolder) ?? repo;
-        return false;
-    }
-
-    private static OpenChangeOption? TryMatchOpenChange(IReadOnlyList<OpenChangeOption> openChanges, string rawArgs)
-    {
-        if (string.IsNullOrWhiteSpace(rawArgs) || openChanges.Count == 0)
-        {
-            return null;
-        }
-
-        var token = rawArgs.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)[0];
-        var exact = openChanges.Where(c => string.Equals(c.Change, token, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (exact.Count == 1)
-        {
-            return exact[0];
-        }
-
-        var bySlug = openChanges.Where(c => c.Change.EndsWith("-" + token, StringComparison.OrdinalIgnoreCase)).ToList();
-        return bySlug.Count == 1 ? bySlug[0] : null;
-    }
+    private static bool IsFixAcceptCommand(string invoked, string rawArgs) =>
+        invoked == "fix" && rawArgs.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Any(t => string.Equals(t, "--accept", StringComparison.OrdinalIgnoreCase));
 
     private void StartRun(WorkflowRepo repo, NormalizedHookEvent ev)
     {
@@ -242,37 +153,134 @@ internal sealed class StartHandler(
         WorkflowRepo repo,
         WorkflowState state,
         SkillInvocation invocation,
+        bool isFixAccept,
         string? rolesRoot)
     {
         var invoked = invocation.Skill;
-        if (invoked == "fix")
+        var args = (ev.CommandArgs ?? invocation.Args ?? "").Trim();
+
+        if (invoked == "reject")
         {
-            var fixStep = new WriteFix(repo.ChangeFolder, WorkflowBriefs.Fix(state));
-            _tasks.Issue(repo, state, fixStep, ev.SessionId);
-            var fixArgs = ev.CommandArgs ?? invocation.Args ?? "";
-            var desc = fixArgs.Trim().Length > 0 ? $"\n\nThe engineer's fix request: {fixArgs.Trim()}" : "";
-            return EmitStartContext(ev, repo, HookInstructions.For(fixStep, ev.Harness, suffix: desc), "fix: Fix");
+            return HandleReject(ev, repo, state, rolesRoot);
         }
 
-        var prefix = ApplyHumanAcceptanceIfNeeded(ev, repo, state, invoked);
-        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
+        if (invoked == "reopen")
+        {
+            return HandleReopen(ev, repo, state, args, rolesRoot);
+        }
 
-        if (invoked == "accept" && TryFormatPostAcceptMessage(ev, repo, step, prefix) is { } postAccept)
+        var prefix = ApplyHumanAcceptanceIfNeeded(ev, repo, state, invoked, isFixAccept);
+        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, isFixAccept ? null : invoked);
+
+        if ((invoked == "accept" || isFixAccept) && TryFormatPostAcceptMessage(ev, repo, step, prefix) is { } postAccept)
         {
             return postAccept;
         }
 
-        var args = ev.CommandArgs ?? invocation.Args ?? "";
-        var idea = invoked == "intent" && args.Trim().Length > 0
-            ? $"\n\nThe product owner's idea, as they typed it: {args.Trim()}"
-            : "";
-
-        return EmitStartContext(ev, repo, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: prefix, suffix: idea), $"{invoked}: {step.Kind}");
+        var suffix = BuildPromptSuffix(invoked, args, step);
+        return EmitStartContext(ev, repo, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: prefix, suffix: suffix), $"{invoked}: {step.Kind}");
     }
 
-    private string ApplyHumanAcceptanceIfNeeded(NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string invoked)
+    private (string? Output, string Decision) HandleReject(NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string? rolesRoot)
     {
-        if (invoked is not ("accept" or "done"))
+        var commit = _documents.RejectIntent(repo, state);
+        if (commit is null)
+        {
+            return EmitStartContext(ev, repo, "The rejection could not be committed. Tell the engineer, then end your turn.", "reject: commit failed");
+        }
+
+        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
+        if (step is Done)
+        {
+            TurnState.ClearTurnFiles(repo, _fs);
+            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+        }
+
+        return EmitStartContext(
+            ev,
+            repo,
+            $"The intent is rejected, committed as {WorkflowEngine.Short(commit)}. Tell the engineer the change is closed, then end your turn.",
+            $"reject: committed {WorkflowEngine.Short(commit)}");
+    }
+
+    private (string? Output, string Decision) HandleReopen(
+        NormalizedHookEvent ev,
+        WorkflowRepo repo,
+        WorkflowState state,
+        string args,
+        string? rolesRoot)
+    {
+        var target = ResolveReopenDocument(state, args);
+        if (target is null)
+        {
+            return EmitStartContext(ev, repo, "Specify an accepted document to reopen (`intent`, `spec`, or `plan`), then end your turn.", "reopen: no accepted target");
+        }
+
+        var commit = _documents.ReopenDocument(repo, state, target.Value);
+        if (commit is null)
+        {
+            return EmitStartContext(ev, repo, $"Could not reopen {target.Value.ToWireName()}. Tell the engineer, then end your turn.", "reopen: commit failed");
+        }
+
+        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
+        return EmitStartContext(
+            ev,
+            repo,
+            $"The {target.Value.ToWireName()} is reopened (`status: draft`), committed as {WorkflowEngine.Short(commit)}. Next step: {WorkflowEngine.Describe(step)}. Tell the engineer, then end your turn.",
+            $"reopen: {target.Value.ToWireName()} {WorkflowEngine.Short(commit)}");
+    }
+
+    private static WorkflowDocument? ResolveReopenDocument(WorkflowState state, string args)
+    {
+        var token = StartChangeResolver.StripLeadingFlags(args).Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
+        WorkflowDocument? explicitDoc = token switch
+        {
+            "intent" or "intent.md" => WorkflowDocument.Intent,
+            "spec" or "spec.md" => WorkflowDocument.Spec,
+            "plan" or "plan.md" => WorkflowDocument.Plan,
+            _ => null,
+        };
+        if (explicitDoc is { } doc)
+        {
+            var d = state.Document(doc);
+            return d.InHead && d.HeadStatus == "accepted" ? doc : null;
+        }
+
+        foreach (var candidate in new[] { WorkflowDocument.Plan, WorkflowDocument.Spec, WorkflowDocument.Intent })
+        {
+            var d = state.Document(candidate);
+            if (d.InHead && d.HeadStatus == "accepted")
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static string BuildPromptSuffix(string invoked, string args, Step step)
+    {
+        if (args.Length == 0)
+        {
+            return "";
+        }
+
+        if (invoked == "intent")
+        {
+            return $"\n\nThe product owner's idea, as they typed it: {args}";
+        }
+
+        if (invoked == "fix" && step is WriteFix)
+        {
+            return $"\n\nThe engineer's fix request: {args}";
+        }
+
+        return "";
+    }
+
+    private string ApplyHumanAcceptanceIfNeeded(NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string invoked, bool isFixAccept)
+    {
+        if (invoked is not ("accept" or "done") && !isFixAccept)
         {
             return "";
         }
@@ -287,6 +295,11 @@ internal sealed class StartHandler(
                 return commit is null
                     ? "The acceptance could not be committed.\n\n"
                     : $"The {a.Document.ToWireName()} is accepted, committed as {WorkflowEngine.Short(commit)}.\n\n";
+            case AwaitAcceptFix when invoked == "accept" || isFixAccept:
+                var commits = _documents.AcceptFixDocuments(repo, state);
+                return commits.Count == 0
+                    ? "The light-track fix acceptance could not be committed.\n\n"
+                    : $"The light-track fix documents are accepted ({string.Join(", ", commits.Select(WorkflowEngine.Short))}).\n\n";
             default:
                 return "";
         }

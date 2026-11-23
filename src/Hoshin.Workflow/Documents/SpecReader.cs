@@ -22,6 +22,9 @@ public sealed partial class SpecReader
     [GeneratedRegex(@"^\(\d+:\d+\):\s*")]
     private static partial Regex GherkinLocationPrefixRegex();
 
+    [GeneratedRegex(@"^\s*(`{3,}|~{3,})\s*$")]
+    private static partial Regex BareFenceCloserRegex();
+
     private sealed record GherkinBlock(string Text, int Offset);
 
     [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected document reader service.")]
@@ -70,6 +73,16 @@ public sealed partial class SpecReader
         }
 
         var close = fence.Close < 0 ? doc.Lines.Length : fence.Close;
+        var earlyClose = Array.FindIndex(doc.Lines, fence.Open + 1, close - (fence.Open + 1), l =>
+        {
+            var cm = BareFenceCloserRegex().Match(l);
+            return cm.Success && cm.Groups[1].Value[0] == fence.Char && cm.Groups[1].Value.Length >= fence.Length;
+        });
+        if (earlyClose >= 0)
+        {
+            close = earlyClose;
+        }
+
         return new GherkinBlock(string.Join('\n', doc.Lines[(fence.Open + 1)..close]), fence.Open + 1);
     }
 

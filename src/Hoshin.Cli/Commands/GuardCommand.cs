@@ -141,7 +141,7 @@ public sealed class GuardCommand(
         {
             { Kind: StepKind.WriteDocument or StepKind.AwaitAccept, Task: { } document } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, $"{document}.md")], document),
             { Kind: StepKind.Review } => CheckWhileWriting(ev, repo, step, [Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "build", "review.md")], "review"),
-            { Kind: StepKind.Fix } => CheckWhileWriting(
+            { Kind: StepKind.Fix or StepKind.AwaitAcceptFix } => CheckWhileWriting(
                 ev,
                 repo,
                 step,

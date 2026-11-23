@@ -60,7 +60,6 @@
                        "CA1502:src/Hoshin.Workflow/Documents/ReviewReader.cs#ReadFinding",
                        "CA1502:src/Hoshin.Workflow/Documents/ReviewReader.cs#ReadSection",
                        "CA1502:src/Hoshin.Workflow/Documents/SpecReader.cs#ReadBlock",
-                       "CA1502:src/Hoshin.Workflow/Engine/WorkflowEngine.cs#Next",
                        "CA1502:src/Hoshin.Workflow/Events/CheckReader.cs#Read",
                        "CA1502:src/Hoshin.Workflow/Events/EventContext.cs#Build",
                        "CA1502:src/Hoshin.Workflow/Events/EventRunner.cs#RunAsync",

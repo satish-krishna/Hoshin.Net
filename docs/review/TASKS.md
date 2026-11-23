@@ -170,7 +170,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | A5 | P1 | Unify: the runner fires lifecycle events and writes build logs | §6 | A3, A4 | done |
 | A6 | P1 | Unify: multi-repo builds | §6 | A5 | done |
 | A7 | P1 | Unify: start a change from `hook start` | H1 | A4 | done |
-| A8 | P1 | Unify: reject, reopen and light-track accept flows; delete the unused half | §6 | A5, A7 | open |
+| A8 | P1 | Unify: reject, reopen and light-track accept flows; delete the unused half | §6 | A5, A7 | done |
 | T21 | P2 | Small reader and validator fixes (batch) | L11, L12 | — | open |
 | T37 | P2 | Fix false and stale doc claims | §7 | — | open |
 | T38 | P2 | Recorded harness payload fixtures | §5.2, §9 | — | open |

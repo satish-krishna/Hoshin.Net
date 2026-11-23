@@ -37,6 +37,9 @@ public sealed class WorkflowStateReader(
 
         var repoLedgers = _taskRepos.ReadRepoLedgers(repo, plan);
         var repoPaths = _taskRepos.ResolveRepoPaths(repo, plan);
+        var isLightTrack = string.Equals(changeItem?.Track, "fix", StringComparison.Ordinal)
+            || string.Equals(plan.WorkType, "fix", StringComparison.OrdinalIgnoreCase)
+            || repo.ReadStep()?.Kind is StepKind.Fix or StepKind.AwaitAcceptFix;
 
         return new WorkflowState(
             repo.Root,
@@ -51,7 +54,8 @@ public sealed class WorkflowStateReader(
             repo.CodeHead(),
             changeItem,
             repoLedgers,
-            repoPaths);
+            repoPaths,
+            isLightTrack);
     }
 
     private ChangeStateItem? TryComputeChangeState(WorkflowRepo repo)

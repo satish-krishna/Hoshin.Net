@@ -34,7 +34,7 @@ public interface IPublisher
     WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = true);
 }
 
-/// <summary>Validates, pins, commits, and accepts change documents.</summary>
+/// <summary>Validates, pins, commits, accepts, reopens, and rejects change documents.</summary>
 public interface IDocumentCommitter
 {
     (IReadOnlyList<Problem> Problems, string? Commit) CommitDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document);
@@ -44,4 +44,10 @@ public interface IDocumentCommitter
     (IReadOnlyList<Problem> Problems, string? Commit) CommitFixDocuments(WorkflowRepo repo, WorkflowState state);
 
     string? AcceptDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document);
+
+    IReadOnlyList<string> AcceptFixDocuments(WorkflowRepo repo, WorkflowState state);
+
+    string? ReopenDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document);
+
+    string? RejectIntent(WorkflowRepo repo, WorkflowState state);
 }

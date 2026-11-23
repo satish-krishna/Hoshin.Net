@@ -294,6 +294,7 @@ public sealed class TaskEvaluator(
     {
         WriteDocument w => w.Document.ToWireName(),
         AwaitAccept a => a.Document.ToWireName(),
+        AwaitAcceptFix f => f.NextDocument.ToWireName(),
         ReviewDocument => "review",
         WriteFix => "fix",
         _ => null,

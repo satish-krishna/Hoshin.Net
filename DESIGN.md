@@ -64,67 +64,71 @@ flowchart TB
 
 | Concern | Implementation |
 | :--- | :--- |
-| **Single source of workflow order** | `WorkflowEngine.Next(WorkflowState)` and `WorkflowEngine.Gate(WorkflowState, skill)` in `Hoshin.Workflow/Engine/WorkflowEngine.cs`. |
-| **Minimal library surface** | `Hoshin.Workflow.csproj` references only `Markdig` (`1.6.0`) and `Gherkin` (`43.0.0`). |
-| **SOLID seams** | External boundaries are constructor-injected interfaces: `IJsonSchemaValidator`, `ICommandRunner`, `IGitClient`, `IPullRequestClient`, `IAllowListedCommandRunner`, `IYamlToJsoncConverter`, `IDocumentMigrator`, `IWorkflowRunner`, and `IHookAdapter`. |
-| **No-shell, secret-free execution** | `AllowListedCommandRunner` invokes processes directly (`UseShellExecute = false`) with an allow-listed OS environment, stripping model API keys and GitHub tokens. |
+| **One unified workflow system** | Dual-harness hooks (`hoshin hook`, `hoshin guard`) and CLI commands (`hoshin state`, `hoshin fix-state`, `hoshin run`, `hoshin red`, `hoshin status`) share one domain model: `ChangeStateService`, `FixStateService`, `EventRunner`, `HookConfigService`, `RedClassifier`, `LedgerStore` (`RepoLedger`), and the narrow Git role interfaces (`ProcessGitClient`). |
+| **Single source of workflow order** | `WorkflowEngine.Next` / `NextForSkill` and `WorkflowGate` (`WorkflowEngine.Gate` / `GateFixAccept`) in `Hoshin.Workflow/Engine/`. Every `Step` record (including `WriteFix`, `AwaitAcceptFix`, and `ReviewDocument`) is constructed exclusively inside `WorkflowEngine`; the hook orchestrator constructs zero steps. |
+| **Minimal library surface** | `Hoshin.Workflow.csproj` references only `Markdig` (`1.6.0`) and `Gherkin` (`43.0.0`). YAML migration lives in `Hoshin.Migration` (`YamlDotNet`), referenced only by `Hoshin.Cli`. |
+| **SOLID seams** | External boundaries are required, constructor-injected narrow interfaces wired lazily at one composition root (`HoshinServices`): `IGitRunner`/`IGitQuery`/`IGitStatus`/`IGitBranches`/`IGitWorktrees`/`IGitCommitter`, `ITaskEvaluator`/`ICheckRunner`/`IApprovalRecorder`/`IPublisher`/`IDocumentCommitter`, `IChangeStarter`, `ITaskRepoResolver`, `IWorkflowEventBridge`, `IJsonSchemaValidator`, `ICommandRunner`, `IAllowListedCommandRunner`, `IPullRequestClient`, `IFileSystem`, `TimeProvider`, and `IHookAdapter`. |
+| **No-shell, secret-free execution** | Both `AllowListedCommandRunner` and `ProcessGitClient` invoke processes directly (`UseShellExecute = false`) with an allow-listed OS environment, stripping model API keys and secrets (keeping push credentials strictly on `git push`). |
 | **Crash-safe hooks** | Every `hoshin hook` and `hoshin guard` invocation reads/writes raw UTF-8 streams (safe against Windows OEM codepages), catches all errors to `stderr`, and exits `0`. |
 
 ## 3. Workflow State Machine (`WorkflowEngine.Next`)
 
-`WorkflowState` is constructed by `WorkflowStateReader` from `ChangeStateService` (carrying documents with upstream `source_*_commit` pins, `ReadinessMap`, schedule, and progress — with a fallback for standalone `.hoshin/` repos without `.hoshin.json`), git, and the unified per-change/per-repo `RepoLedger` at `.git/hoshin/<system>/<change>/<repo>.json` (managed atomically under `FileLock` by `LedgerStore`, mirroring task verdicts to `reds` and `runs` for `hoshin red show` and `hoshin status`). Both `WorkflowEngine.Next(WorkflowState)` and `WorkflowEngine.Gate(WorkflowState, skill)` stay pure — receiving the computed `ChangeStateItem` / `ReadinessMap` as values — and gating comes from `ChangeState` (`ReadinessMap`'s `SkillReadiness.Stop` reasons for stale pins, superseded plans, the light-track stop, and uncommitted acceptance) before falling back to step-owner gating:
+`WorkflowState` is constructed by `WorkflowStateReader` from `ChangeStateService` (carrying documents with upstream `source_*_commit` pins, `ReadinessMap`, `FixStateService`'s 8-row light-track state, schedule, and progress — with a fallback for standalone `.hoshin/` repos without `.hoshin.json`), git, and the unified per-change/per-repo `RepoLedger` at `.git/hoshin/<system>/<change>/<repo>.json` (managed atomically under `FileLock` by `LedgerStore`, mirroring task verdicts to `reds` and `runs` for `hoshin red show` and `hoshin status`). Both `WorkflowEngine.Next` / `NextForSkill` and `WorkflowGate` stay pure — receiving the computed `ChangeStateItem`, `ReadinessMap`, and `FixStateResult` as values — and gating comes from `ChangeState` (`ReadinessMap`'s `SkillReadiness.Stop` reasons for stale pins, superseded plans, the light-track stop, uncommitted acceptance, and rejection/reopen guards, plus `FixStateService` rows 1–8 for `fix` and `fix --accept`) before falling back to step-owner gating:
 
 ```mermaid
 stateDiagram-v2
-    [*] --> WriteIntent : "No intent / uncommitted"
+    [*] --> WriteIntent : "No intent / uncommitted (change.start)"
     WriteIntent --> AwaitAcceptIntent : "Stop: clean draft committed"
     AwaitAcceptIntent --> WriteSpec : "accept commits status: accepted"
-    AwaitAcceptIntent --> DoneFail : "status: rejected"
+    AwaitAcceptIntent --> DoneFail : "reject commits status: rejected"
 
     WriteSpec --> AwaitAcceptSpec : "Stop: Gherkin valid + source_intent_commit pinned"
     AwaitAcceptSpec --> WritePlan : "accept commits status: accepted"
-    AwaitAcceptSpec --> DoneFail : "status: rejected"
+    AwaitAcceptSpec --> WriteIntent : "reopen intent (pin breaks downstream)"
 
     WritePlan --> AwaitAcceptPlan : "Stop: Plan + CrossChecker valid + source_spec_commit pinned"
     AwaitAcceptPlan --> Implement : "accept commits status: accepted"
-    AwaitAcceptPlan --> DoneFail : "status: rejected"
+    AwaitAcceptPlan --> WriteSpec : "reopen spec (pin breaks plan)"
 
-    [*] --> WriteFix : "Light track (/fix: 1 repo, <=3 tasks)"
-    WriteFix --> AwaitAcceptIntent : "Stop: 3 docs valid & committed"
+    [*] --> WriteFix : "Light track (/fix: 1 repo, <=3 tasks; FixState row 3)"
+    WriteFix --> AwaitAcceptFix : "Stop: 3 docs valid & committed (FixState rows 4-7)"
+    AwaitAcceptFix --> Implement : "accept / fix --accept pins & accepts all 3 (FixState row 8)"
+    AwaitAcceptFix --> DoneFail : "reject (FixState row 1)"
 
-    Implement --> Implement : "Verdict passed, more tasks remain"
-    Implement --> Retry : "Verdict failed (attempt < 3)"
+    Implement --> Implement : "Verdict passed, more tasks remain (ScheduleCalculator)"
+    Implement --> Retry : "Verdict failed (attempt < maxAttempts)"
     Retry --> Implement : "Retry passed, more tasks remain"
-    Retry --> Retry : "Verdict failed (attempt < 3)"
-    Retry --> DoneFail : "3 attempts exhausted"
+    Retry --> Retry : "Verdict failed (attempt < maxAttempts)"
+    Retry --> DoneFail : "maxAttempts exhausted"
 
     Implement --> RunChecks : "All tasks passed"
     Retry --> RunChecks : "All tasks passed"
 
-    RunChecks --> Review : "build.finish checks green"
+    RunChecks --> Review : "EventRunner build.finish checks green"
     RunChecks --> DoneFail : "Checks failed"
 
-    Review --> NeedsApproval : "Stop: clean build/review.md committed (code head unchanged)"
+    Review --> NeedsApproval : "Stop: clean build/review.md committed + review.finish"
     Review --> DoneFail : "Review has high findings"
 
     NeedsApproval --> Publish : "Engineer invokes /accept or /done"
     NeedsApproval --> DoneFail : "Engineer rejects"
 
-    Publish --> DoneOk : "Branch pushed to upstream/origin + PR opened or reused"
+    Publish --> DoneOk : "EventRunner change.done pushes & opens/reuses PRs"
     DoneOk --> [*]
     DoneFail --> [*]
 ```
 
 ### Step Contracts (`Hoshin.Workflow.Engine`)
 
-- `WriteDocument(Document, Path, Brief)` — Conversational authoring for `intent`, `spec`, or `plan`.
-- `AwaitAccept(Document, Path, Head)` — Committed draft awaiting `accept`.
-- `WriteFix(ChangeFolder, Brief)` — Light-track drafting of `intent.md`, `spec.md`, and `plan.md` together (enforcing 1 repository and ≤ 3 tasks).
-- `Implement(AgentTask)` / `Retry(AgentTask, Handoff)` — Agent work requests carrying the embedded/loaded role procedure and attempt brief.
-- `RunChecks(Head)` — Library-executed `build.finish` blocking checks read strictly from the change's **base branch** ref (`git show <base>:...`), combining `.hoshin.json`, `intent/<system>/hooks.json` (via `HookConfigService`), and any committed per-change `hooks.jsonc`/`hooks.json` (defaulting `blocking` to `true` unless explicitly `false`), never from the working tree.
-- `ReviewDocument(Path, Head, Brief)` — Required review gate after `RunChecks` passes, keyed by **code head** (latest commit touching paths outside `<change>/build/review.md`), written and committed to `build/review.md`. High findings stop with `Done(false)`; zero high findings advance to `NeedsApproval`.
+- `WriteDocument(Document, Path, Brief)` — Conversational authoring for `intent`, `spec`, or `plan` (also re-entered automatically when an accepted document is reopened or an upstream commit pin breaks).
+- `AwaitAccept(Document, Path, Head)` — Committed draft awaiting human `accept` (or human `reject` / `reopen`).
+- `WriteFix(ChangeFolder, Brief)` — Light-track drafting of `intent.md`, `spec.md`, and `plan.md` together (enforcing 1 repository and ≤ 3 tasks; `FixState` row 3).
+- `AwaitAcceptFix(ChangeFolder, Head, NextDocument)` — Committed light-track fix documents awaiting human `accept` or `fix --accept` (`FixState` rows 4–7), accepting all remaining docs in order with `source_intent_commit` and `source_spec_commit` pins to reach row 8.
+- `Implement(AgentTask)` / `Retry(AgentTask, Handoff)` — Agent work requests carrying the embedded/loaded role procedure and attempt brief, scheduled across repositories via `ScheduleCalculator` and executed in each task's repository checkout (`ITaskRepoResolver`).
+- `RunChecks(Head)` — Executes `EventRunner` `build.finish` hooks per repository (read strictly from the base branch via `HookConfigService`, writing `checks.jsonl`) in Hoshin workspaces, with `BaseBranchChecksReader` fallback in standalone `.hoshin/` repos.
+- `ReviewDocument(Path, Head, Brief)` — Required review gate after `RunChecks` passes, keyed by **code head** (latest commit touching paths outside `<change>/build/review.md`), written and committed to `build/review.md` and firing `review.finish`. High findings stop with `Done(false)`; zero high findings advance to `NeedsApproval`.
 - `NeedsApproval(Head, Reason)` — Built, checked, and cleanly reviewed change waiting for human approval at the current code head.
-- `Publish(Head, Ref)` — Library-owned `git push` to the branch's upstream remote (defaulting to `origin`, branch `change/<change>` unless overridden in `change.jsonc`) plus opening or reusing a PR via `IPullRequestClient` (surfacing push and PR errors without recording publication).
+- `Publish(Head, Ref)` — Fires `EventRunner` `change.done` (`ChangeDoneStep`) in Hoshin workspaces (pushing every repository on `change/<change>` and opening/reusing PRs via `IPullRequestClient`), with direct push + PR fallback in standalone `.hoshin/` repos.
 - `Done(Success, Outcome)` — Terminal state.
 
 ## 4. Two-Phase Red/Green Verification & Commits

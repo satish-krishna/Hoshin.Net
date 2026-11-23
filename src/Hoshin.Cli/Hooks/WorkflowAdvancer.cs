@@ -61,7 +61,7 @@ internal sealed class WorkflowAdvancer(
         return (verdict, Advance(repo, rolesRoot, sessionId));
     }
 
-    public Step Advance(WorkflowRepo repo, string? rolesRoot, string? sessionId)
+    public Step Advance(WorkflowRepo repo, string? rolesRoot, string? sessionId, string? invokedSkill = null)
     {
         while (true)
         {
@@ -71,7 +71,8 @@ internal sealed class WorkflowAdvancer(
                 return new Done(false, error ?? "no plan");
             }
 
-            var step = WorkflowEngine.Next(state);
+            var step = WorkflowEngine.NextForSkill(state, invokedSkill);
+            invokedSkill = null;
             switch (step)
             {
                 case RunChecks:

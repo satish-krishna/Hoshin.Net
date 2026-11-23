@@ -87,6 +87,15 @@ public sealed class WorkflowRunner(
     public string? AcceptDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document) =>
         _documents.AcceptDocument(repo, state, document);
 
+    public IReadOnlyList<string> AcceptFixDocuments(WorkflowRepo repo, WorkflowState state) =>
+        _documents.AcceptFixDocuments(repo, state);
+
+    public string? ReopenDocument(WorkflowRepo repo, WorkflowState state, WorkflowDocument document) =>
+        _documents.ReopenDocument(repo, state, document);
+
+    public string? RejectIntent(WorkflowRepo repo, WorkflowState state) =>
+        _documents.RejectIntent(repo, state);
+
     public static string? TryAutoWrapBareJsonFrontMatter(string text) =>
         BareFrontMatterWrapper.TryAutoWrap(text);
 }

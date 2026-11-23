@@ -49,7 +49,7 @@ public sealed class HookOrchestrator
         ArgumentNullException.ThrowIfNull(timeProvider);
 
         var advancer = new WorkflowAdvancer(taskEvaluator, checkRunner, publisher, gitWorktrees, gitQuery, gitStatus, fileSystem, ledgerStore, stateReader, eventBridge);
-        _start = new StartHandler(adapter, taskEvaluator, approvals, documentCommitter, changeStarter, advancer, fileSystem, timeProvider);
+        _start = new StartHandler(adapter, approvals, documentCommitter, changeStarter, advancer, fileSystem, timeProvider);
         _result = new ResultHandler(adapter, taskEvaluator, advancer, fileSystem, timeProvider);
         _stop = new StopHandler(adapter, documentCommitter, advancer, fileSystem, timeProvider);
     }

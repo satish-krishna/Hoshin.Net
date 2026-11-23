@@ -40,6 +40,7 @@ public static class HookInstructions
             ReviewDocument rv => rv.Brief,
             WriteFix fx => fx.Brief,
             AwaitAccept a => $"The {a.Document.ToWireName()} is committed and waits for acceptance. Tell the person to review it at {a.Path}, and that `{SkillCommand("accept", harness)}` accepts it. Then end your turn.",
+            AwaitAcceptFix => $"The light-track fix documents are committed and wait for acceptance. Tell the engineer to review them, and that `{SkillCommand("accept", harness)}` or `{SkillCommand("fix", harness)} --accept` accepts them. Then end your turn.",
             Done { Success: true } d => $"The change is done: {d.Outcome}. Tell the engineer in one sentence, then end your turn.",
             Done d => $"The run stopped: {d.Outcome}. Tell the engineer in one or two sentences, then end your turn.",
             _ => $"Step {step.Kind} is in progress. End your turn.",
