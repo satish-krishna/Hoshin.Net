@@ -5,7 +5,7 @@
 **Compared against:** the original plugin, `satish-krishna/hoshin` (checked out at `D:\workspaces\hoshin`). Its `tools/GRAMMAR.md` is the behavior reference; a copy now lives at [docs/GRAMMAR.md](../GRAMMAR.md).
 **Date:** 2026-11-23
 
-The companion [PRIMER.md](PRIMER.md) explains the layout and where to start reading. [TASKS.md](TASKS.md) holds the first pass's work items, all marked `done` apart from EPIC-B. **TASKS.md does not yet cover the new findings in this document** (see §12).
+The companion [PRIMER.md](PRIMER.md) explains the layout and where to start reading. [TASKS.md](TASKS.md) holds the first pass's work items, all marked `done` apart from EPIC-B, and the round-2 tasks (`R00`–`R20`) that come from this review (§12.2).
 
 ---
 
@@ -551,7 +551,7 @@ No single task owned the whole lifecycle, so no test exercised it. The next roun
 
 ### 12.2 Recommended plan
 
-New work items for TASKS.md (not yet written there):
+The work items below are written up in [TASKS.md](TASKS.md), under "Round 2", as `R00`–`R20`. The numbers here are this list's, not the task IDs.
 
 **R0 — the gate (first, before any fix):**
 1. An end-to-end acceptance test, ideally written by someone other than the implementer, that drives recorded hook payloads through a whole change. It must use:

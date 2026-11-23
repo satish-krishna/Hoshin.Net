@@ -9,6 +9,8 @@ This file turns [ANALYSIS.md](ANALYSIS.md) into discrete work items that a codin
 
 The IDs in brackets (S1, E2, L4, …) point back to the matching section of ANALYSIS.md, which has the full reasoning.
 
+**Round 1** (the tasks below, `T01`–`T43`, `A1`–`A8`) is done; it landed as PR #5. **Round 2** (`R00`–`R20`) is at the end of this file, under "Round 2 — close the lifecycle". It has its own rules: read them before starting any round-2 task.
+
 ---
 
 ## How to work through this file (instructions for the agent)
@@ -1037,3 +1039,196 @@ Goal: System B's engine and harness adapter, driven by System A's domain service
 ### EPIC-B · Restore the dropped skill guidance, templates and evals
 
 ANALYSIS §6 lists what was dropped. This needs a human reviewer for each skill. The judgment rules have to be rewritten harness-neutrally to satisfy AGENTS.md invariant 5. Port `hoshin/references/templates/*` and the `hoshin/evals` cases, and add an eval runner. Make this its own plan, with one PR per skill.
+
+---
+
+# Round 2 — close the lifecycle
+
+Round 1 (everything above) is done. It landed as PR #5, and the second-pass review ([ANALYSIS.md](ANALYSIS.md)) found that a real change still can't get from intent to merged pull requests. Round 2 fixes that. Its IDs are `R00`–`R20`; the IDs in brackets (W4, E14, …) point to ANALYSIS.md.
+
+Round 2 differs from round 1 in one way that matters: **it is gated by an acceptance test that the implementer did not write and may not change.**
+
+## R-rules — how to work through round 2 (instructions for the agent)
+
+Every rule of round 1's "How to work through this file" still applies, with these changes.
+
+0. **Before the first task, read the gate.** Read the header comment of `tests/Hoshin.Tests/Acceptance/WorkspaceLifecycleAcceptanceTests.cs` and the message of the commit that added it (`git log -1 617291d`). The gate drives the shipped `hoshin.dll` with Claude Code hook payloads through one whole change, in a workspace whose master is `ai-sdlc`, with each repository built from a session started inside it. It judges only what an engineer can see.
+1. **The gate belongs to the reviewer.** Don't edit, skip, filter, rename or re-trait anything under `tests/Hoshin.Tests/Acceptance/`, and don't change CI so that it stops running there. `.github/CODEOWNERS` requires the reviewer's approval for that folder.
+2. **When you think the gate is wrong,** stop work on that task. Add the failure message, including the hook transcript it prints, to the pull request description under a "Gate disputes" heading, and say why you think the test is at fault. The reviewer decides. Don't work around it in the meantime. Stages 4–9 of the gate have not yet run against working code, so a dispute there is possible and expected; raising one is part of the job.
+3. **The gate is red until R01–R09 are done.** So the commit rule changes: every commit builds with 0 warnings and passes the fast suite *without the gate*:
+   ```bash
+   dotnet build Hoshin.sln
+   dotnet test tests/Hoshin.Tests --filter "FullyQualifiedName!~BlackBoxConformanceTests&Category!=Acceptance"
+   dotnet test tests/Hoshin.Tests --filter "Category=Acceptance"   # run at every commit too; record where it now fails
+   ```
+   The gate's first failure must never move backward. Each commit records it in a `Gate:` trailer (below).
+4. **Each task still writes its own test first.** The gate shows that the whole lifecycle works; it doesn't replace the task's own test of its own behavior.
+5. **A task is done when its "Done when" holds, not when the gate moves.** If the gate moves past the task's stage but the task's own test doesn't pass, the task isn't done.
+
+### Delivery
+
+- **Branch:** `fix/round-2`. It exists, and its first commits are the gate (`617291d`), the review docs, this part of TASKS.md and `.github/CODEOWNERS`. Don't rebase those away.
+- **Scope of the branch:** R01–R09 (tier R1) only. They are what the gate needs. R10–R20 go in later branches, one pull request per tier, after this branch merges.
+- **Pull request:** a draft, opened by the engineer, titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
+- **Commits:** one per task, in index order, with round 1's trailers plus one:
+  ```
+  Task: R02
+  Test-first: <test name> failed before the change: <one-line failure>
+  Docs: <owner documents updated, or "none">
+  Gate: <the gate's first failing assertion after this commit, or "passes">
+  ```
+- **Ready for review:** when all three gate tests pass on Linux and Windows in CI and R01–R09 are `done` or `invalid`. Then the branch merges by squash, as usual.
+
+## Decisions needed for round 2
+
+### D6 — How does the engineer decline at approval?
+
+Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reason>` at `NeedsApproval` records a declined approval with the reason, and the change goes back to the fix loop of R06, like a review finding; (b) declining means "don't approve", and the engineer then runs a fix build with instructions. **Recommendation:** (a). It keeps a record of why, and it reuses R06's loop. **Answer:** _(open)_
+
+## Round 2 index
+
+| ID | Tier | Title | Fixes | Needs | Gate stage | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| R00 | R0 | End-to-end acceptance gate | §12.1 | — | — | done (`617291d`) |
+| R01 | R1 | A hook crash reaches the session | W14 | — | all (diagnosis) | open |
+| R02 | R1 | Every hook finds the run and the change's checkout the same way | W11, W12, W13 | R01 | 1 | open |
+| R03 | R1 | One workspace locator; sessions anywhere; a session builds only its repository | W4, W5, W13 | R02 | 2, 3 | open |
+| R04 | R1 | Red runs `compile`, and sees the repository's gitignored tools | E14, E15 | — | 2, 3 | open |
+| R05 | R1 | Progress comes from the committed build logs | W6 | R02 | — (own test) | open |
+| R06 | R1 | A fix loop after checks, review and approval | W3 | R02, D6 for the approval part | 4, 5, 6 | open |
+| R07 | R1 | Publishing reaches `Done` and stays there | W1 | R02 | 8, 9 | open |
+| R08 | R1 | A parked build traps no session and can be resumed | W2 | R02 | companion 2 | open |
+| R09 | R1 | The guard sees every shell and write tool | S11 | — | companion 3 | open |
+| R10 | R2 | `migrate` keeps in-flight changes valid | L13, L14, L15, L16 | — | — | open |
+| R11 | R2 | One stray commit doesn't burn every attempt | W7 | — | — | open |
+| R12 | R2 | Honor event refusals; fail loudly on an unresolved repository | W8, W9 | R03 | — | open |
+| R13 | R2 | Pin the base ref; authenticate approvals | S12, S13 | — | — | open |
+| R14 | R2 | Event hooks and `red record` get the allow-listed environment | S9 | — | — | open |
+| R15 | R2 | Retry atomic replace on Windows sharing violations | L17 | — | — | open |
+| R16 | R2 | Narrow the guard's shell matching to stop false denials | S18 | R09 | — | open |
+| R17 | R3 | Make the architecture baseline shrink-only and close the scanner holes | C1, C2, C3 | — | — | open |
+| R18 | R3 | Run the `yaml.mjs` differential in CI; record real harness payloads | §8, §10.4 | — | — | open |
+| R19 | R3 | Restore `start`/triage; package `reject` and `reopen` | §9, H13 | D6 | — | open |
+| R20 | R3 | Publish a marketplace entry, tag a release, fix the doc claims | §11 | — | — | open |
+
+Findings without a task here (W10, S14–S17, E16–E21, L18, C4) stay in ANALYSIS.md for a later round. "Gate stage" names the numbered comment in `WholeChange_…` that the task should get the gate past, or the companion test it should turn green.
+
+## R1 — make the normal path work
+
+### R01 · A hook crash reaches the session
+
+- **Fixes:** W14
+- **Where:** `src/Hoshin.Cli/Commands/HookCommand.cs` (`RunAsync`, its `catch (Exception e)`), `HarnessAdapter` (`AppendTrace`, the output builders).
+- **Problem:** every hook exception becomes one stderr line and exit 0 with empty output. The model and the engineer see nothing, and `hooks.jsonl` records nothing. W12 was invisible because of this.
+- **Do:** keep exit 0, since a failing hook breaks the session. But for `start`, `result` and `stop`, emit the harness's normal context or Stop output with a short message: "hoshin hit an internal error in `<verb>`: `<exception type>: <message>`. Tell the engineer; don't retry." Append a trace line with the exception type and message, and keep the stderr line. Don't block Stop on an internal error; inform and allow, or a crash would trap the session.
+- **Test first:** a unit test that makes the orchestrator throw (inject a failing `IWorkflowRunner`) and asserts that the Claude Code `hook result` output carries the message, the trace line exists, and the exit code is 0. Do the same for Antigravity's output shape.
+- **Done when:** the test passes, and the gate's transcripts show the message instead of silence wherever a hook throws. The gate already fails on any `hoshin hook:` stderr line, so this task will make it fail *more clearly*, not less.
+
+### R02 · Every hook finds the run and the change's checkout the same way
+
+- **Fixes:** W11, W12, W13
+- **Where:** `WorkflowAdvancer.ResolveRepo` / `ResolveRepoAt`, `StartChangeResolver.TryResolveOrStart`, `ResultHandler`, `StopHandler`, `GuardCommand.Evaluate`, `WorkflowRepo.Find`, `ChangeFolderResolver`, `WorkflowStateReader.Read`.
+- **Problem:** `hook start` re-roots a run onto the change's copy (`<workspace>/.hoshin/copies/<change>`), but `hook result`, `hook stop` and `guard` resolve the repository from the session's `cwd`. So a workspace intent draft is never committed (W11). A change in a copy crashes the result hook on a null `ReadState` (W12). A product-repository session's hooks look in that repository's `.git/hoshin` and see no run (W13).
+- **Do:**
+  1. Put run resolution in one injected type, used by every hook verb and the guard. Given a hook event, it finds the active run for the session from the *workspace*: the master's common git dir, which a copy shares, plus product repositories. It returns the checkout that holds the change folder (the copy, when there is one) and the repository the session is in. Delete the per-handler `ResolveRepo(ev)` calls.
+  2. `JudgeAndAdvance` must not use `!` on `ReadState`. A null state is a reported error (R01), not a crash.
+  3. Write `run.json` in one place that every repository of the workspace resolves to, and say where in DESIGN.md.
+- **Test first:** in a workspace fixture created with `hoshin change start` (a real copy, not a change folder in the master's main checkout):
+  - `/hoshin:intent`, write the draft where the brief says, Stop → the draft is committed in the copy;
+  - with an accepted plan seeded in the copy, `/hoshin:build` from the master, then the subagent's result → T1 is judged and committed;
+  - `guard` in a product-repository session during that build denies `git commit`.
+- **Done when:** those tests pass, `MultiRepoBuildTests` also runs with a change created by `change start`, and the gate gets past stage 1. `Gate:` names the new first failure.
+
+### R03 · One workspace locator; sessions anywhere; a session builds only its repository
+
+- **Fixes:** W4, W5, W13 (the product-repository half)
+- **Where:** the four `HasWorkspaceMarker` copies (`ChangeStarter`, `TaskRepoResolver`, `WorkflowEventBridge`, `WorkflowStateReader`), `ChangeLedgerPaths.ResolveSystemAndChange`, `WorkflowEngine.NextScheduledTaskStep`, `IWorkspaceResolver`.
+- **Problem:** workspace detection looks for a sibling folder literally named `master`, in four copies, so a session in a product repository gets "There is no change plan" (W4). A hook-started change can resolve to a different ledger key on the next hook (W5). The original builds each repository from a session started inside it, so that repository's `CLAUDE.md`, skills and hooks are loaded (hoshin `skills/build/SKILL.md` lines 25 and 28). Hoshin.Net issues any repository's next task from any session.
+- **Do:**
+  1. One `WorkspaceLocator`, injected, that finds the master by its `.hoshin.json` marker through `WorkspaceResolver`, whatever its folder name. Delete the four copies and the `"master"` literal they use (CONTRIBUTING R1).
+  2. Ledger coordinates come from the change folder's `intent/<system>/<change>` path, never from `scope`.
+  3. A build in a session started inside a product repository issues only that repository's tasks. When it has none left, it tells the engineer what comes next (the next repository's `build` command, or `review`), as the original's `schedule` does, and lets the session end. A build from the master session may keep today's behavior.
+- **Test first:** with the master folder named `ai-sdlc`:
+  - `/hoshin:build` from `api` dispatches only api's task;
+  - after it, Stop in the api session is silent, and the context named web's build as the next step;
+  - `hoshin state` and the hooks agree on the ledger path for a hook-started change.
+- **Done when:** the tests pass, `grep '"master"'` finds no workspace-detection literal, and the gate gets past the dispatch half of stages 2 and 3.
+
+### R04 · Red runs `compile`, and sees the repository's gitignored tools
+
+- **Fixes:** E14, E15
+- **Where:** `RedWorktree.ObserveRed`, `RedGreenPolicy.EvaluateAndCommit`, `IGitWorktrees.EnsureDetachedWorktree`, `ProcessExecutable.Resolve`.
+- **Problem:** the detached Red worktree runs only the test command, never `compile`, so a test that needs build output fails for the wrong reason (E14). Gitignored tools (`node_modules/…`, `.venv/bin/…`) aren't in the worktree, so their tasks are classified `CouldNotRun` and can never pass (E15). The gate's T1 has both a `compile` step and gitignored build output; T2 runs `node node_modules/testkit/run.mjs`.
+- **Do:**
+  1. Run the task's `compile` in the Red worktree before the test. A compile failure caused only by missing target symbols is valid Red; any other compile failure is not.
+  2. Make the main checkout's gitignored dependency folders visible in the worktree without copying them: link (`node_modules`, `.venv`, and folders listed in a marker option) or resolve argv paths against the main checkout. Pick one and document it in DESIGN.md. Never commit anything from them.
+- **Test first:** two real-process tests (no fake runner): a Node task whose test imports `../dist/x.mjs`, with `compile: ["node", "build.mjs"]` and `dist/` gitignored, gives valid Red and then passes; a task whose test command is `node node_modules/<tool>/run.mjs …` with `node_modules/` gitignored gives valid Red and passes.
+- **Done when:** both tests pass on Linux and Windows, and the gate's T1 and T2 are accepted on their first attempt (stages 2 and 3 pass).
+
+### R05 · Progress comes from the committed build logs
+
+- **Fixes:** W6
+- **Where:** `WorkflowState.VerdictsForTask`, `WorkflowEngine.NextScheduledTaskStep`, `WorkflowStateReader`, `ChangeStateService`.
+- **Problem:** the hook path reads progress from the local ledger only. A build continued on another machine, from a fresh clone, or after the TypeScript plugin re-issues tasks that are already logged and committed.
+- **Do:** a task is done when its build-log entry is committed (as `ChangeState` already decides). The ledger becomes a cache of attempts and verdict details, not the source of truth. If the ledger and the logs disagree, the logs win and the disagreement is reported once.
+- **Test first:** with T1 logged in a committed `build/app.md` and an empty `.git/hoshin` (a fresh clone of the master and the product repository), `/hoshin:build` issues T2, not T1, and `hoshin state` agrees.
+- **Done when:** the test passes. The gate doesn't cover this; the reviewer will add a gate test for resuming on another machine once this lands.
+
+### R06 · A fix loop after checks, review and approval
+
+- **Fixes:** W3
+- **Needs:** D6 for the approval part only. Do the checks and review parts first.
+- **Where:** `WorkflowEngine.NextPostBuild`, `CheckRunner`, `StartHandler.ApplyHumanAcceptanceIfNeeded`, `GateCommand` (which already implements `gateRetries` for the CLI path).
+- **Problem:** failed checks, a review with any high finding, and a declined approval all end in `Done(false)`. There is no step that lets anyone fix the change. In a multi-repo change, a fix in a product repository doesn't even move the master-only code head. The original handles this with `onFailure: fix` and `gateRetries` for checks, and with a build run that takes fix instructions after a review (hoshin `skills/review/SKILL.md` line 111).
+- **Do:**
+  1. Checks: a failed `build.finish` check with `onFailure: fix` returns a fix step to the agent, bounded by `gateRetries`, as `GateCommand` does. Only after the retries are used up is it `Done(false)`.
+  2. Review: after a review with high findings, `/hoshin:build <instructions>` from inside the repository dispatches a fix subagent with the findings and the instructions. Its commits move that repository's head, and the next step is checks, then review again. Lift "code head" to the set of all touched repositories' heads, so a fix in any repository counts.
+  3. Approval: per D6.
+- **Test first:** a real-process test where review 1 has one high finding in a product repository, a `/hoshin:build fix F1 …` from inside it commits a fix, and the next step is review 2, then `NeedsApproval`. Another, where a failing check with `onFailure: fix` gives a fix step, then passes on the retry.
+- **Done when:** both pass, and the gate gets past stages 4, 5 and 6.
+
+### R07 · Publishing reaches `Done` and stays there
+
+- **Fixes:** W1
+- **Where:** `Publisher.Publish`, `ChangeDoneStep`, `WorkflowEngine.NextPostBuild`, `WorkflowState.EffectiveCodeHead`.
+- **Problem:** `Publisher` records the pre-publish code head, and `change.done` then commits `change.jsonc`, which moves it. `Next` goes back to `RunChecks`, `Review` and `NeedsApproval`, forever.
+- **Do:** record the head after `change.done`'s own commit, or leave `change.jsonc` out of the code head, the way `review.md` is. Then make every later hook in any session of the change quiet once `Next` is `Done(true)`.
+- **Test first:** after a successful workspace publish, `Next` is `Done(true)`; a Stop in the master session is silent; `/hoshin:build` from a product repository dispatches nothing and opens no new pull request.
+- **Done when:** the test passes, and the gate's stages 8 and 9 pass. At that point the whole `WholeChange_…` test should be green.
+
+### R08 · A parked build traps no session and can be resumed
+
+- **Fixes:** W2
+- **Where:** `StopHandler.HandleAdvancedStepStop` (the parking branch), `GuardTamperingProtection.DetectMissingRunMarkerTampering`, `StopCounterStore`.
+- **Problem:** after three ignored Stops, the build parks by deleting `run.json`. From then on, the tampering check blocks every Stop in the repository, from every session, forever. It checks neither the session nor `stop_hook_active`.
+- **Do:** parking records that the run is parked (it doesn't delete the evidence that the tampering check reads as an attack). The tampering check applies only to the run's own session, and honors `stop_hook_active`. `/hoshin:build` from a new session resumes a parked run.
+- **Test first:** park a build with four Stops; a Stop from an unrelated session is silent; a new session's `/hoshin:build` dispatches the task again and it completes.
+- **Done when:** the test passes, and the gate's `InterruptedBuild_…` test passes.
+
+### R09 · The guard sees every shell and write tool
+
+- **Fixes:** S11
+- **Where:** `packaging/claude-code/hooks/hooks.json` (the `PreToolUse` matcher), `HarnessTools` (`ClaudeShellTools` and the write-tool list), `GuardCommand`.
+- **Problem:** the matcher is `Bash|Edit|Write|MultiEdit|NotebookEdit`, and `ClaudeShellTools` is only `Bash`. On Windows, `git push` through the PowerShell tool is never checked. MCP write tools aren't checked either.
+- **Do:** add `PowerShell` to the matcher and to the shell tools, with the same command checks as `Bash`. Route the MCP tools that write files or push (`mcp__*` with a write or push verb) to the guard, and deny them during a build. The matcher and `HarnessTools` must come from one definition (CONTRIBUTING R1), with a test that keeps them in sync.
+- **Test first:** `guard` with `tool_name: PowerShell` and `git push origin HEAD:refs/heads/main` during an active build is denied; the shipped `hooks.json` matcher contains `PowerShell`.
+- **Done when:** the test passes, and the gate's `ActiveBuild_…` test passes.
+
+## R2 — integrity and data (later branch)
+
+These get full task write-ups before their branch starts. ANALYSIS.md §§5–8 has the failures and file references.
+
+- **R10 · `migrate` keeps in-flight changes valid** (L13–L16): re-pin accepted documents to the migrated upstream commit; read back and compare the output before deleting the source, and write atomically; keep null and booleans typed; refuse numbers that overflow, before anything is written.
+- **R11 · One stray commit doesn't burn every attempt** (W7): reset to the start HEAD after a "HEAD moved" verdict, and make the two-commit pair recoverable after a hook is killed between them.
+- **R12 · Honor event refusals; fail loudly** (W8, W9): a refused `build.start` stops the task instead of issuing it; a failed `task.done` is reported; a task whose repository can't be resolved fails with a message instead of running in the master.
+- **R13 · Pin the base ref; authenticate approvals** (S12, S13): read checks from the remote-tracking branch or a SHA pinned in `change.jsonc`; write approvals only from a user-typed hook event, and check them at publish time against `hooks.jsonl` or a commit trailer.
+- **R14 · Allow-listed environment everywhere** (S9): event hooks (`HookProcess`) and `red record` get the same scrubbed environment as tests.
+- **R15 · Windows atomic replace** (L17): retry on sharing violations with a short bounded backoff, and read the ledger, `run.json` and `step.json` through the same retrying path.
+- **R16 · Narrow the guard** (S18): stop denying ordinary redirects and the word "hoshin" in paths; accept that shell matching is a speed bump, and move the real checks into the library (ANALYSIS §6, "The lesson").
+
+## R3 — enforcement and parity (later branch)
+
+- **R17 · Baseline and scanners** (C1–C3): compare `baseline.json` against `origin/main` and fail when it grows; count `.editorconfig` severities, `NoWarn`, `GlobalSuppressions.cs` and every `SuppressMessage` form; close the scanner holes ANALYSIS §10.1 lists, starting with `catch (…) when (…)`.
+- **R18 · Differential and payloads** (§8, §10.4): check out `hoshin` in CI so the `yaml.mjs` differential runs, compare refusals as well as values, and replace the hand-written hook fixtures with payloads recorded from real Claude Code and Antigravity sessions.
+- **R19 · Start and reject** (§9, H13): restore the `start` triage skill; package `reject` and `reopen` so Claude Code users can type them.
+- **R20 · Release** (§11): a `marketplace.json` under a plugin name that doesn't collide with the original, a tagged release, and the doc claims ANALYSIS §11.2 lists.
