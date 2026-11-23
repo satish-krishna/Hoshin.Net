@@ -3,8 +3,10 @@ using Hoshin.Workflow.Common;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class StateCommand(HoshinServices services) : IHoshinCommand
+public sealed class StateCommand(ChangeStateService changeState) : IHoshinCommand
 {
+    private readonly ChangeStateService _changeState = changeState ?? throw new ArgumentNullException(nameof(changeState));
+
     public string Name => "state";
     public string Usage => "state --json [--system <s>] [--change <c> | --open] [--master <path>] [--workspace <path>]";
 
@@ -16,7 +18,7 @@ public sealed class StateCommand(HoshinServices services) : IHoshinCommand
             throw new UsageException();
         }
 
-        var result = services.ChangeState.Compute(
+        var result = _changeState.Compute(
             Directory.GetCurrentDirectory(),
             new StateOptions(o.Get("master"), o.Get("workspace"), o.Get("system"), o.Get("change"), o.Has("open")));
 

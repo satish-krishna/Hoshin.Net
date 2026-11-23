@@ -12,7 +12,11 @@ namespace Hoshin.Cli.Hooks;
 /// </summary>
 public sealed class HookOrchestrator(
     IHookAdapter adapter,
-    IWorkflowRunner runner,
+    ITaskEvaluator taskEvaluator,
+    ICheckRunner checkRunner,
+    IApprovalRecorder approvals,
+    IPublisher publisher,
+    IDocumentCommitter documentCommitter,
     IAllowListedCommandRunner commandRunner,
     IFileSystem fileSystem,
     PlanReader planReader,
@@ -21,7 +25,11 @@ public sealed class HookOrchestrator(
     private const int MaxStopBlocks = 3;
 
     private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
-    private readonly IWorkflowRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+    private readonly ITaskEvaluator _tasks = taskEvaluator ?? throw new ArgumentNullException(nameof(taskEvaluator));
+    private readonly ICheckRunner _checks = checkRunner ?? throw new ArgumentNullException(nameof(checkRunner));
+    private readonly IApprovalRecorder _approvals = approvals ?? throw new ArgumentNullException(nameof(approvals));
+    private readonly IPublisher _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+    private readonly IDocumentCommitter _documents = documentCommitter ?? throw new ArgumentNullException(nameof(documentCommitter));
     private readonly IAllowListedCommandRunner _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
@@ -119,7 +127,7 @@ public sealed class HookOrchestrator(
         if (invoked == "fix")
         {
             var fixStep = new WriteFix(repo.ChangeFolder, WorkflowBriefs.Fix(state));
-            _runner.Issue(repo, state, fixStep, ev.SessionId);
+            _tasks.Issue(repo, state, fixStep, ev.SessionId);
             var fixArgs = ev.CommandArgs ?? slashArgs ?? "";
             var desc = fixArgs.Trim().Length > 0 ? $"\n\nThe engineer's fix request: {fixArgs.Trim()}" : "";
             return EmitStartContext(ev, repo, HookInstructions.For(fixStep, ev.Harness, suffix: desc), "fix: Fix");
@@ -130,11 +138,11 @@ public sealed class HookOrchestrator(
             switch (WorkflowEngine.Next(state))
             {
                 case NeedsApproval:
-                    _runner.Answer(state.Repo(repo), state, approved: true, $"approved by the engineer in {(ev.IsAntigravity ? "Antigravity" : "Claude Code")}");
+                    _approvals.Answer(state.Repo(repo), state, approved: true, $"approved by the engineer in {(ev.IsAntigravity ? "Antigravity" : "Claude Code")}");
                     prefix = "The engineer's approval is recorded.\n\n";
                     break;
                 case AwaitAccept a when invoked == "accept":
-                    var commit = _runner.AcceptDocument(repo, state, a.Document);
+                    var commit = _documents.AcceptDocument(repo, state, a.Document);
                     prefix = commit is null
                         ? "The acceptance could not be committed.\n\n"
                         : $"The {a.Document} is accepted, committed as {WorkflowEngine.Short(commit)}.\n\n";
@@ -195,7 +203,7 @@ public sealed class HookOrchestrator(
         if (ev.IsAntigravity)
         {
             var agyId = ev.LaunchedAgentId ?? $"agy-{current.Task}-{current.Attempt}";
-            if (!_runner.TryRegisterActiveSubagent(repo, current.Task, current.Attempt, agyId, out var existing))
+            if (!_tasks.TryRegisterActiveSubagent(repo, current.Task, current.Attempt, agyId, out var existing))
             {
                 QueuePendingContext(repo, $"A subagent ({existing}) is already building {current.Task}. Do not start another subagent and do not edit or run anything yourself. End your turn and wait for it.");
                 return (_adapter.EmptyOutput(ev.Harness), $"duplicate launch {agyId} while {existing} runs");
@@ -208,7 +216,7 @@ public sealed class HookOrchestrator(
         if (ev.IsAsyncLaunch)
         {
             var id = ev.LaunchedAgentId ?? $"agent-{current.Task}-{current.Attempt}";
-            if (!_runner.TryRegisterActiveSubagent(repo, current.Task, current.Attempt, id, out var existing))
+            if (!_tasks.TryRegisterActiveSubagent(repo, current.Task, current.Attempt, id, out var existing))
             {
                 return (_adapter.ContextOutput(ev, $"A subagent ({existing}) is already building {current.Task}. Do not start another subagent and do not edit or run anything yourself. End your turn and wait for it."), $"duplicate launch {id} while {existing} runs");
             }
@@ -370,7 +378,7 @@ public sealed class HookOrchestrator(
             return (_adapter.EmptyOutput(ev.Harness), $"allow: waiting, {write.Document} unchanged");
         }
 
-        var (problems, commit) = _runner.CommitDocument(repo, state, write.Document);
+        var (problems, commit) = _documents.CommitDocument(repo, state, write.Document);
         if (commit is null)
         {
             if (StopCounterStore.EndsWithQuestion(ev.LastAssistantMessage))
@@ -412,7 +420,7 @@ public sealed class HookOrchestrator(
             return (_adapter.EmptyOutput(ev.Harness), "allow: waiting, review unchanged");
         }
 
-        var (problems, commit) = _runner.CommitReview(repo, state);
+        var (problems, commit) = _documents.CommitReview(repo, state);
         if (commit is null)
         {
             var blocks = StopCounterStore.Next(repo, "review", ev.ContinuationActive);
@@ -451,7 +459,7 @@ public sealed class HookOrchestrator(
             return (_adapter.EmptyOutput(ev.Harness), "allow: waiting, fix documents unchanged");
         }
 
-        var (problems, commit) = _runner.CommitFixDocuments(repo, state);
+        var (problems, commit) = _documents.CommitFixDocuments(repo, state);
         if (commit is null)
         {
             var blocks = StopCounterStore.Next(repo, "fix", ev.ContinuationActive);
@@ -474,7 +482,7 @@ public sealed class HookOrchestrator(
     private (WorkflowVerdict Verdict, Step Next) JudgeAndAdvance(WorkflowRepo repo, string? rolesRoot, CurrentStep current, string? sessionId)
     {
         var state = ReadState(repo, rolesRoot, out _)!;
-        var verdict = _runner.EvaluateAndCommitTask(repo, state, current.Task!, current.Attempt);
+        var verdict = _tasks.EvaluateAndCommitTask(repo, state, current.Task!, current.Attempt);
         StopCounterStore.ResetAll(repo);
         return (verdict, Advance(repo, rolesRoot, sessionId));
     }
@@ -493,11 +501,11 @@ public sealed class HookOrchestrator(
             switch (step)
             {
                 case RunChecks:
-                    _runner.RunChecks(repo, state);
+                    _checks.RunChecks(repo, state);
                     continue;
 
                 case Publish p:
-                    var publish = _runner.Publish(repo, state, p.Ref);
+                    var publish = _publisher.Publish(repo, state, p.Ref);
                     if (!publish.Ok)
                     {
                         var detail = string.IsNullOrWhiteSpace(publish.Error) ? "" : $": {publish.Error}";
@@ -507,7 +515,7 @@ public sealed class HookOrchestrator(
                     continue;
 
                 default:
-                    _runner.Issue(repo, state, step, sessionId);
+                    _tasks.Issue(repo, state, step, sessionId);
                     return step;
             }
         }

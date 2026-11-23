@@ -70,14 +70,21 @@ internal static class TestServices
         IHookAdapter? adapter = null,
         IWorkflowRunner? runner = null,
         IAllowListedCommandRunner? commandRunner = null,
-        TimeProvider? timeProvider = null) =>
-        new(
+        TimeProvider? timeProvider = null)
+    {
+        var r = runner ?? WorkflowRunner;
+        return new(
             adapter ?? HookAdapter,
-            runner ?? WorkflowRunner,
+            r,
+            r,
+            r,
+            r,
+            r,
             commandRunner ?? AllowListedRunner,
             FileSystem,
             PlanReader,
             timeProvider ?? Time);
+    }
 
     public static (WorkflowRepo? Repo, string? Reason) EvaluateGuard(
         NormalizedHookEvent ev,

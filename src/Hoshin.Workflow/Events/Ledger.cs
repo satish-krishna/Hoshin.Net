@@ -57,7 +57,7 @@ public sealed record RepoLedger(
     [property: JsonPropertyName("reds"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<RedRecord>? Reds = null);
 
 /// <summary>Atomic per-repository ledger storage in <c>&lt;git-common-dir&gt;/hoshin/&lt;system&gt;/&lt;change&gt;/&lt;repo&gt;.json</c>.</summary>
-public sealed class LedgerStore(IGitClient git, IFileSystem fileSystem)
+public sealed class LedgerStore(IGitWorktrees git, IFileSystem fileSystem)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -66,7 +66,7 @@ public sealed class LedgerStore(IGitClient git, IFileSystem fileSystem)
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IGitWorktrees _git = git ?? throw new ArgumentNullException(nameof(git));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
     public string LedgerFolder(string master, string system, string change) =>

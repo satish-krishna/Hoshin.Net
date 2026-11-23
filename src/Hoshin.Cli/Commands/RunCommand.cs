@@ -1,12 +1,20 @@
 using System.Text.Json;
+using Hoshin.Workflow.Baseline;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class RunCommand(HoshinServices services) : IHoshinCommand
+public sealed class RunCommand(
+    EventContextFactory eventContext,
+    BaselineTaker baselineTaker,
+    EventRunner eventRunner) : IHoshinCommand
 {
+    private readonly EventContextFactory _eventContext = eventContext ?? throw new ArgumentNullException(nameof(eventContext));
+    private readonly BaselineTaker _baselineTaker = baselineTaker ?? throw new ArgumentNullException(nameof(baselineTaker));
+    private readonly EventRunner _eventRunner = eventRunner ?? throw new ArgumentNullException(nameof(eventRunner));
+
     public string Name => "run";
     public string Usage => "run <event> --json --change <change> [--system s] [--repo r]... [--document f] [--task T<n>] [--again] [--check] [--stream] [--master p] [--workspace p]";
 
@@ -73,16 +81,16 @@ public sealed class RunCommand(HoshinServices services) : IHoshinCommand
             return await CheckAllAsync(eventName, change, system, resolveOptions, extra, targetRepos).ConfigureAwait(false);
         }
 
-        var ctx = services.EventContext.Build(
+        var ctx = _eventContext.Build(
             Directory.GetCurrentDirectory(),
             new EventContextArgs(eventName, change, system, repos.FirstOrDefault(), resolveOptions, extra),
-            services.BaselineTaker.RecoverInterrupted);
+            _baselineTaker.RecoverInterrupted);
 
         Action<StreamProgressEvent>? progress = o.Has("stream")
             ? p => CliIo.WriteStdoutLine(JsonSerializer.Serialize(p, CliIo.IgnoreNullJsonOptions))
             : null;
 
-        var outcome = await services.EventRunner.RunAsync(ctx, new EventRunOptions(o.Has("again"), false, progress)).ConfigureAwait(false);
+        var outcome = await _eventRunner.RunAsync(ctx, new EventRunOptions(o.Has("again"), false, progress)).ConfigureAwait(false);
         if (o.Has("stream"))
         {
             var streamed = new Dictionary<string, object?>
@@ -131,12 +139,12 @@ public sealed class RunCommand(HoshinServices services) : IHoshinCommand
         {
             try
             {
-                var ctx = services.EventContext.Build(
+                var ctx = _eventContext.Build(
                     Directory.GetCurrentDirectory(),
                     new EventContextArgs(eventName, change, systemArg, repo, resolveOptions, extra),
-                    services.BaselineTaker.RecoverInterrupted);
+                    _baselineTaker.RecoverInterrupted);
                 resolvedSystem ??= ctx.System;
-                var o = await services.EventRunner.RunAsync(ctx, new EventRunOptions(CheckOnly: true)).ConfigureAwait(false);
+                var o = await _eventRunner.RunAsync(ctx, new EventRunOptions(CheckOnly: true)).ConfigureAwait(false);
                 results.Add((ctx.Repo, o.Outcome, o.Problems));
             }
             catch (CouldNotRunException e)

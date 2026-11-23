@@ -4,8 +4,10 @@ using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class CommitCommand(HoshinServices services) : IHoshinCommand
+public sealed class CommitCommand(Committer committer) : IHoshinCommand
 {
+    private readonly Committer _committer = committer ?? throw new ArgumentNullException(nameof(committer));
+
     public string Name => "commit";
     public string Usage => "commit --json --kind <kind> [--system <s>] [--change <c>] [--repo <repo> [--task T<n>] --type <type> --subject \"<text>\"] [--co-author \"<name> <email>\"] [--master <path>] [--workspace <path>] -- <path>...";
 
@@ -37,7 +39,7 @@ public sealed class CommitCommand(HoshinServices services) : IHoshinCommand
             throw new UsageException();
         }
 
-        var outcome = services.Committer.Commit(new CommitRequest(
+        var outcome = _committer.Commit(new CommitRequest(
             kind,
             o.Get("system"),
             o.Get("change"),

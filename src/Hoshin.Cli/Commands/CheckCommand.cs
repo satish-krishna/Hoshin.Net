@@ -1,9 +1,12 @@
+using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class CheckCommand(HoshinServices services) : IHoshinCommand
+public sealed class CheckCommand(IDocumentCheckService checker) : IHoshinCommand
 {
+    private readonly IDocumentCheckService _checker = checker ?? throw new ArgumentNullException(nameof(checker));
+
     public string Name => "check";
     public string Usage => "check <file>...";
 
@@ -14,7 +17,7 @@ public sealed class CheckCommand(HoshinServices services) : IHoshinCommand
             throw new UsageException();
         }
 
-        var problems = services.DocumentChecker.CheckFiles(args);
+        var problems = _checker.CheckFiles(args);
         foreach (var p in problems)
         {
             CliIo.WriteStdoutLine(ProblemFormatter.Format(p));

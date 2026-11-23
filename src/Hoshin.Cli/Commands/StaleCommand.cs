@@ -3,8 +3,10 @@ using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class StaleCommand(HoshinServices services) : IHoshinCommand
+public sealed class StaleCommand(StaleChecker staleChecker) : IHoshinCommand
 {
+    private readonly StaleChecker _staleChecker = staleChecker ?? throw new ArgumentNullException(nameof(staleChecker));
+
     public string Name => "stale";
     public string Usage => "stale --json --system <s> [--repo <repo>]... [--master <path>] [--workspace <path>]";
 
@@ -35,7 +37,7 @@ public sealed class StaleCommand(HoshinServices services) : IHoshinCommand
             throw new UsageException();
         }
 
-        var result = services.StaleChecker.Check(
+        var result = _staleChecker.Check(
             Directory.GetCurrentDirectory(),
             new StaleOptions(system, repos, o.Get("master"), o.Get("workspace")));
         CliIo.PrintJson(result);

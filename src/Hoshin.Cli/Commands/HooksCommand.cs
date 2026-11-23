@@ -4,8 +4,15 @@ using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class HooksCommand(HoshinServices services) : IHoshinCommand
+public sealed class HooksCommand(
+    IWorkspaceResolver resolver,
+    MarkerReader markerReader,
+    HookConfigService hookConfig) : IHoshinCommand
 {
+    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
+    private readonly HookConfigService _hookConfig = hookConfig ?? throw new ArgumentNullException(nameof(hookConfig));
+
     public string Name => "hooks";
     public string Usage => "hooks --json --system <system> [--event <event>] [--master p] [--workspace p]";
 
@@ -24,18 +31,18 @@ public sealed class HooksCommand(HoshinServices services) : IHoshinCommand
             throw new UsageException();
         }
 
-        var r = services.Resolver.Resolve(Directory.GetCurrentDirectory(), new ResolveOptions(o.Get("master"), o.Get("workspace")));
+        var r = _resolver.Resolve(Directory.GetCurrentDirectory(), new ResolveOptions(o.Get("master"), o.Get("workspace")));
         if (r.Master is null)
         {
             throw new CouldNotRunException(string.Join('\n', r.Problems));
         }
 
-        if (!services.MarkerReader.ReadMarker(Path.Combine(r.Master, MarkerConstants.FileName)).Systems.ContainsKey(system))
+        if (!_markerReader.ReadMarker(Path.Combine(r.Master, MarkerConstants.FileName)).Systems.ContainsKey(system))
         {
             throw new CouldNotRunException($"the marker lists no system {system}");
         }
 
-        var config = services.HookConfig.ReadFromBaseBranch(r.Master, system);
+        var config = _hookConfig.ReadFromBaseBranch(r.Master, system);
         var list = config.Hooks.Where(h => ev is null || h.Event == ev).ToList();
         CliIo.PrintJson(new
         {

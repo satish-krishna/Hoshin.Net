@@ -18,9 +18,10 @@ public interface IWorkspaceResolver
     string MasterFolderName(string workspace, string master, IReadOnlyList<string>? markers = null);
 }
 
-public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader) : IWorkspaceResolver
+public sealed class WorkspaceResolver(IGitWorktrees gitWorktrees, IGitRunner gitRunner, MarkerReader markerReader) : IWorkspaceResolver
 {
-    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
+    private readonly IGitRunner _gitRunner = gitRunner ?? throw new ArgumentNullException(nameof(gitRunner));
     private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
@@ -33,7 +34,7 @@ public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader)
         }
 
         var workspaceOption = options.Workspace is null ? null : PathHelpers.RealPath(options.Workspace);
-        var sessionTop = _git.TopLevel(cwd);
+        var sessionTop = _gitWorktrees.TopLevel(cwd);
 
         if (options.Master is not null)
         {
@@ -47,7 +48,7 @@ public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader)
                 return WithMaster(sessionTop, workspaceOption, sessionTop, markerNames);
             }
 
-            var dirs = _git.GitDirs(sessionTop);
+            var dirs = _gitWorktrees.GitDirs(sessionTop);
             if (dirs is not null && !PathHelpers.PathsEqual(dirs.GitDir, dirs.Common))
             {
                 return WithMaster(sessionTop, workspaceOption, sessionTop, markerNames);
@@ -81,8 +82,8 @@ public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader)
         }
 
         var master = PathHelpers.RealPath(path);
-        var top = _git.TopLevel(master);
-        var dirs = top is not null && PathHelpers.PathsEqual(top, master) ? _git.GitDirs(master) : null;
+        var top = _gitWorktrees.TopLevel(master);
+        var dirs = top is not null && PathHelpers.PathsEqual(top, master) ? _gitWorktrees.GitDirs(master) : null;
         if (dirs is null)
         {
             return Refused(workspaceOption, $"`{master}` is not the root of a git repository.");
@@ -107,7 +108,7 @@ public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader)
             return new Resolution(singleWs, master, !PathHelpers.PathsEqual(dirs.GitDir, dirs.Common), [], WorkspaceLayout.SingleRepo);
         }
 
-        var sessionCommon = sessionTop is null ? null : _git.GitDirs(sessionTop)?.Common;
+        var sessionCommon = sessionTop is null ? null : _gitWorktrees.GitDirs(sessionTop)?.Common;
         var holdsMaster = sessionTop is not null && PathHelpers.IsSubPathOf(master, sessionTop);
         var workspace = workspaceOption;
         if (workspace is null && sessionTop is not null && sessionCommon is not null && !PathHelpers.PathsEqual(sessionCommon, dirs.Common) && !holdsMaster)
@@ -159,7 +160,7 @@ public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader)
     public string MasterFolderName(string workspace, string master, IReadOnlyList<string>? markers = null)
     {
         var markerNames = markers ?? MarkerConstants.DefaultMarkers;
-        var dirs = _git.GitDirs(master);
+        var dirs = _gitWorktrees.GitDirs(master);
         var own = PathHelpers.RealPath(master);
         if (dirs is null)
         {
@@ -171,7 +172,7 @@ public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader)
             .ToList();
         var main = same.Select(f => f.Folder).FirstOrDefault(folder =>
         {
-            var d = _git.GitDirs(folder);
+            var d = _gitWorktrees.GitDirs(folder);
             return d is not null && PathHelpers.PathsEqual(d.GitDir, dirs.Common);
         });
         var named = main ?? same.Select(f => f.Folder).FirstOrDefault(folder => !PathHelpers.PathsEqual(folder, own)) ?? same.Select(f => f.Folder).FirstOrDefault();
@@ -180,14 +181,14 @@ public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader)
 
     private string? RepositoryWorkspace(string common)
     {
-        var configured = _git.Out(common, ["config", "--get", "core.worktree"]);
+        var configured = _gitRunner.Out(common, ["config", "--get", "core.worktree"]);
         if (!string.IsNullOrEmpty(configured))
         {
             var resolved = Path.IsPathRooted(configured) ? configured : Path.Combine(common, configured);
             return Path.GetDirectoryName(PathHelpers.RealPath(resolved));
         }
 
-        if (_git.Out(common, ["config", "--get", "--bool", "core.bare"]) == "true")
+        if (_gitRunner.Out(common, ["config", "--get", "--bool", "core.bare"]) == "true")
         {
             return Path.GetDirectoryName(common);
         }
@@ -214,7 +215,7 @@ public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader)
             var folder = PathHelpers.RealPath(entry);
             if (HoldsMarker(folder, markerNames))
             {
-                result.Add((folder, _git.GitDirs(folder)?.Common));
+                result.Add((folder, _gitWorktrees.GitDirs(folder)?.Common));
             }
         }
 

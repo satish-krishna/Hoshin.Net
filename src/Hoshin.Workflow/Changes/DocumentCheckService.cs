@@ -8,14 +8,24 @@ using Hoshin.Workflow.Workspace;
 namespace Hoshin.Workflow.Changes;
 
 /// <summary>Checks documents, cross-document references, <c>.hoshin.json</c>, <c>hooks.json</c>, and <c>change.jsonc</c>.</summary>
+public interface IDocumentCheckService
+{
+    List<Problem> CheckFiles(IReadOnlyList<string> files);
+}
+
+/// <summary>Checks documents, cross-document references, <c>.hoshin.json</c>, <c>hooks.json</c>, and <c>change.jsonc</c>.</summary>
 public sealed class DocumentCheckService(
     IDocumentReader reader,
-    IGitClient git,
+    IGitWorktrees gitWorktrees,
+    IGitBranches gitBranches,
+    IGitQuery gitQuery,
     MarkerReader markerReader,
-    CrossChecker crossChecker)
+    CrossChecker crossChecker) : IDocumentCheckService
 {
     private readonly IDocumentReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
-    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
+    private readonly IGitBranches _gitBranches = gitBranches ?? throw new ArgumentNullException(nameof(gitBranches));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
     private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
     private readonly CrossChecker _crossChecker = crossChecker ?? throw new ArgumentNullException(nameof(crossChecker));
 
@@ -167,9 +177,9 @@ public sealed class DocumentCheckService(
             }
 
             var dir = Path.GetDirectoryName(Path.GetFullPath(file))!;
-            var top = _git.TopLevel(dir);
-            var baseBranch = top is null ? null : _git.BaseBranch(top);
-            var revision = top is null || baseBranch is null ? null : _git.BaseRevision(top, baseBranch);
+            var top = _gitWorktrees.TopLevel(dir);
+            var baseBranch = top is null ? null : _gitBranches.BaseBranch(top);
+            var revision = top is null || baseBranch is null ? null : _gitBranches.BaseRevision(top, baseBranch);
             if (top is null || revision is null)
             {
                 return problems;
@@ -185,7 +195,7 @@ public sealed class DocumentCheckService(
                 foreach (var app in apps.EnumerateObject())
                 {
                     var normal = MarkerReader.NormalizeFolder(app.Value);
-                    if (normal is not null && normal != "." && _git.ListFiles(top, revision, normal).Count == 0)
+                    if (normal is not null && normal != "." && _gitQuery.ListFiles(top, revision, normal).Count == 0)
                     {
                         problems.Add($"app {app.Name}: the folder {normal} does not exist on the base branch {baseBranch}");
                     }

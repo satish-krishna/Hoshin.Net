@@ -13,60 +13,113 @@ using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli;
 
-/// <summary>Composition root wiring all SOLID workflow interfaces with their implementations.</summary>
+/// <summary>Lazy composition root wiring all SOLID workflow interfaces and narrow role abstractions.</summary>
 public sealed class HoshinServices
 {
+    private readonly Lazy<MarkerReader> _markerReader;
+    private readonly Lazy<ChangeRecordStore> _changeRecords;
+    private readonly Lazy<FrontMatterEdit> _frontMatterEdit;
+    private readonly Lazy<CrossChecker> _crossChecker;
+    private readonly Lazy<ScopeRules> _scopeRules;
+    private readonly Lazy<IntentReader> _intentReader;
+    private readonly Lazy<SpecReader> _specReader;
+    private readonly Lazy<PlanReader> _planReader;
+    private readonly Lazy<BuildLogReader> _buildLogReader;
+    private readonly Lazy<ReviewReader> _reviewReader;
+    private readonly Lazy<IDocumentReader> _documentReader;
+    private readonly Lazy<IWorkspaceResolver> _resolver;
+    private readonly Lazy<AppService> _apps;
+    private readonly Lazy<BranchChecker> _branchChecker;
+    private readonly Lazy<ChangeLocator> _changeLocator;
+    private readonly Lazy<ProgressService> _progress;
+    private readonly Lazy<FixStateService> _fixState;
+    private readonly Lazy<ChangePlacer> _changePlacer;
+    private readonly Lazy<FinishedChecker> _finishedChecker;
+    private readonly Lazy<ChangeListService> _changeList;
+    private readonly Lazy<ChangeStateService> _changeState;
+    private readonly Lazy<StaleChecker> _staleChecker;
+    private readonly Lazy<DocumentCheckService> _documentChecker;
+    private readonly Lazy<Committer> _committer;
+    private readonly Lazy<ChangeRenameService> _changeRename;
+    private readonly Lazy<ChangeRemoveService> _changeRemove;
+    private readonly Lazy<IYamlToJsoncConverter> _yamlConverter;
+    private readonly Lazy<IDocumentMigrator> _documentMigrator;
+    private readonly Lazy<WorkspaceMigrator> _migrator;
+    private readonly Lazy<HookConfigService> _hookConfig;
+    private readonly Lazy<LedgerStore> _ledger;
+    private readonly Lazy<HookScriptExporter> _hookScripts;
+    private readonly Lazy<HookProcessRunner> _hookProcess;
+    private readonly Lazy<EventContextFactory> _eventContext;
+    private readonly Lazy<BaselineStore> _baselineStore;
+    private readonly Lazy<BaselineApprovals> _baselineApprovals;
+    private readonly Lazy<BaselineTaker> _baselineTaker;
+    private readonly Lazy<RedRecorder> _redRecorder;
+    private readonly Lazy<RedVerdictService> _redVerdict;
+    private readonly Lazy<BuildStartStep> _buildStartStep;
+    private readonly Lazy<EventRunner> _eventRunner;
+    private readonly Lazy<IAllowListedCommandRunner> _allowListedRunner;
+    private readonly Lazy<IWorkflowRunner> _workflowRunner;
+    private readonly Lazy<HarnessAdapter> _hookAdapter;
+    private readonly Lazy<HookOrchestrator> _hookOrchestrator;
+
     public TimeProvider TimeProvider { get; }
     public IFileSystem FileSystem { get; }
     public IJsonSchemaValidator SchemaValidator { get; }
     public ICommandRunner CommandRunner { get; }
     public IGitClient Git { get; }
     public IPullRequestClient PullRequests { get; }
-    public MarkerReader MarkerReader { get; }
-    public ChangeRecordStore ChangeRecords { get; }
-    public FrontMatterEdit FrontMatterEdit { get; }
-    public CrossChecker CrossChecker { get; }
-    public ScopeRules ScopeRules { get; }
-    public IntentReader IntentReader { get; }
-    public SpecReader SpecReader { get; }
-    public PlanReader PlanReader { get; }
-    public BuildLogReader BuildLogReader { get; }
-    public ReviewReader ReviewReader { get; }
-    public IDocumentReader DocumentReader { get; }
-    public IWorkspaceResolver Resolver { get; }
-    public AppService Apps { get; }
-    public BranchChecker BranchChecker { get; }
-    public ChangeLocator ChangeLocator { get; }
-    public ProgressService Progress { get; }
-    public FixStateService FixState { get; }
-    public ChangePlacer ChangePlacer { get; }
-    public FinishedChecker FinishedChecker { get; }
-    public ChangeListService ChangeList { get; }
-    public ChangeStateService ChangeState { get; }
-    public StaleChecker StaleChecker { get; }
-    public DocumentCheckService DocumentChecker { get; }
-    public Committer Committer { get; }
-    public ChangeRenameService ChangeRename { get; }
-    public ChangeRemoveService ChangeRemove { get; }
-    public IYamlToJsoncConverter YamlConverter { get; }
-    public IDocumentMigrator DocumentMigrator { get; }
-    public WorkspaceMigrator Migrator { get; }
-    public HookConfigService HookConfig { get; }
-    public LedgerStore Ledger { get; }
-    public HookScriptExporter HookScripts { get; }
-    public HookProcessRunner HookProcess { get; }
-    public EventContextFactory EventContext { get; }
-    public BaselineStore BaselineStore { get; }
-    public BaselineApprovals BaselineApprovals { get; }
-    public BaselineTaker BaselineTaker { get; }
-    public RedRecorder RedRecorder { get; }
-    public RedVerdictService RedVerdict { get; }
-    public BuildStartStep BuildStartStep { get; }
-    public EventRunner EventRunner { get; }
-    public IAllowListedCommandRunner AllowListedRunner { get; }
-    public IWorkflowRunner WorkflowRunner { get; }
-    public HarnessAdapter HookAdapter { get; }
-    public HookOrchestrator HookOrchestrator { get; }
+
+    public MarkerReader MarkerReader => _markerReader.Value;
+    public ChangeRecordStore ChangeRecords => _changeRecords.Value;
+    public FrontMatterEdit FrontMatterEdit => _frontMatterEdit.Value;
+    public CrossChecker CrossChecker => _crossChecker.Value;
+    public ScopeRules ScopeRules => _scopeRules.Value;
+    public IntentReader IntentReader => _intentReader.Value;
+    public SpecReader SpecReader => _specReader.Value;
+    public PlanReader PlanReader => _planReader.Value;
+    public BuildLogReader BuildLogReader => _buildLogReader.Value;
+    public ReviewReader ReviewReader => _reviewReader.Value;
+    public IDocumentReader DocumentReader => _documentReader.Value;
+    public IWorkspaceResolver Resolver => _resolver.Value;
+    public AppService Apps => _apps.Value;
+    public BranchChecker BranchChecker => _branchChecker.Value;
+    public ChangeLocator ChangeLocator => _changeLocator.Value;
+    public ProgressService Progress => _progress.Value;
+    public FixStateService FixState => _fixState.Value;
+    public ChangePlacer ChangePlacer => _changePlacer.Value;
+    public FinishedChecker FinishedChecker => _finishedChecker.Value;
+    public ChangeListService ChangeList => _changeList.Value;
+    public ChangeStateService ChangeState => _changeState.Value;
+    public StaleChecker StaleChecker => _staleChecker.Value;
+    public DocumentCheckService DocumentChecker => _documentChecker.Value;
+    public IDocumentCheckService DocumentCheckService => _documentChecker.Value;
+    public Committer Committer => _committer.Value;
+    public ChangeRenameService ChangeRename => _changeRename.Value;
+    public ChangeRemoveService ChangeRemove => _changeRemove.Value;
+    public IYamlToJsoncConverter YamlConverter => _yamlConverter.Value;
+    public IDocumentMigrator DocumentMigrator => _documentMigrator.Value;
+    public WorkspaceMigrator Migrator => _migrator.Value;
+    public HookConfigService HookConfig => _hookConfig.Value;
+    public LedgerStore Ledger => _ledger.Value;
+    public HookScriptExporter HookScripts => _hookScripts.Value;
+    public HookProcessRunner HookProcess => _hookProcess.Value;
+    public EventContextFactory EventContext => _eventContext.Value;
+    public BaselineStore BaselineStore => _baselineStore.Value;
+    public BaselineApprovals BaselineApprovals => _baselineApprovals.Value;
+    public BaselineTaker BaselineTaker => _baselineTaker.Value;
+    public RedRecorder RedRecorder => _redRecorder.Value;
+    public RedVerdictService RedVerdict => _redVerdict.Value;
+    public BuildStartStep BuildStartStep => _buildStartStep.Value;
+    public EventRunner EventRunner => _eventRunner.Value;
+    public IAllowListedCommandRunner AllowListedRunner => _allowListedRunner.Value;
+    public IWorkflowRunner WorkflowRunner => _workflowRunner.Value;
+    public ITaskEvaluator TaskEvaluator => _workflowRunner.Value;
+    public ICheckRunner CheckRunner => _workflowRunner.Value;
+    public IApprovalRecorder ApprovalRecorder => _workflowRunner.Value;
+    public IPublisher Publisher => _workflowRunner.Value;
+    public IDocumentCommitter DocumentCommitter => _workflowRunner.Value;
+    public HarnessAdapter HookAdapter => _hookAdapter.Value;
+    public HookOrchestrator HookOrchestrator => _hookOrchestrator.Value;
 
     public HoshinServices()
         : this(new EmbeddedSchemaValidator(), new ProcessCommandRunner(), TimeProvider.System, new PhysicalFileSystem())
@@ -103,63 +156,68 @@ public sealed class HoshinServices
         Git = git ?? throw new ArgumentNullException(nameof(git));
         PullRequests = pullRequests ?? throw new ArgumentNullException(nameof(pullRequests));
 
-        MarkerReader = new MarkerReader(FileSystem);
-        ChangeRecords = new ChangeRecordStore(FileSystem);
-        FrontMatterEdit = new FrontMatterEdit(FileSystem);
-        CrossChecker = new CrossChecker(FileSystem);
-        ScopeRules = new ScopeRules(ChangeRecords, MarkerReader, FileSystem);
+        _markerReader = new(() => new MarkerReader(FileSystem));
+        _changeRecords = new(() => new ChangeRecordStore(FileSystem));
+        _frontMatterEdit = new(() => new FrontMatterEdit(FileSystem));
+        _crossChecker = new(() => new CrossChecker(FileSystem));
+        _scopeRules = new(() => new ScopeRules(ChangeRecords, MarkerReader, FileSystem));
 
-        IntentReader = new IntentReader();
-        SpecReader = new SpecReader();
-        PlanReader = new PlanReader(SchemaValidator);
-        BuildLogReader = new BuildLogReader(SchemaValidator);
-        ReviewReader = new ReviewReader(SchemaValidator);
-        DocumentReader = new DocumentReader(SpecReader, PlanReader, BuildLogReader, ReviewReader);
+        _intentReader = new(() => new IntentReader());
+        _specReader = new(() => new SpecReader());
+        _planReader = new(() => new PlanReader(SchemaValidator));
+        _buildLogReader = new(() => new BuildLogReader(SchemaValidator));
+        _reviewReader = new(() => new ReviewReader(SchemaValidator));
+        _documentReader = new(() => new DocumentReader(SpecReader, PlanReader, BuildLogReader, ReviewReader));
 
-        Resolver = new WorkspaceResolver(Git, MarkerReader);
-        Apps = new AppService(Git, MarkerReader);
-        BranchChecker = new BranchChecker(Git);
-        ChangeLocator = new ChangeLocator(Git, Apps, MarkerReader);
-        Progress = new ProgressService(PlanReader, BuildLogReader, MarkerReader);
-        FixState = new FixStateService(Git, PlanReader, BuildLogReader, MarkerReader);
-        ChangePlacer = new ChangePlacer(Git, Resolver, ChangeLocator, MarkerReader);
-        FinishedChecker = new FinishedChecker(Git);
-        ChangeList = new ChangeListService(ChangePlacer, FinishedChecker);
-        ChangeState = new ChangeStateService(Git, ChangePlacer, FinishedChecker, FixState, Progress, SpecReader, ReviewReader, Apps);
-        StaleChecker = new StaleChecker(Git, Resolver, ChangeLocator, Apps);
-        DocumentChecker = new DocumentCheckService(DocumentReader, Git, MarkerReader, CrossChecker);
-        Committer = new Committer(Git, Resolver, ChangeLocator, Apps, DocumentChecker, Progress, ReviewReader, MarkerReader, ScopeRules);
-        ChangeRename = new ChangeRenameService(Git, Apps, BranchChecker, ChangeRecords);
-        ChangeRemove = new ChangeRemoveService(Git, Apps, ChangeRecords);
-        YamlConverter = new YamlToJsoncConverter();
-        DocumentMigrator = new DocumentMigrator(YamlConverter);
-        Migrator = new WorkspaceMigrator(Git, Resolver, DocumentMigrator, MarkerReader, ScopeRules);
+        _resolver = new(() => new WorkspaceResolver(Git, Git, MarkerReader));
+        _apps = new(() => new AppService(Git, MarkerReader));
+        _branchChecker = new(() => new BranchChecker(Git));
+        _changeLocator = new(() => new ChangeLocator(Git, Apps, MarkerReader));
+        _progress = new(() => new ProgressService(PlanReader, BuildLogReader, MarkerReader));
+        _fixState = new(() => new FixStateService(Git, PlanReader, BuildLogReader, MarkerReader));
+        _changePlacer = new(() => new ChangePlacer(Git, Resolver, ChangeLocator, MarkerReader));
+        _finishedChecker = new(() => new FinishedChecker(Git));
+        _changeList = new(() => new ChangeListService(ChangePlacer, FinishedChecker));
+        _changeState = new(() => new ChangeStateService(Git, ChangePlacer, FinishedChecker, FixState, Progress, SpecReader, ReviewReader, Apps));
+        _staleChecker = new(() => new StaleChecker(Git, Resolver, ChangeLocator, Apps));
+        _documentChecker = new(() => new DocumentCheckService(DocumentReader, Git, Git, Git, MarkerReader, CrossChecker));
+        _committer = new(() => new Committer(Git, Resolver, ChangeLocator, Apps, DocumentChecker, Progress, ReviewReader, MarkerReader, ScopeRules));
+        _changeRename = new(() => new ChangeRenameService(Git, Apps, BranchChecker, ChangeRecords));
+        _changeRemove = new(() => new ChangeRemoveService(Git, Apps, ChangeRecords));
+        _yamlConverter = new(() => new YamlToJsoncConverter());
+        _documentMigrator = new(() => new DocumentMigrator(YamlConverter));
+        _migrator = new(() => new WorkspaceMigrator(Git, Resolver, DocumentMigrator, MarkerReader, ScopeRules));
 
-        HookConfig = new HookConfigService(Git);
-        Ledger = new LedgerStore(Git, FileSystem);
-        HookScripts = new HookScriptExporter(Git);
-        HookProcess = new HookProcessRunner(CommandRunner);
-        EventContext = new EventContextFactory(Git, Resolver, ChangeLocator, Apps);
-        BaselineStore = new BaselineStore(Git);
-        BaselineApprovals = new BaselineApprovals(Ledger, TimeProvider);
-        BaselineTaker = new BaselineTaker(Git, BaselineStore, Apps, EventContext, HookScripts, HookProcess, TimeProvider);
-        RedRecorder = new RedRecorder(Git, PlanReader, Apps, EventContext, Ledger, HookProcess, TimeProvider);
-        RedVerdict = new RedVerdictService(Ledger, RedRecorder);
+        _hookConfig = new(() => new HookConfigService(Git, Git));
+        _ledger = new(() => new LedgerStore(Git, FileSystem));
+        _hookScripts = new(() => new HookScriptExporter(Git, Git));
+        _hookProcess = new(() => new HookProcessRunner(CommandRunner));
+        _eventContext = new(() => new EventContextFactory(Git, Resolver, ChangeLocator, Apps));
+        _baselineStore = new(() => new BaselineStore(Git));
+        _baselineApprovals = new(() => new BaselineApprovals(Ledger, TimeProvider));
+        _baselineTaker = new(() => new BaselineTaker(Git, BaselineStore, Apps, EventContext, HookScripts, HookProcess, TimeProvider));
+        _redRecorder = new(() => new RedRecorder(Git, PlanReader, Apps, EventContext, Ledger, HookProcess, TimeProvider));
+        _redVerdict = new(() => new RedVerdictService(Ledger, RedRecorder));
 
-        BuildStartStep = new BuildStartStep(Git, Apps, EventContext, Ledger, BaselineTaker, BaselineApprovals, ChangeRecords, ScopeRules);
-        var steps = new IEventStep[]
-        {
-            new ChangeStartStep(Git, Apps, BranchChecker, ChangeRecords),
-            new DocAcceptStep(Git),
-            BuildStartStep,
-            new TaskDoneStep(),
-            new BuildFinishStep(Git, Progress, Apps, EventContext, BaselineTaker, BaselineApprovals, ChangeRecords, ScopeRules),
-            new ReviewFinishStep(),
-            new ChangeDoneStep(Git, PullRequests, Progress, ReviewReader, Apps, ChangeRecords, ScopeRules),
-        };
-        EventRunner = new EventRunner(Git, HookConfig, Ledger, HookScripts, HookProcess, steps, TimeProvider);
-        AllowListedRunner = new AllowListedCommandRunner();
-        WorkflowRunner = new WorkflowRunner(
+        _buildStartStep = new(() => new BuildStartStep(Git, Apps, EventContext, Ledger, BaselineTaker, BaselineApprovals, ChangeRecords, ScopeRules));
+        _eventRunner = new(() => new EventRunner(
+            Git,
+            HookConfig,
+            Ledger,
+            HookScripts,
+            HookProcess,
+            [
+                new ChangeStartStep(Git, Apps, BranchChecker, ChangeRecords),
+                new DocAcceptStep(Git),
+                BuildStartStep,
+                new TaskDoneStep(),
+                new BuildFinishStep(Git, Progress, Apps, EventContext, BaselineTaker, BaselineApprovals, ChangeRecords, ScopeRules),
+                new ReviewFinishStep(),
+                new ChangeDoneStep(Git, PullRequests, Progress, ReviewReader, Apps, ChangeRecords, ScopeRules),
+            ],
+            TimeProvider));
+        _allowListedRunner = new(() => new AllowListedCommandRunner());
+        _workflowRunner = new(() => new WorkflowRunner(
             AllowListedRunner,
             PullRequests,
             IntentReader,
@@ -169,8 +227,18 @@ public sealed class HoshinServices
             FrontMatterEdit,
             CrossChecker,
             FileSystem,
-            TimeProvider);
-        HookAdapter = new HarnessAdapter(TimeProvider);
-        HookOrchestrator = new HookOrchestrator(HookAdapter, WorkflowRunner, AllowListedRunner, FileSystem, PlanReader, TimeProvider);
+            TimeProvider));
+        _hookAdapter = new(() => new HarnessAdapter(TimeProvider));
+        _hookOrchestrator = new(() => new HookOrchestrator(
+            HookAdapter,
+            TaskEvaluator,
+            CheckRunner,
+            ApprovalRecorder,
+            Publisher,
+            DocumentCommitter,
+            AllowListedRunner,
+            FileSystem,
+            PlanReader,
+            TimeProvider));
     }
 }

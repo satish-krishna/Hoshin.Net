@@ -6,32 +6,9 @@ using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
 
-/// <summary>Library-owned execution steps for the workflow state machine (Red/Green two-phase commits, checks, baseline, publish, document commits).</summary>
-public interface IWorkflowRunner
+/// <summary>Composite abstraction for workflow execution steps (prefer narrow role interfaces).</summary>
+public interface IWorkflowRunner : ITaskEvaluator, ICheckRunner, IApprovalRecorder, IPublisher, IDocumentCommitter
 {
-    void Issue(WorkflowRepo repo, WorkflowState state, Step step, string? sessionId = null);
-
-    bool TryRegisterActiveSubagent(WorkflowRepo repo, string taskId, int attempt, string agentId, out string? existingAgentId);
-
-    void ClearActiveSubagent(WorkflowRepo repo, string? agentId = null);
-
-    WorkflowVerdict EvaluateAndCommitTask(WorkflowRepo repo, WorkflowState state, string taskId, int attempt);
-
-    WorkflowBaselineRun RunBaseline(WorkflowRepo repo, WorkflowState state);
-
-    WorkflowCheckRun RunChecks(WorkflowRepo repo, WorkflowState state);
-
-    WorkflowApproval Answer(WorkflowRepo repo, WorkflowState state, bool approved, string note);
-
-    WorkflowPublishResult Publish(WorkflowRepo repo, WorkflowState state, string targetRef, bool openPullRequest = true);
-
-    (IReadOnlyList<Problem> Problems, string? Commit) CommitDocument(WorkflowRepo repo, WorkflowState state, string name);
-
-    (IReadOnlyList<Problem> Problems, string? Commit) CommitReview(WorkflowRepo repo, WorkflowState state);
-
-    (IReadOnlyList<Problem> Problems, string? Commit) CommitFixDocuments(WorkflowRepo repo, WorkflowState state);
-
-    string? AcceptDocument(WorkflowRepo repo, WorkflowState state, string name);
 }
 
 /// <summary>

@@ -33,9 +33,10 @@ public sealed class ScriptFolders : IDisposable
 }
 
 /// <summary>Exports hook scripts from the master repository's base branch into a temporary directory.</summary>
-public sealed class HookScriptExporter(IGitClient git)
+public sealed class HookScriptExporter(IGitQuery gitQuery, IGitRunner gitRunner)
 {
-    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+    private readonly IGitRunner _gitRunner = gitRunner ?? throw new ArgumentNullException(nameof(gitRunner));
 
     public ScriptFolders Export(string master, string? revision, string system)
     {
@@ -51,9 +52,9 @@ public sealed class HookScriptExporter(IGitClient git)
         {
             foreach (var folder in layers.Values)
             {
-                foreach (var file in _git.ListFiles(master, revision, folder))
+                foreach (var file in _gitQuery.ListFiles(master, revision, folder))
                 {
-                    var r = _git.Run(master, ["cat-file", "blob", $"{revision}:{file.Path}"]);
+                    var r = _gitRunner.Run(master, ["cat-file", "blob", $"{revision}:{file.Path}"]);
                     if (!r.Ok)
                     {
                         continue;

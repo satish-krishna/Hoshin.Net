@@ -22,43 +22,9 @@ public sealed record GitCommitOutcome(bool Ok, string? Sha, string? Error, strin
 
 public sealed record TrailerCommit(string Sha, List<string> Values);
 
-/// <summary>Abstraction for all local Git operations used by Hoshin.Workflow.</summary>
-public interface IGitClient
+/// <summary>Composite abstraction for all local Git operations used by Hoshin.Workflow (prefer narrow role interfaces).</summary>
+public interface IGitClient : IGitRunner, IGitQuery, IGitStatus, IGitBranches, IGitWorktrees, IGitCommitter
 {
-    GitResult Run(string cwd, IReadOnlyList<string> args, string? input = null);
-    byte[] RunBytes(string cwd, IReadOnlyList<string> args, string? input = null);
-    string? Out(string cwd, IReadOnlyList<string> args);
-    string Must(string cwd, IReadOnlyList<string> args, string what);
-    string? TopLevel(string dir);
-    string GitPath(string dir, string path, bool common = false);
-    GitDirsInfo? GitDirs(string dir);
-    string? CurrentBranch(string dir);
-    string? CommitOf(string dir, string rev);
-    bool HasLocalBranch(string dir, string name);
-    bool HasRemoteBranch(string dir, string name);
-    string? BaseBranch(string dir);
-    string? BaseRevision(string dir, string baseBranch);
-    string? ShowFile(string dir, string rev, string path);
-    List<GitFileEntry> ListFiles(string dir, string rev, string path);
-    List<string> DirtyPaths(string dir, IReadOnlyList<string>? exclude = null);
-    List<string> BranchNames(string dir);
-    List<GitCommitInfo> CommitsBeyondBase(string dir, string branch, string baseBranch);
-    bool IsAncestor(string dir, string ancestor, string descendant);
-    string MainCheckout(string dir);
-    List<GitWorktree> Worktrees(string dir);
-    string? CheckedOutIn(string dir, string branch);
-    List<string> ChangedPaths(string dir, IReadOnlyList<string> paths);
-    bool ExistsAt(string dir, string rev, string path);
-    GitCommitOutcome CommitPaths(string dir, IReadOnlyList<string> paths, IReadOnlyList<string> paragraphs);
-    string? MergeBase(string dir, string a, string b);
-    int? CountCommits(string dir, string from, string to, IReadOnlyList<string> paths);
-    List<TrailerCommit> CommitsWithTrailer(string dir, string from, string to, string key, IReadOnlyList<string>? paths = null);
-    string? LastCommitTouching(string dir, string range, IReadOnlyList<string> pathspec);
-    List<string> TrackedChanges(string dir);
-    List<string> ChangedFilesBetween(string dir, string from, string to, IReadOnlyList<string> pathspec);
-    HashSet<string> ReportedPaths(string top, IReadOnlyList<string> paths);
-    bool DiffersFromHead(string top, string path);
-    bool Differs(string top, IReadOnlyList<string> revs, string path);
 }
 
 /// <summary>Default <see cref="IGitClient"/> shelling out to the <c>git</c> CLI via <see cref="ICommandRunner"/>.</summary>

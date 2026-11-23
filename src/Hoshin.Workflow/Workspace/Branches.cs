@@ -3,9 +3,9 @@ using Hoshin.Workflow.Git;
 namespace Hoshin.Workflow.Workspace;
 
 /// <summary>Checks whether a candidate branch name collides with existing branches across repositories.</summary>
-public sealed class BranchChecker(IGitClient git)
+public sealed class BranchChecker(IGitBranches git)
 {
-    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IGitBranches _git = git ?? throw new ArgumentNullException(nameof(git));
 
     public List<string> BranchClashes(string name, IReadOnlyList<RepositoryRef> repos, string? own = null)
     {

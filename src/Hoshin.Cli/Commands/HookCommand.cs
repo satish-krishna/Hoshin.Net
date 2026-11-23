@@ -9,8 +9,17 @@ namespace Hoshin.Cli.Commands;
 /// Dual-harness lifecycle hook entry point (<c>hoshin hook &lt;start|result|subagent-stop|stop|log&gt; [--roles &lt;dir&gt;]</c>).
 /// Always exits <c>0</c> and reports any internal failure to <c>stderr</c> so hooks never crash an active session.
 /// </summary>
-public sealed class HookCommand(HoshinServices services) : IHoshinCommand
+public sealed class HookCommand(
+    HarnessAdapter hookAdapter,
+    HookOrchestrator hookOrchestrator,
+    IAllowListedCommandRunner allowListedRunner,
+    IFileSystem fileSystem) : IHoshinCommand
 {
+    private readonly HarnessAdapter _hookAdapter = hookAdapter ?? throw new ArgumentNullException(nameof(hookAdapter));
+    private readonly HookOrchestrator _hookOrchestrator = hookOrchestrator ?? throw new ArgumentNullException(nameof(hookOrchestrator));
+    private readonly IAllowListedCommandRunner _allowListedRunner = allowListedRunner ?? throw new ArgumentNullException(nameof(allowListedRunner));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+
     public string Name => "hook";
     public string Usage => "hook start|result|subagent-stop|stop [--roles <path>]";
 
@@ -29,21 +38,21 @@ public sealed class HookCommand(HoshinServices services) : IHoshinCommand
             var o = OptionParser.Parse(args.Skip(1).ToList(), values: ["roles"]);
             var rolesRoot = o.Get("roles") ?? DefaultRolesDir();
 
-            var ev = services.HookAdapter.ReadFromStdin();
-            var repo = WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), services.AllowListedRunner, services.FileSystem);
+            var ev = _hookAdapter.ReadFromStdin();
+            var repo = WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _allowListedRunner, _fs);
 
             var (output, decision) = sub switch
             {
-                "start" => services.HookOrchestrator.HandleStart(ev, rolesRoot),
-                "result" => services.HookOrchestrator.HandleResult(ev, rolesRoot),
-                "subagent-stop" => services.HookOrchestrator.HandleSubagentStop(ev, rolesRoot),
-                "stop" => services.HookOrchestrator.HandleStop(ev, rolesRoot),
-                "log" => (services.HookAdapter.EmptyOutput(ev.Harness), "logged"),
-                _ => (services.HookAdapter.EmptyOutput(ev.Harness), $"unknown subcommand {sub}"),
+                "start" => _hookOrchestrator.HandleStart(ev, rolesRoot),
+                "result" => _hookOrchestrator.HandleResult(ev, rolesRoot),
+                "subagent-stop" => _hookOrchestrator.HandleSubagentStop(ev, rolesRoot),
+                "stop" => _hookOrchestrator.HandleStop(ev, rolesRoot),
+                "log" => (_hookAdapter.EmptyOutput(ev.Harness), "logged"),
+                _ => (_hookAdapter.EmptyOutput(ev.Harness), $"unknown subcommand {sub}"),
             };
 
             HarnessAdapter.WriteStdoutUtf8(output);
-            services.HookAdapter.AppendTrace(repo, $"hook {sub}", ev, output, decision, clock);
+            _hookAdapter.AppendTrace(repo, $"hook {sub}", ev, output, decision, clock);
         }
         catch (Exception e)
         {

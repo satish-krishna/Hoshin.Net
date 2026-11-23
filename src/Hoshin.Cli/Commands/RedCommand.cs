@@ -1,13 +1,24 @@
 using System.Text.RegularExpressions;
+using Hoshin.Workflow.Baseline;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Events;
+using Hoshin.Workflow.Red;
 using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli.Commands;
 
-public sealed class RedCommand(HoshinServices services) : IHoshinCommand
+public sealed class RedCommand(
+    EventContextFactory eventContext,
+    BaselineTaker baselineTaker,
+    RedVerdictService redVerdict,
+    RedRecorder redRecorder) : IHoshinCommand
 {
     private static readonly Regex TaskRegex = new(@"^T\d+$", RegexOptions.Compiled);
+
+    private readonly EventContextFactory _eventContext = eventContext ?? throw new ArgumentNullException(nameof(eventContext));
+    private readonly BaselineTaker _baselineTaker = baselineTaker ?? throw new ArgumentNullException(nameof(baselineTaker));
+    private readonly RedVerdictService _redVerdict = redVerdict ?? throw new ArgumentNullException(nameof(redVerdict));
+    private readonly RedRecorder _redRecorder = redRecorder ?? throw new ArgumentNullException(nameof(redRecorder));
 
     public string Name => "red";
     public string Usage => "red record|show --json --change c --repo r --task T<n> [--system s] [--master p] [--workspace p]";
@@ -23,14 +34,14 @@ public sealed class RedCommand(HoshinServices services) : IHoshinCommand
             throw new UsageException();
         }
 
-        var ctx = services.EventContext.Build(
+        var ctx = _eventContext.Build(
             Directory.GetCurrentDirectory(),
             new EventContextArgs("build.start", o.Get("change")!, o.Get("system"), o.Get("repo")!, new ResolveOptions(o.Get("master"), o.Get("workspace")), new Dictionary<string, string>()),
-            services.BaselineTaker.RecoverInterrupted);
+            _baselineTaker.RecoverInterrupted);
 
         if (o.Positional[0] == "show")
         {
-            var verdict = services.RedVerdict.Verdict(ctx, task);
+            var verdict = _redVerdict.Verdict(ctx, task);
             CliIo.PrintJson(new
             {
                 task,
@@ -42,7 +53,7 @@ public sealed class RedCommand(HoshinServices services) : IHoshinCommand
             return ExitCodes.Pass;
         }
 
-        var res = await services.RedRecorder.RecordAsync(ctx, task).ConfigureAwait(false);
+        var res = await _redRecorder.RecordAsync(ctx, task).ConfigureAwait(false);
         CliIo.PrintJson(new
         {
             task,

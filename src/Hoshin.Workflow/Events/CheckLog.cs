@@ -30,7 +30,7 @@ public sealed class CheckLog
 
     public string RunId { get; }
 
-    public static string ChecksFile(IGitClient git, string master, string system, string change) =>
+    public static string ChecksFile(IGitWorktrees git, string master, string system, string change) =>
         Path.Combine(git.GitPath(master, Path.Combine("hoshin", system, change), common: true), "checks.jsonl");
 
     public static bool IsCheck(string eventName, HookDefinition hook) =>

@@ -23,7 +23,7 @@ public sealed record BaselineStoreFile(
     [property: JsonPropertyName("entries")] List<BaselineEntry> Entries);
 
 /// <summary>Stores per-repository baseline results in <c>&lt;git-common-dir&gt;/hoshin/&lt;system&gt;/.baselines/&lt;repo&gt;.json</c>.</summary>
-public sealed class BaselineStore(IGitClient git)
+public sealed class BaselineStore(IGitWorktrees git)
 {
     private const int KeepCount = 20;
 
@@ -34,7 +34,7 @@ public sealed class BaselineStore(IGitClient git)
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IGitWorktrees _git = git ?? throw new ArgumentNullException(nameof(git));
 
     public string BaselineFile(string master, string system, string repo) =>
         _git.GitPath(master, Path.Combine("hoshin", system, ".baselines", $"{repo}.json"), common: true);
