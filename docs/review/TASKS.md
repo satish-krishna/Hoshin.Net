@@ -1069,7 +1069,7 @@ Every rule of round 1's "How to work through this file" still applies, with thes
 
 - **Branch:** `fix/round-2`. It exists, and its first commits are the gate (`617291d`), the review docs, this part of TASKS.md and `.github/CODEOWNERS`. Don't rebase those away.
 - **Scope of the branch:** R01–R09 (tier R1) only. They are what the gate needs. R10–R20 go in later branches, one pull request per tier, after this branch merges.
-- **Pull request:** a draft, opened by the implementer's GitHub identity (see "No bypass" below), titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
+- **Pull request:** a draft, opened from a human collaborator's GitHub account (D7, and "No bypass" below), titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
 - **Commits:** one per task, in index order, with round 1's trailers plus one:
   ```
   Task: R02
@@ -1078,13 +1078,20 @@ Every rule of round 1's "How to work through this file" still applies, with thes
   Gate: <the gate's first failing assertion after this commit, or "passes">
   ```
 - **Ready for review:** when all three gate tests pass on Linux and Windows in CI and R01–R09 are `done` or `invalid`. Then the branch merges by squash, as usual.
-- **No bypass:** this branch is code, so CONTRIBUTING §2.1 gives it no administrator bypass. It contains code-owned paths (the gate and `CODEOWNERS`), so the code owner must approve it, which means the pull request must be opened by the implementer's own GitHub identity, not the code owner's.
+- **No bypass:** this branch is code, so CONTRIBUTING §2.1 gives it no administrator bypass. It contains code-owned paths (the gate and `CODEOWNERS`), so the code owner must approve it, which means the pull request must be opened by an identity other than the code owner's (D7).
 
 ## Decisions needed for round 2
 
 ### D6 — How does the engineer decline at approval?
 
 Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reason>` at `NeedsApproval` records a declined approval with the reason, and the change goes back to the fix loop of R06, like a review finding; (b) declining means "don't approve", and the engineer then runs a fix build with instructions. **Recommendation:** (a). It keeps a record of why, and it reuses R06's loop. **Answer:** _(open)_
+
+### D7 — Whose GitHub identity does the implementer push and open pull requests under?
+
+Code gets no administrator bypass (CONTRIBUTING §2.1), and an author can't approve their own pull request, so the round-2 pull request has to come from someone other than the code owner. **Options:** (a) a machine-user account; (b) a GitHub App; (c) a human collaborator's account. **Answer:** (c), a human collaborator's account. The conditions:
+- the collaborator has `write` or `maintain` permission, **never `admin`**. Admins aren't enforced by the branch protection, so an admin collaborator could merge a red gate or change `CODEOWNERS` without approval;
+- the collaborator is not a code owner, so their approval never stands in for the code owner's;
+- everything the agent does under that account is the collaborator's responsibility, so they agree to it, and the token the agent uses has no more scope than this repository needs (a fine-grained token limited to this repository, with contents and pull-request write access).
 
 ## Round 2 index
 
