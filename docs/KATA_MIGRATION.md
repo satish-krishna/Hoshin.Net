@@ -130,6 +130,9 @@ dotnet <plugin>/lib/hoshin.dll check <change>/spec.md <change>/plan.md <change>/
 
 ---
 
-## 5. Unchanged Contracts
+## 5. Unchanged Contracts & Exit-Code Deltas
 
-All 22 CLI subcommands (`resolve`, `state`, `list`, `stale`, `instructions`, `hooks`, `status`, `run`, `change start|show|rename|remove`, `commit`, `read`, `red show|record`, `migrate`, `checks`, `baseline show|approve|retake`, `check`, `naming`, `branch-name`, `scope`, `fix-state`, `gate`, `guard`) preserve their exact option names, JSON field names, enum values, exit codes, and error message prefixes verified by `tests/Hoshin.Tests/BlackBox/clients.test.mjs` and the 44 black-box conformance suites.
+All 22 CLI subcommands (`resolve`, `state`, `list`, `stale`, `instructions`, `hooks`, `status`, `run`, `change start|show|rename|remove`, `commit`, `read`, `red show|record`, `migrate`, `checks`, `baseline show|approve|retake`, `check`, `naming`, `branch-name`, `scope`, `fix-state`, `gate`, `guard`) preserve their option names, JSON field names, enum values, and error message prefixes verified by `tests/Hoshin.Tests/BlackBox/clients.test.mjs` and the 44 black-box conformance suites, with two intentional v2.0.0 exit-code deltas:
+
+- **Layout 1 and YAML documents exit `2`:** Any unmigrated Layout 1 or `---` YAML front-matter document (or `change.yml`) exits `2` (could not run) with migration guidance instead of `0` or `1`; run `hoshin migrate` once per legacy repository.
+- **Missing-symbol compile failures in `red record` exit `0` (`outcome: "failed"`):** Strongly-typed missing-target-symbol compilation errors (`CS0246`, `TS2304`, Rust `E0425`, etc.) now count as valid observed Red (`outcome: "failed"`, exit `0`) via the unified `RedClassifier`, rather than `could-not-compile` (exit `1`).

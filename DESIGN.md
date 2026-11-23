@@ -206,7 +206,7 @@ Plan tasks may omit `test` or set `"test": null` for non-testable work (configur
 | Lifecycle Boundary | Claude Code Hook | Antigravity Hook | Command | Behavior |
 | :--- | :--- | :--- | :--- | :--- |
 | **Skill / Step Start** | `UserPromptExpansion`, `PostToolUse` (`Skill`) | `PreInvocation`, `PostToolUse` (`read_file` / `view_file` on `SKILL.md`) | `hoshin hook start` | Gates the invoked skill via `WorkflowEngine.Gate`, writes `run.json` + `step.json`, runs non-agent steps, and injects the active step brief (`< 10,000` chars). `accept` and `done` are strictly human-only (`disable-model-invocation: true` and user-sourced events only). |
-| **Pre-Tool Guard** | `PreToolUse` (`Bash`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`) | `PreToolUse` (`run_command`, `write_file`, `edit_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`) | `hoshin guard` | Enforces static protections always and session-aware fast-path step rules from `run.json` + `step.json` without recomputing `WorkflowState`. |
+| **Pre-Tool Guard** | `PreToolUse` (`Bash`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`) | `PreToolUse` (`run_command`, `write_file`, `edit_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`) | `hoshin guard` | Scoped strictly to repositories with an active, non-stale `.git/hoshin/run.json` matching the calling session (or its active subagent); enforces static protections and fast-path step rules from `step.json` without recomputing `WorkflowState`, staying silent outside active runs. |
 | **Subagent Result** | `PostToolUse` (`Agent`, `Task`) | `PostToolUse` (`invoke_subagent`, `manage_task`, `manage_subagents`) | `hoshin hook result` | Foreground: judges attempt immediately and injects next step. Async: records `ActiveSubagent` in ledger, refuses conflicting concurrent launches, instructs orchestrator to wait. |
 | **Async Subagent Stop** | `SubagentStop` | Handled on parent `Stop` (`fullyIdle: true`) | `hoshin hook subagent-stop` | Judges completed background subagent by matching `agentId`. |
 | **Turn End / Gate** | `Stop` | `Stop` | `hoshin hook stop` | Yields while background subagent runs (`background_tasks` running or `fullyIdle: false`); stays silent during open authoring interviews; validates, auto-wraps, pins, and commits clean drafts; blocks (`block` / `continue`) with diagnostics or next build step up to 3 consecutive stops; allows clean exit at `NeedsApproval` or `Done`. |
@@ -266,28 +266,28 @@ All change documents are Markdown with JSONC structured blocks:
 - **`build/<repo>.md` & `build/review.md`:** Validated by `BuildLogReader` (`build-log-entry.schema.json`) and `ReviewReader` (`review-header.schema.json`, `finding.schema.json`, mandatory `rule` on every `convention` finding).
 - **`change.jsonc`:** Validated by `ChangeRecordStore`.
 
-### Zero-Dependency Migration (`hoshin migrate`)
+### YAML-to-JSONC Migration (`Hoshin.Migration` / `hoshin migrate`)
 
-`Hoshin.Workflow/Migration` provides `YamlToJsoncConverter` (zero external YAML packages) and `DocumentMigrator`:
+YAML parsing is isolated in the separate `src/Hoshin.Migration` assembly (`YamlDotNet 16.3.0`), referenced only by `Hoshin.Cli` so `Hoshin.Workflow` keeps strictly `Markdig` and `Gherkin`. `YamlToJsoncConverter` and `DocumentMigrator`:
 
-- Converts both **Layout 1** and **Layout 2** YAML documents (`intent.md`, `spec.md`, `plan.md`, `build/*.md`, `build/review.md`, `context/*.md`, `branch.md`) into canonical Layout 2 JSONC while preserving comments (`#` → `//`), key ordering, and all-digit commit hashes as strings.
-- Converts `change.yml` → `change.jsonc` (refusing cleanly if both exist).
-- Integrates with legacy `ai-sdlc` → `hoshin` workspace migration (`hoshin migrate --json [--write | --dry-run]`) and supports standalone directories/files (`hoshin migrate <path>... [--dry-run] [--write] [--json]`).
-- Strictly idempotent: already-migrated files report `"current"` and remain byte-identical.
+- Convert both **Layout 1** and **Layout 2** YAML documents (`intent.md`, `spec.md`, `plan.md`, `build/*.md`, `build/review.md`, `context/*.md`, `branch.md`) into canonical Layout 2 JSONC while preserving comments (`#` → `//`), key ordering, and all-digit commit hashes as strings, and fail closed on unsupported constructs.
+- Convert `change.yml` → `change.jsonc` (verifying key-set preservation and refusing cleanly if both exist).
+- Integrate with legacy `ai-sdlc` → `hoshin` workspace migration (`hoshin migrate --json [--write | --dry-run]`) and support standalone directories/files (`hoshin migrate <path>... [--dry-run] [--write] [--json]`).
+- Remain strictly idempotent: already-migrated files report `"current"` and stay byte-identical.
 
 ## 7. Packaging & Distribution
 
-`packaging/package.ps1` builds all `v2.0.0` release artifacts cleanly from a single command:
+`packaging/package.ps1` runs cross-platform under PowerShell 7 (`pwsh`) using `Join-Path`, defaults `-Version` from `Directory.Build.props` (`VersionPrefix`), stamps `-Version` into `plugin.json`, and builds all release artifacts from a single command:
 
 | Artifact | Path | Contents |
 | :--- | :--- | :--- |
-| **Portable CLI** | `artifacts/portable/` | Framework-dependent `lib/` (`hoshin.dll`, `Hoshin.Workflow.dll`, `Markdig.dll`, `Gherkin.dll`, `Cucumber.Messages.dll`, runtimeconfig, deps) + `skills/`. Runs via Microsoft's signed `dotnet` host with no native executables or code-signing friction. |
-| **NuGet Library** | `artifacts/nuget/Hoshin.Workflow.2.0.0.nupkg` | `Hoshin.Workflow.dll` with embedded JSON schemas, workspace templates, and all 11 role/skill procedures; depends only on `Markdig` and `Gherkin`. |
-| **Claude Code Plugin** | `artifacts/claude-code/` | `.claude-plugin/plugin.json`, `hooks/hooks.json`, `lib/`, `roles/`, and one-line `skills/<name>/SKILL.md` wrappers + verbatim `references/procedure.md` for all 10 skills. |
-| **Antigravity Bundle** | `artifacts/antigravity/.agents/` | `hooks.json` (unquoted relative paths for Windows `cmd /c` compatibility), `lib/`, `roles/`, and one-line `skills/<name>/SKILL.md` wrappers + verbatim `references/procedure.md` for all 10 skills. |
+| **Portable CLI** | `artifacts/portable/` | Framework-dependent `lib/` (`hoshin.dll`, `Hoshin.Workflow.dll`, `Hoshin.Migration.dll`, `Markdig.dll`, `Gherkin.dll`, `Cucumber.Messages.dll`, `YamlDotNet.dll`, runtimeconfig, deps) + `skills/`. Runs via Microsoft's signed `dotnet` host with no native executables or code-signing friction. |
+| **NuGet Library** | `artifacts/nuget/Hoshin.Workflow.<version>.nupkg` | `Hoshin.Workflow.dll` with embedded JSON schemas, workspace templates, and all 11 role/skill procedures; depends only on `Markdig` and `Gherkin`. |
+| **Claude Code Plugin** | `artifacts/claude-code/` | `.claude-plugin/plugin.json` (version stamped from `-Version`), `hooks/hooks.json`, `lib/`, `roles/`, and one-line `skills/<name>/SKILL.md` wrappers (`disable-model-invocation: true` on `accept` and `done`) + verbatim `references/procedure.md` for all 10 packaged user skills (`intent`, `spec`, `plan`, `build`, `review`, `fix`, `done`, `accept`, `setup`, `context`). |
+| **Antigravity Bundle** | `artifacts/antigravity/.agents/` | `hooks.json` (unquoted relative paths for Windows `cmd /c` compatibility), `lib/`, `roles/`, and one-line `skills/<name>/SKILL.md` wrappers + verbatim `references/procedure.md` for all 10 packaged user skills. |
 
-### Performance & Verification Summary
+### Verification & Contract Guarantees
 
-- **Fresh-clone verification (Windows, .NET 10.0.2):** `dotnet build Hoshin.sln` succeeds with **0 warnings, 0 errors**; `dotnet test` passes **129/129** (85 C# unit, migration, state-machine, example conformance, and dual-harness hook integration tests + all 44 ported black-box CLI conformance suites covering 558+ CLI cases).
-- **Guard latency on Windows (portable Release build):** ~143–148 ms median on allow, ~176 ms median on red-phase deny (well below legacy Node.js `hoshin.ts guard` at ~293–333 ms).
+- **Cross-platform CI (Linux `ubuntu-latest` + Windows `windows-latest`):** `.github/workflows/ci.yml` runs `dotnet build Hoshin.sln -warnaserror`, the full `dotnet test` suite (unit tests, `ArchitectureTests` SOLID/dependency rules, migration tests, dual-harness hook tests, `Packager_*` under `pwsh`, and all 44 ported black-box CLI conformance suites), plus changed-line coverage enforcement (`dotnet-coverage` + `diff-cover --fail-under=90` across `src/**`).
+- **Behavioral reference:** Detailed document-layout, `state`, `fix-state`, event, and refusal rules are documented in [docs/GRAMMAR.md](docs/GRAMMAR.md).
 - **External client compatibility:** Verified continuously by `tests/Hoshin.Tests/BlackBox/clients.test.mjs` against [CLIENTS.md](CLIENTS.md); Kata Workbench upgrade steps are documented in [docs/KATA_MIGRATION.md](docs/KATA_MIGRATION.md).
