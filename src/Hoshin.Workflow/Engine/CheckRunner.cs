@@ -29,11 +29,7 @@ public sealed class CheckRunner(
         }
 
         var baseline = new WorkflowBaselineRun(sha, passed, string.Join("\n", outputs), _time.GetUtcNow());
-        repo.WithLedger(l =>
-        {
-            l.Baselines.Add(baseline);
-            return 0;
-        });
+        repo.UpdateLedger(l => l with { Baselines = new List<WorkflowBaselineRun>(l.WorkflowBaselines) { baseline } });
         return baseline;
     }
 
@@ -52,11 +48,7 @@ public sealed class CheckRunner(
 
         var codeHead = state.EffectiveCodeHead;
         var result = new WorkflowCheckRun(codeHead, passed, string.Join("\n", outputs), _time.GetUtcNow());
-        repo.WithLedger(l =>
-        {
-            l.Checks.Add(result);
-            return 0;
-        });
+        repo.UpdateLedger(l => l with { Checks = new List<WorkflowCheckRun>(l.WorkflowChecks) { result } });
         return result;
     }
 }
@@ -70,15 +62,10 @@ public sealed class ApprovalRecorder(TimeProvider timeProvider) : IApprovalRecor
     {
         var codeHead = state.EffectiveCodeHead;
         var approval = new WorkflowApproval(codeHead, approved, note, _time.GetUtcNow());
-        repo.WithLedger(l =>
-        {
-            if (!l.Approvals.Any(a => a.Head == codeHead))
-            {
-                l.Approvals.Add(approval);
-            }
-
-            return 0;
-        });
+        repo.UpdateLedger(l =>
+            l.WorkflowApprovalRecords.Any(a => a.Head == codeHead)
+                ? l
+                : l with { WorkflowApprovals = new List<WorkflowApproval>(l.WorkflowApprovalRecords) { approval } });
         return approval;
     }
 }

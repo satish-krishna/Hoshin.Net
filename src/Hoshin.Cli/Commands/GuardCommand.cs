@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Hoshin.Cli.Hooks;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Commands;
@@ -20,6 +21,7 @@ public sealed class GuardCommand(
     IGitQuery gitQuery,
     IGitStatus gitStatus,
     IFileSystem fileSystem,
+    LedgerStore ledgerStore,
     TimeProvider timeProvider) : IHoshinCommand
 {
     private readonly HarnessAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
@@ -27,6 +29,7 @@ public sealed class GuardCommand(
     private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
     private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+    private readonly LedgerStore _ledgerStore = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     private const string GitPrefix = @"\bgit\s+(?:(?:(?:-C|-c|--git-dir|--work-tree|--namespace)(?:=\S+|\s+\S+)|--?[\w-]+(?:=\S+)?)\s+)*";
@@ -97,7 +100,7 @@ public sealed class GuardCommand(
     }
 
     public (WorkflowRepo? Repo, string? Reason) Evaluate(NormalizedHookEvent ev) =>
-        Evaluate(ev, _gitWorktrees, _gitQuery, _gitStatus, _fs, _time);
+        Evaluate(ev, _gitWorktrees, _gitQuery, _gitStatus, _fs, _ledgerStore, _time);
 
     public static (WorkflowRepo? Repo, string? Reason) Evaluate(
         NormalizedHookEvent ev,
@@ -105,11 +108,12 @@ public sealed class GuardCommand(
         IGitQuery gitQuery,
         IGitStatus gitStatus,
         IFileSystem fileSystem,
+        LedgerStore ledgerStore,
         TimeProvider timeProvider)
     {
         // 1. Scope first (D2): guard applies only inside a repository with an active, non-stale hoshin run for this session.
         var cwd = string.IsNullOrWhiteSpace(ev.Cwd) ? Directory.GetCurrentDirectory() : ev.Cwd;
-        var repo = WorkflowRepo.Find(cwd, gitWorktrees, gitQuery, gitStatus, fileSystem);
+        var repo = WorkflowRepo.Find(cwd, gitWorktrees, gitQuery, gitStatus, fileSystem, ledgerStore);
         if (repo is null || !fileSystem.FileExists(repo.RunMarkerPath))
         {
             return (null, null);

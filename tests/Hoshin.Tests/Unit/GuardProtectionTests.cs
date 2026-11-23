@@ -119,7 +119,7 @@ public sealed class GuardProtectionTests
         });
         orchestrator.HandleStart(TestServices.HookAdapter.Parse(startPayload), rolesRoot: null);
         Assert.True(File.Exists(repo.RunMarkerPath));
-        Assert.NotEmpty(repo.ReadLedger().Issued);
+        Assert.NotEmpty(repo.ReadLedger().WorkflowIssued);
 
         // Tampering: delete run.json mid-build.
         File.Delete(repo.RunMarkerPath);

@@ -23,12 +23,13 @@ public sealed class TaskEvaluatorFakeGitTests
         var fakeGit = new RecordingFakeGit("1111111111111111111111111111111111111111", "?? test/t1.test.mjs\0?? src/app.mjs\0");
         var fakeRunner = new FakeTestRunner(repoRoot);
         var fs = new PhysicalFileSystem();
-        var repo = new WorkflowRepo(repoRoot, gitDir, changeDir, fakeGit, fakeGit, fs);
+        var ledgerStore = new Hoshin.Workflow.Events.LedgerStore(fakeGit, fs);
+        var repo = new WorkflowRepo(repoRoot, gitDir, changeDir, fakeGit, fakeGit, fs, ledgerStore);
 
         var task = new WorkflowTask("T1", "add greeting", "Implement greet", ["fake-test", "test/t1.test.mjs"]);
         var plan = new WorkflowPlan("c1", "demo", "main", [task], []);
         var missingDoc = new WorkflowDocState(Path.Combine(changeDir, "intent.md"), false, false, false, null, null);
-        var state = new WorkflowState(repoRoot, changeDir, plan, fakeGit.HeadSha, new WorkflowLedger(), null, missingDoc, missingDoc, missingDoc);
+        var state = new WorkflowState(repoRoot, changeDir, plan, fakeGit.HeadSha, Hoshin.Workflow.Events.LedgerStore.Empty(), null, missingDoc, missingDoc, missingDoc);
 
         var evaluator = new TaskEvaluator(fakeGit, fakeGit, fakeGit, fakeGit, fakeRunner, TimeProvider.System);
         var verdict = evaluator.EvaluateAndCommitTask(repo, state, "T1", 1);

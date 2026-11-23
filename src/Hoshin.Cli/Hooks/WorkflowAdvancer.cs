@@ -1,6 +1,7 @@
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Hooks;
@@ -14,6 +15,7 @@ internal sealed class WorkflowAdvancer(
     IGitQuery gitQuery,
     IGitStatus gitStatus,
     IFileSystem fileSystem,
+    LedgerStore ledgerStore,
     PlanReader planReader)
 {
     private readonly ITaskEvaluator _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
@@ -23,6 +25,7 @@ internal sealed class WorkflowAdvancer(
     private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
     private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+    private readonly LedgerStore _ledgerStore = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
     private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
 
     public IFileSystem FileSystem => _fs;
@@ -30,7 +33,7 @@ internal sealed class WorkflowAdvancer(
     public PlanReader PlanReader => _planReader;
 
     public WorkflowRepo? ResolveRepo(NormalizedHookEvent ev) =>
-        WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _gitWorktrees, _gitQuery, _gitStatus, _fs);
+        WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _gitWorktrees, _gitQuery, _gitStatus, _fs, _ledgerStore);
 
     public WorkflowState? ReadState(WorkflowRepo repo, string? rolesRoot, out string? error)
     {

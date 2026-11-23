@@ -41,11 +41,7 @@ public sealed class Publisher(
         }
 
         var published = new WorkflowPublished(state.EffectiveCodeHead, targetRef, _time.GetUtcNow(), prUrl);
-        repo.WithLedger(l =>
-        {
-            l.Published.Add(published);
-            return 0;
-        });
+        repo.UpdateLedger(l => l with { Published = new List<WorkflowPublished>(l.WorkflowPublishedRecords) { published } });
         return new WorkflowPublishResult(published, null);
     }
 

@@ -255,6 +255,7 @@ public sealed class HoshinServices
             Git,
             Git,
             FileSystem,
+            Ledger,
             PlanReader,
             TimeProvider));
     }

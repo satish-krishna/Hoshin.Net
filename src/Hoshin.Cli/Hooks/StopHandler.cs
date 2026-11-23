@@ -77,7 +77,7 @@ internal sealed class StopHandler(
         var report = TurnState.DrainPendingReport(repo, _fs);
         if (current is { Task: not null }
             && trackedAgentId is not null
-            && !repo.ReadLedger().Verdicts.Any(v => v.Task == current.Task && v.Attempt == current.Attempt))
+            && !repo.ReadLedger().WorkflowVerdicts.Any(v => v.Task == current.Task && v.Attempt == current.Attempt))
         {
             var (verdict, _) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId);
             report += WorkflowAdvancer.ReportVerdict(current, verdict);

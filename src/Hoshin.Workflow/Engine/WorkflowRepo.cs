@@ -1,38 +1,63 @@
+using System.Text.Json;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
 
 /// <summary>
-/// A git repository hosting a workflow run, together with its change folder and <c>.git/hoshin/</c> ledger/step paths.
+/// A git repository hosting a workflow run, together with its change folder and unified <see cref="RepoLedger"/> /
+/// <c>.git/hoshin/</c> step and run-marker paths.
 /// Performs zero direct process execution; every Git query goes through narrow <see cref="IGitQuery"/> / <see cref="IGitStatus"/> interfaces.
 /// </summary>
-public sealed class WorkflowRepo(
-    string root,
-    string gitCommonDir,
-    string changeFolder,
-    IGitQuery gitQuery,
-    IGitStatus gitStatus,
-    IFileSystem fileSystem)
+public sealed class WorkflowRepo
 {
-    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
-    private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
-    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+    private readonly IGitQuery _gitQuery;
+    private readonly IGitStatus _gitStatus;
+    private readonly IFileSystem _fs;
+    private readonly LedgerStore _ledgerStore;
+    private readonly WorkflowLedgerCoordinates _coords;
 
-    public string Root { get; } = Path.GetFullPath(root);
+    public WorkflowRepo(
+        string root,
+        string gitCommonDir,
+        string changeFolder,
+        IGitQuery gitQuery,
+        IGitStatus gitStatus,
+        IFileSystem fileSystem,
+        LedgerStore ledgerStore)
+    {
+        _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
+        _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
+        _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+        _ledgerStore = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
 
-    public string HoshinDir { get; } = Path.Combine(Path.GetFullPath(gitCommonDir), "hoshin");
+        Root = Path.GetFullPath(root);
+        HoshinDir = Path.Combine(Path.GetFullPath(gitCommonDir), "hoshin");
+        ChangeFolder = Path.GetFullPath(changeFolder);
+        _coords = ChangeLedgerPaths.ResolveCoordinates(Root, ChangeFolder, _fs);
+    }
 
-    public string ChangeFolder { get; } = Path.GetFullPath(changeFolder);
+    public string Root { get; }
+
+    public string HoshinDir { get; }
+
+    public string ChangeFolder { get; }
 
     public IGitQuery GitQuery => _gitQuery;
 
     public IGitStatus GitStatus => _gitStatus;
 
-    public string ChangeKey => ChangeLedgerPaths.ResolveChangeKey(ChangeFolder);
+    public string SystemKey => _coords.System;
 
-    public string LedgerPath => ChangeLedgerPaths.LedgerPath(HoshinDir, ChangeKey);
+    public string ChangeKey => _coords.Change;
+
+    public string RepoKey => _coords.Repo;
+
+    public string LedgerFolder => Path.Combine(HoshinDir, SystemKey, ChangeKey);
+
+    public string LedgerPath => Path.Combine(LedgerFolder, $"{RepoKey}.json");
 
     public string StepPath => Path.Combine(HoshinDir, "step.json");
 
@@ -52,12 +77,14 @@ public sealed class WorkflowRepo(
         IGitQuery gitQuery,
         IGitStatus gitStatus,
         IFileSystem fileSystem,
+        LedgerStore ledgerStore,
         string? explicitChangeFolder = null)
     {
         ArgumentNullException.ThrowIfNull(gitWorktrees);
         ArgumentNullException.ThrowIfNull(gitQuery);
         ArgumentNullException.ThrowIfNull(gitStatus);
         ArgumentNullException.ThrowIfNull(fileSystem);
+        ArgumentNullException.ThrowIfNull(ledgerStore);
         if (!fileSystem.DirectoryExists(directory))
         {
             return null;
@@ -73,7 +100,7 @@ public sealed class WorkflowRepo(
         var root = Path.GetFullPath(top);
         var commonDir = Path.GetFullPath(dirs.Common);
         var changeFolder = ChangeFolderResolver.Resolve(root, commonDir, explicitChangeFolder, fileSystem);
-        return new WorkflowRepo(root, commonDir, changeFolder, gitQuery, gitStatus, fileSystem);
+        return new WorkflowRepo(root, commonDir, changeFolder, gitQuery, gitStatus, fileSystem, ledgerStore);
     }
 
     public string Head() => _gitQuery.CommitOf(Root, "HEAD") ?? "";
@@ -117,21 +144,60 @@ public sealed class WorkflowRepo(
         }
     }
 
-    public WorkflowLedger ReadLedger() => WorkflowLedgerStore.ReadLedger(this, _fs);
+    public RepoLedger ReadLedger()
+    {
+        var migrated = ChangeLedgerPaths.TryMigrateLegacyLedger(
+            HoshinDir,
+            Root,
+            ChangeFolder,
+            _coords,
+            ReadRunMarker(),
+            _fs,
+            _ledgerStore);
+        if (migrated is not null)
+        {
+            return migrated;
+        }
 
-    public void WriteLedger(WorkflowLedger ledger) => WorkflowLedgerStore.WriteLedger(this, _fs, ledger);
+        return _ledgerStore.Read(LedgerFolder, RepoKey) ?? LedgerStore.Empty(SystemKey, ChangeKey, RepoKey, Root);
+    }
 
-    public CurrentStep? ReadStep() => WorkflowLedgerStore.ReadStep(this, _fs);
+    public void WriteLedger(RepoLedger ledger) =>
+        _ledgerStore.Write(LedgerFolder, ledger);
 
-    public void WriteStep(CurrentStep step) => WorkflowLedgerStore.WriteStep(this, _fs, step);
+    public RepoLedger UpdateLedger(Func<RepoLedger, RepoLedger> update) =>
+        _ledgerStore.Update(
+            LedgerFolder,
+            RepoKey,
+            () => ChangeLedgerPaths.TryMigrateLegacyLedger(
+                      HoshinDir,
+                      Root,
+                      ChangeFolder,
+                      _coords,
+                      ReadRunMarker(),
+                      _fs,
+                      _ledgerStore)
+                  ?? LedgerStore.Empty(SystemKey, ChangeKey, RepoKey, Root),
+            update);
 
-    public RunMarker? ReadRunMarker() => WorkflowLedgerStore.ReadRunMarker(this, _fs);
+    public CurrentStep? ReadStep() =>
+        _fs.FileExists(StepPath)
+            ? JsonSerializer.Deserialize(_fs.ReadAllText(StepPath), WorkflowJsonContext.Default.CurrentStep)
+            : null;
 
-    public void WriteRunMarker(RunMarker marker) => WorkflowLedgerStore.WriteRunMarker(this, _fs, marker);
+    public void WriteStep(CurrentStep step) =>
+        _fs.WriteAllTextAtomic(StepPath, JsonSerializer.Serialize(step, WorkflowJsonContext.Default.CurrentStep));
 
-    public T WithLedger<T>(Func<WorkflowLedger, T> update) => WorkflowLedgerStore.WithLedger(this, _fs, update);
+    public RunMarker? ReadRunMarker() =>
+        _fs.FileExists(RunMarkerPath)
+            ? JsonSerializer.Deserialize(_fs.ReadAllText(RunMarkerPath), WorkflowJsonContext.Default.RunMarker)
+            : null;
 
-    public FileStream AcquireRunLock(TimeSpan? timeout = null) => WorkflowLedgerStore.AcquireRunLock(this, timeout);
+    public void WriteRunMarker(RunMarker marker) =>
+        _fs.WriteAllTextAtomic(RunMarkerPath, JsonSerializer.Serialize(marker, WorkflowJsonContext.Default.RunMarker));
+
+    public FileStream AcquireRunLock(TimeSpan? timeout = null) =>
+        FileLock.Acquire(RunLockPath, timeout ?? TimeSpan.FromMinutes(10));
 
     /// <summary>Checks whether a repository-relative path matches any configured test glob pattern or explicit task test file.</summary>
     public static bool IsTestPath(string relativePath, IReadOnlyList<string>? testPatterns = null, IReadOnlyList<string>? taskTestFiles = null) =>

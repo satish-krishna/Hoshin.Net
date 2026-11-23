@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Hoshin.Workflow.Engine;
 using Xunit;
 
@@ -45,14 +46,13 @@ public sealed class ScopedWorkflowLedgerTests
         });
 
         var repoA = TestServices.FindRepo(repoDir, "intent/demo/change-a")!;
-        repoA.WithLedger(l =>
+        repoA.UpdateLedger(l => l with
         {
-            l.Verdicts.Add(new WorkflowVerdict("T1", 1, repoA.Head(), true, "observed", [], DateTimeOffset.UtcNow));
-            return 0;
+            Verdicts = [new WorkflowVerdict("T1", 1, repoA.Head(), true, "observed", [], DateTimeOffset.UtcNow)],
         });
 
         Assert.IsType<RunChecks>(WorkflowEngine.Next(TestServices.ReadState(repoA)!));
-        Assert.True(File.Exists(Path.Combine(repoA.HoshinDir, "changes", "change-a", "workflow-ledger.json")));
+        Assert.True(File.Exists(Path.Combine(repoA.HoshinDir, "demo", "change-a", "master.json")));
 
         // Switch run to change B (which also has task T1).
         var repoB = TestServices.FindRepo(repoDir, "intent/demo/change-b")!;
@@ -79,13 +79,18 @@ public sealed class ScopedWorkflowLedgerTests
         repoA.WriteRunMarker(new RunMarker(DateTimeOffset.UtcNow, "s1", "claude-code", repoA.ChangeFolder));
 
         var legacyPath = Path.Combine(repoA.HoshinDir, "workflow-ledger.json");
-        var legacyLedger = new WorkflowLedger();
-        legacyLedger.Verdicts.Add(new WorkflowVerdict("T1", 1, repoA.Head(), true, "observed", [], DateTimeOffset.UtcNow));
-        File.WriteAllText(legacyPath, System.Text.Json.JsonSerializer.Serialize(legacyLedger, WorkflowJsonContext.Default.WorkflowLedger));
+        var legacyJson = JsonSerializer.Serialize(new
+        {
+            verdicts = new[]
+            {
+                new WorkflowVerdict("T1", 1, repoA.Head(), true, "observed", [], DateTimeOffset.UtcNow),
+            },
+        });
+        File.WriteAllText(legacyPath, legacyJson);
 
         var read = repoA.ReadLedger();
-        Assert.Single(read.Verdicts);
-        Assert.False(File.Exists(legacyPath), "Legacy ledger should be moved once.");
-        Assert.True(File.Exists(Path.Combine(repoA.HoshinDir, "changes", "change-a", "workflow-ledger.json")));
+        Assert.Single(read.WorkflowVerdicts);
+        Assert.False(File.Exists(legacyPath), "Legacy ledger should be migrated once.");
+        Assert.True(File.Exists(Path.Combine(repoA.HoshinDir, "demo", "change-a", "master.json")));
     }
 }

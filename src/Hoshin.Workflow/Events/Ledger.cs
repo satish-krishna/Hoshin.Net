@@ -1,7 +1,7 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Events;
@@ -54,7 +54,37 @@ public sealed record RepoLedger(
     [property: JsonPropertyName("runs")] List<EventRecord> Runs,
     [property: JsonPropertyName("gateBlocks")] Dictionary<string, int> GateBlocks,
     [property: JsonPropertyName("approvals"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<BaselineApproval>? Approvals = null,
-    [property: JsonPropertyName("reds"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<RedRecord>? Reds = null);
+    [property: JsonPropertyName("reds"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<RedRecord>? Reds = null,
+    [property: JsonPropertyName("issued"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowIssued>? Issued = null,
+    [property: JsonPropertyName("verdicts"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowVerdict>? Verdicts = null,
+    [property: JsonPropertyName("baselines"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowBaselineRun>? Baselines = null,
+    [property: JsonPropertyName("checks"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowCheckRun>? Checks = null,
+    [property: JsonPropertyName("reviews"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowReviewRun>? Reviews = null,
+    [property: JsonPropertyName("workflowApprovals"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowApproval>? WorkflowApprovals = null,
+    [property: JsonPropertyName("published"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<WorkflowPublished>? Published = null,
+    [property: JsonPropertyName("activeSubagent"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ActiveSubagent? ActiveSubagent = null)
+{
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowIssued> WorkflowIssued => Issued ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowVerdict> WorkflowVerdicts => Verdicts ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowBaselineRun> WorkflowBaselines => Baselines ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowCheckRun> WorkflowChecks => Checks ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowReviewRun> WorkflowReviews => Reviews ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowApproval> WorkflowApprovalRecords => WorkflowApprovals ?? [];
+
+    [JsonIgnore]
+    public IReadOnlyList<WorkflowPublished> WorkflowPublishedRecords => Published ?? [];
+}
 
 /// <summary>Atomic per-repository ledger storage in <c>&lt;git-common-dir&gt;/hoshin/&lt;system&gt;/&lt;change&gt;/&lt;repo&gt;.json</c>.</summary>
 public sealed class LedgerStore(IGitWorktrees git, IFileSystem fileSystem)
@@ -136,7 +166,7 @@ public sealed class LedgerStore(IGitWorktrees git, IFileSystem fileSystem)
         return updated;
     }
 
-    public static RepoLedger Empty(string system, string change, string repo, string path) =>
+    public static RepoLedger Empty(string system = "default", string change = "default", string repo = "master", string path = "") =>
         new(1, system, change, repo, path, [], new Dictionary<string, int>(StringComparer.Ordinal));
 
     public static EventRecord? Latest(RepoLedger? ledger, string eventName, string? key, string? subject = null)

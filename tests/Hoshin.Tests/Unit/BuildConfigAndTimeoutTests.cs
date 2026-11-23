@@ -101,8 +101,10 @@ public sealed class BuildConfigAndTimeoutTests
             Checks: [],
             MaxAttempts: 1);
 
-        var ledger = new WorkflowLedger();
-        ledger.Verdicts.Add(new WorkflowVerdict("T1", 1, "abc1234", false, "not observed", ["green: failed"], DateTimeOffset.UtcNow));
+        var ledger = Hoshin.Workflow.Events.LedgerStore.Empty() with
+        {
+            Verdicts = [new WorkflowVerdict("T1", 1, "abc1234", false, "not observed", ["green: failed"], DateTimeOffset.UtcNow)],
+        };
 
         var missingDoc = new WorkflowDocState("", false, false, false, null, null);
         var state = new WorkflowState("/repo", "/repo/.hoshin", plan, "abc1234", ledger, null, missingDoc, missingDoc, missingDoc);

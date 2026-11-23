@@ -1,5 +1,6 @@
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
 using Xunit;
 
@@ -21,17 +22,17 @@ public sealed class PublishAndReviewGateTests
         Checks: [],
         Branch: branch);
 
-    private static WorkflowState StateAtChecksGreen(WorkflowLedger? ledger = null, string head = "code1111111", string? codeHead = null)
+    private static WorkflowState StateAtChecksGreen(RepoLedger? ledger = null, string head = "code1111111", string? codeHead = null)
     {
-        var l = ledger ?? new WorkflowLedger();
-        if (l.Verdicts.Count == 0)
+        var l = ledger ?? LedgerStore.Empty();
+        if (l.WorkflowVerdicts.Count == 0)
         {
-            l.Verdicts.Add(new WorkflowVerdict("T1", 1, codeHead ?? head, true, "observed", [], DateTimeOffset.UtcNow));
+            l = l with { Verdicts = [new WorkflowVerdict("T1", 1, codeHead ?? head, true, "observed", [], DateTimeOffset.UtcNow)] };
         }
 
-        if (l.Checks.Count == 0)
+        if (l.WorkflowChecks.Count == 0)
         {
-            l.Checks.Add(new WorkflowCheckRun(codeHead ?? head, true, "ok", DateTimeOffset.UtcNow));
+            l = l with { Checks = [new WorkflowCheckRun(codeHead ?? head, true, "ok", DateTimeOffset.UtcNow)] };
         }
 
         return new WorkflowState(
@@ -64,10 +65,12 @@ public sealed class PublishAndReviewGateTests
     [Fact]
     public void Next_WithHighReviewFindings_ReturnsDoneFalse()
     {
-        var ledger = new WorkflowLedger();
-        ledger.Verdicts.Add(new WorkflowVerdict("T1", 1, "code1111111", true, "observed", [], DateTimeOffset.UtcNow));
-        ledger.Checks.Add(new WorkflowCheckRun("code1111111", true, "ok", DateTimeOffset.UtcNow));
-        ledger.Reviews.Add(new WorkflowReviewRun("code1111111", 1, 2, 1, DateTimeOffset.UtcNow));
+        var ledger = LedgerStore.Empty() with
+        {
+            Verdicts = [new WorkflowVerdict("T1", 1, "code1111111", true, "observed", [], DateTimeOffset.UtcNow)],
+            Checks = [new WorkflowCheckRun("code1111111", true, "ok", DateTimeOffset.UtcNow)],
+            Reviews = [new WorkflowReviewRun("code1111111", 1, 2, 1, DateTimeOffset.UtcNow)],
+        };
 
         var done = Assert.IsType<Done>(WorkflowEngine.Next(StateAtChecksGreen(ledger)));
         Assert.False(done.Success);
@@ -77,10 +80,12 @@ public sealed class PublishAndReviewGateTests
     [Fact]
     public void Next_WithCleanReview_ReturnsNeedsApproval()
     {
-        var ledger = new WorkflowLedger();
-        ledger.Verdicts.Add(new WorkflowVerdict("T1", 1, "code1111111", true, "observed", [], DateTimeOffset.UtcNow));
-        ledger.Checks.Add(new WorkflowCheckRun("code1111111", true, "ok", DateTimeOffset.UtcNow));
-        ledger.Reviews.Add(new WorkflowReviewRun("code1111111", 1, 1, 0, DateTimeOffset.UtcNow));
+        var ledger = LedgerStore.Empty() with
+        {
+            Verdicts = [new WorkflowVerdict("T1", 1, "code1111111", true, "observed", [], DateTimeOffset.UtcNow)],
+            Checks = [new WorkflowCheckRun("code1111111", true, "ok", DateTimeOffset.UtcNow)],
+            Reviews = [new WorkflowReviewRun("code1111111", 1, 1, 0, DateTimeOffset.UtcNow)],
+        };
 
         var approval = Assert.IsType<NeedsApproval>(WorkflowEngine.Next(StateAtChecksGreen(ledger)));
         Assert.Equal("code1111111", approval.Head);
@@ -122,11 +127,10 @@ public sealed class PublishAndReviewGateTests
 
         var repo = TestServices.FindRepo(repoDir)!;
         var codeHead = repo.Head();
-        repo.WithLedger(l =>
+        repo.UpdateLedger(l => l with
         {
-            l.Verdicts.Add(new WorkflowVerdict("T1", 1, codeHead, true, "observed", [], DateTimeOffset.UtcNow));
-            l.Checks.Add(new WorkflowCheckRun(codeHead, true, "ok", DateTimeOffset.UtcNow));
-            return 0;
+            Verdicts = [new WorkflowVerdict("T1", 1, codeHead, true, "observed", [], DateTimeOffset.UtcNow)],
+            Checks = [new WorkflowCheckRun(codeHead, true, "ok", DateTimeOffset.UtcNow)],
         });
 
         var beforeReview = TestServices.ReadState(repo)!;
@@ -269,7 +273,7 @@ public sealed class PublishAndReviewGateTests
         var result = runner.Publish(repo, state, $"refs/heads/{state.Plan.EffectiveBranch}");
         Assert.False(result.Ok);
         Assert.Contains("gh auth required", result.Error, StringComparison.Ordinal);
-        Assert.Empty(repo.ReadLedger().Published);
+        Assert.Empty(repo.ReadLedger().WorkflowPublishedRecords);
     }
 
     private sealed class FakePullRequestClient : IPullRequestClient

@@ -95,7 +95,7 @@ public sealed class SessionIsolationTests
 
         var (output, _) = orchestrator.HandleResult(resultEv, SkillsDir);
         Assert.Null(output);
-        Assert.Empty(repo.ReadLedger().Verdicts);
+        Assert.Empty(repo.ReadLedger().WorkflowVerdicts);
     }
 
     [Fact]

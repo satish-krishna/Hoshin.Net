@@ -194,19 +194,6 @@ public sealed record WorkflowReviewRun(string Head, int ReviewNumber, int Findin
 /// <summary>An active async subagent recorded in the ledger so concurrent launches are refused and completion is judged once.</summary>
 public sealed record ActiveSubagent(string Task, int Attempt, string AgentId, DateTimeOffset LaunchedAt);
 
-/// <summary>Everything a workflow run has decided for a change. Lives in <c>.git/hoshin/changes/&lt;change&gt;/workflow-ledger.json</c>; no host owns a copy.</summary>
-public sealed class WorkflowLedger
-{
-    public List<WorkflowIssued> Issued { get; set; } = [];
-    public List<WorkflowVerdict> Verdicts { get; set; } = [];
-    public List<WorkflowBaselineRun> Baselines { get; set; } = [];
-    public List<WorkflowCheckRun> Checks { get; set; } = [];
-    public List<WorkflowReviewRun> Reviews { get; set; } = [];
-    public List<WorkflowApproval> Approvals { get; set; } = [];
-    public List<WorkflowPublished> Published { get; set; } = [];
-    public ActiveSubagent? ActiveSubagent { get; set; }
-}
-
 /// <summary>
 /// Fast-path step state written beside the ledger (<c>.git/hoshin/step.json</c>) so <c>hoshin guard</c> never
 /// recomputes <see cref="WorkflowState"/> and isolates unrelated sessions.
@@ -235,7 +222,6 @@ public sealed record RunMarker(
     string? Change = null);
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-[JsonSerializable(typeof(WorkflowLedger))]
 [JsonSerializable(typeof(CurrentStep))]
 [JsonSerializable(typeof(AgentTask))]
 [JsonSerializable(typeof(RunMarker))]

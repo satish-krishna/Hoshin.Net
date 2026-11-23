@@ -1,3 +1,5 @@
+using Hoshin.Workflow.Events;
+
 namespace Hoshin.Workflow.Engine;
 
 /// <summary>
@@ -8,9 +10,9 @@ public static class WorkflowHeadGuard
 {
     public const string UnexpectedHeadMoveReason = "git: HEAD moved outside the workflow";
 
-    public static bool HasUnexpectedHeadMove(WorkflowLedger ledger, string taskId, string currentHead)
+    public static bool HasUnexpectedHeadMove(RepoLedger ledger, string taskId, string currentHead)
     {
-        var issued = ledger.Issued.FirstOrDefault(x => x.Task == taskId);
+        var issued = ledger.WorkflowIssued.FirstOrDefault(x => x.Task == taskId);
         if (issued is null || string.IsNullOrEmpty(issued.StartHead))
         {
             return false;
@@ -21,6 +23,6 @@ public static class WorkflowHeadGuard
             return false;
         }
 
-        return !ledger.Verdicts.Any(v => v.Passed && string.Equals(v.Head, currentHead, StringComparison.Ordinal));
+        return !ledger.WorkflowVerdicts.Any(v => v.Passed && string.Equals(v.Head, currentHead, StringComparison.Ordinal));
     }
 }

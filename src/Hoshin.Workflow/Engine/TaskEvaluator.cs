@@ -1,3 +1,4 @@
+using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Workflow.Engine;
@@ -43,16 +44,17 @@ public sealed class TaskEvaluator(
     public bool TryRegisterActiveSubagent(WorkflowRepo repo, string taskId, int attempt, string agentId, out string? existingAgentId)
     {
         string? conflict = null;
-        var registered = repo.WithLedger(ledger =>
+        var registered = false;
+        repo.UpdateLedger(ledger =>
         {
             if (ledger.ActiveSubagent is { } active && !string.Equals(active.AgentId, agentId, StringComparison.Ordinal))
             {
                 conflict = active.AgentId;
-                return false;
+                return ledger;
             }
 
-            ledger.ActiveSubagent = new ActiveSubagent(taskId, attempt, agentId, _time.GetUtcNow());
-            return true;
+            registered = true;
+            return ledger with { ActiveSubagent = new ActiveSubagent(taskId, attempt, agentId, _time.GetUtcNow()) };
         });
 
         existingAgentId = conflict;
@@ -66,15 +68,10 @@ public sealed class TaskEvaluator(
 
     public void ClearActiveSubagent(WorkflowRepo repo, string? agentId = null)
     {
-        repo.WithLedger(ledger =>
-        {
-            if (agentId is null || ledger.ActiveSubagent?.AgentId == agentId)
-            {
-                ledger.ActiveSubagent = null;
-            }
-
-            return 0;
-        });
+        repo.UpdateLedger(ledger =>
+            agentId is null || ledger.ActiveSubagent?.AgentId == agentId
+                ? ledger with { ActiveSubagent = null }
+                : ledger);
 
         var step = repo.ReadStep();
         if (step is not null && (agentId is null || step.AgentId == agentId))
@@ -89,7 +86,7 @@ public sealed class TaskEvaluator(
 
         using var runLock = repo.AcquireRunLock();
         var liveLedger = repo.ReadLedger();
-        if (liveLedger.Verdicts.FirstOrDefault(v => v.Task == taskId && v.Attempt == attempt) is { } existing)
+        if (liveLedger.WorkflowVerdicts.FirstOrDefault(v => v.Task == taskId && v.Attempt == attempt) is { } existing)
         {
             return existing;
         }
@@ -100,7 +97,7 @@ public sealed class TaskEvaluator(
 
         if (ValidatePreConditions(repo, liveLedger, task, attempt, startHead, now, out var changed) is { } earlyFail)
         {
-            return RecordVerdict(repo, earlyFail);
+            return RecordVerdict(repo, task, earlyFail);
         }
 
         var policy = _verdictPolicies.First(p => p.AppliesTo(task));
@@ -115,7 +112,7 @@ public sealed class TaskEvaluator(
             _gitCommitter,
             _runner,
             now));
-        return RecordVerdict(repo, verdict);
+        return RecordVerdict(repo, task, verdict);
     }
 
     private void IssueTaskStep(WorkflowRepo repo, WorkflowState state, Step step, string? sessionId)
@@ -133,24 +130,28 @@ public sealed class TaskEvaluator(
 
     private void RecordIssued(WorkflowRepo repo, AgentTask agent)
     {
-        repo.WithLedger(ledger =>
+        repo.UpdateLedger(ledger =>
         {
-            if (!ledger.Issued.Any(x => x.Task == agent.Task && x.Attempt == agent.Attempt))
+            if (ledger.WorkflowIssued.Any(x => x.Task == agent.Task && x.Attempt == agent.Attempt))
             {
-                var firstForTask = ledger.Issued.FirstOrDefault(x => x.Task == agent.Task);
-                var taskStart = firstForTask?.StartHead ?? _gitQuery.CommitOf(repo.Root, "HEAD") ?? "";
-                var snapshot = WorkingTreeSnapshot.Capture(repo, _gitStatus);
-                var preIssuePaths = firstForTask?.PreIssuePaths ?? snapshot.PathDigests;
-                ledger.Issued.Add(new WorkflowIssued(
+                return ledger;
+            }
+
+            var firstForTask = ledger.WorkflowIssued.FirstOrDefault(x => x.Task == agent.Task);
+            var taskStart = firstForTask?.StartHead ?? _gitQuery.CommitOf(repo.Root, "HEAD") ?? "";
+            var snapshot = WorkingTreeSnapshot.Capture(repo, _gitStatus);
+            var preIssuePaths = firstForTask?.PreIssuePaths ?? snapshot.PathDigests;
+            var updatedIssued = new List<WorkflowIssued>(ledger.WorkflowIssued)
+            {
+                new(
                     agent.Task,
                     agent.Attempt,
                     taskStart,
                     _time.GetUtcNow(),
                     snapshot.IndexHadStagedChanges,
-                    preIssuePaths));
-            }
-
-            return 0;
+                    preIssuePaths),
+            };
+            return ledger with { Issued = updatedIssued };
         });
     }
 
@@ -163,7 +164,7 @@ public sealed class TaskEvaluator(
         bool hasTest,
         string[]? taskTestFiles)
     {
-        var start = repo.ReadLedger().Issued.First(x => x.Task == agent.Task).StartHead;
+        var start = repo.ReadLedger().WorkflowIssued.First(x => x.Task == agent.Task).StartHead;
         var previous = repo.ReadStep();
         var same = previous is not null && previous.Task == agent.Task && previous.Attempt == agent.Attempt;
         var activeSession = sessionId ?? previous?.SessionId ?? repo.ReadRunMarker()?.SessionId;
@@ -200,7 +201,7 @@ public sealed class TaskEvaluator(
 
     private WorkflowVerdict? ValidatePreConditions(
         WorkflowRepo repo,
-        WorkflowLedger liveLedger,
+        RepoLedger liveLedger,
         WorkflowTask task,
         int attempt,
         string startHead,
@@ -213,7 +214,7 @@ public sealed class TaskEvaluator(
             return new WorkflowVerdict(task.Id, attempt, startHead, false, "not observed: HEAD moved outside the workflow", [WorkflowHeadGuard.UnexpectedHeadMoveReason], now);
         }
 
-        var issued = liveLedger.Issued.FirstOrDefault(x => x.Task == task.Id && x.Attempt == attempt);
+        var issued = liveLedger.WorkflowIssued.FirstOrDefault(x => x.Task == task.Id && x.Attempt == attempt);
         if (issued?.IndexHadStagedChanges == true)
         {
             return new WorkflowVerdict(task.Id, attempt, startHead, false, "not observed: index had staged changes", [WorkingTreeSnapshot.StagedIndexRefusalReason], now);
@@ -245,16 +246,56 @@ public sealed class TaskEvaluator(
         _ => null,
     };
 
-    private static WorkflowVerdict RecordVerdict(WorkflowRepo repo, WorkflowVerdict verdict)
+    private static WorkflowVerdict RecordVerdict(WorkflowRepo repo, WorkflowTask task, WorkflowVerdict verdict)
     {
-        repo.WithLedger(ledger =>
+        repo.UpdateLedger(ledger =>
         {
-            if (!ledger.Verdicts.Any(v => v.Task == verdict.Task && v.Attempt == verdict.Attempt))
+            if (ledger.WorkflowVerdicts.Any(v => v.Task == verdict.Task && v.Attempt == verdict.Attempt))
             {
-                ledger.Verdicts.Add(verdict);
+                return ledger;
             }
 
-            return 0;
+            var verdicts = new List<WorkflowVerdict>(ledger.WorkflowVerdicts) { verdict };
+            var reds = ledger.Reds;
+            if (task.Test is { Length: > 0 } && verdict.Passed && !string.IsNullOrEmpty(verdict.TestCommit))
+            {
+                reds = new List<RedRecord>(reds ?? [])
+                {
+                    new(
+                        task.Id,
+                        verdict.TestCommit,
+                        task.Compile,
+                        task.Test,
+                        "failed",
+                        1,
+                        verdict.Red,
+                        verdict.At.ToString("O")),
+                };
+            }
+
+            var details = new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["attempt"] = verdict.Attempt,
+                ["red"] = verdict.Red,
+            };
+            if (!string.IsNullOrEmpty(verdict.TestCommit))
+            {
+                details["testCommit"] = verdict.TestCommit;
+            }
+
+            var run = new EventRecord(
+                Event: "task.done",
+                Repo: ledger.Repo,
+                Key: verdict.Head,
+                Subject: verdict.Task,
+                Outcome: verdict.Passed ? "passed" : "failed",
+                At: verdict.At.ToString("O"),
+                Hooks: [],
+                Problems: verdict.Reasons.ToList(),
+                Failed: null,
+                Details: details);
+
+            return LedgerStore.AppendRun(ledger with { Verdicts = verdicts, Reds = reds }, run);
         });
         return verdict;
     }

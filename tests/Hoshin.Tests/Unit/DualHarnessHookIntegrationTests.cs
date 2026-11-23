@@ -362,7 +362,7 @@ public sealed class DualHarnessHookIntegrationTests
             session_id = "claude-async",
             agent_id = "agent-1",
         });
-        Assert.True(toy.Repo.ReadLedger().Verdicts.Single().Passed);
+        Assert.True(toy.Repo.ReadLedger().WorkflowVerdicts.Single().Passed);
         Assert.Null(toy.Repo.ReadLedger().ActiveSubagent);
 
         // Next parent Stop blocks with T1 verdict report AND T2 brief.
@@ -665,13 +665,15 @@ public sealed class DualHarnessHookIntegrationTests
     private static void AdvanceToyToNeedsApproval(ToyFixture toy)
     {
         var head = toy.Repo.CodeHead();
-        toy.Repo.WithLedger(l =>
+        toy.Repo.UpdateLedger(l => l with
         {
-            l.Verdicts.Add(new WorkflowVerdict("T1", 1, head, true, "observed", [], DateTimeOffset.UtcNow));
-            l.Verdicts.Add(new WorkflowVerdict("T2", 1, head, true, "observed", [], DateTimeOffset.UtcNow));
-            l.Checks.Add(new WorkflowCheckRun(head, true, "ok", DateTimeOffset.UtcNow));
-            l.Reviews.Add(new WorkflowReviewRun(head, 1, 0, 0, DateTimeOffset.UtcNow));
-            return 0;
+            Verdicts =
+            [
+                new WorkflowVerdict("T1", 1, head, true, "observed", [], DateTimeOffset.UtcNow),
+                new WorkflowVerdict("T2", 1, head, true, "observed", [], DateTimeOffset.UtcNow),
+            ],
+            Checks = [new WorkflowCheckRun(head, true, "ok", DateTimeOffset.UtcNow)],
+            Reviews = [new WorkflowReviewRun(head, 1, 0, 0, DateTimeOffset.UtcNow)],
         });
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
     }
@@ -691,8 +693,8 @@ public sealed class DualHarnessHookIntegrationTests
             tool_input = new { skill = "hoshin:accept" },
         });
 
-        Assert.Empty(toy.Repo.ReadLedger().Approvals);
-        Assert.Empty(toy.Repo.ReadLedger().Published);
+        Assert.Empty(toy.Repo.ReadLedger().WorkflowApprovalRecords);
+        Assert.Empty(toy.Repo.ReadLedger().WorkflowPublishedRecords);
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
         Assert.Contains("/hoshin:accept", ClaudeContext(stdout), StringComparison.Ordinal);
 
@@ -722,8 +724,8 @@ public sealed class DualHarnessHookIntegrationTests
         });
         Assert.Equal("{}", postOut);
 
-        Assert.Empty(toy.Repo.ReadLedger().Approvals);
-        Assert.Empty(toy.Repo.ReadLedger().Published);
+        Assert.Empty(toy.Repo.ReadLedger().WorkflowApprovalRecords);
+        Assert.Empty(toy.Repo.ReadLedger().WorkflowPublishedRecords);
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
         var (_, preOut, _) = RunHook(toy.RepoDir, "hook start", new

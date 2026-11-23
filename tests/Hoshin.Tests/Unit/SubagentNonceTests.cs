@@ -73,7 +73,7 @@ public sealed class SubagentNonceTests
         })), SkillsDir);
 
         Assert.Null(exploreOut);
-        Assert.Empty(repo.ReadLedger().Verdicts);
+        Assert.Empty(repo.ReadLedger().WorkflowVerdicts);
         var nextAfterExplore = Assert.IsType<Implement>(WorkflowEngine.Next(TestServices.ReadState(repo, SkillsDir)!));
         Assert.Equal("T1", nextAfterExplore.Agent.Task);
         Assert.Equal(1, nextAfterExplore.Agent.Attempt);
@@ -96,7 +96,7 @@ public sealed class SubagentNonceTests
         })), SkillsDir);
 
         Assert.NotNull(implOut);
-        var verdict = Assert.Single(repo.ReadLedger().Verdicts);
+        var verdict = Assert.Single(repo.ReadLedger().WorkflowVerdicts);
         Assert.True(verdict.Passed, string.Join("; ", verdict.Reasons));
     }
 

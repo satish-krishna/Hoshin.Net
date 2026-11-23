@@ -1,23 +1,45 @@
 using System.Text.Json;
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Events;
 
 namespace Hoshin.Workflow.Engine;
 
+/// <summary>Unified ledger coordinates matching System A's <c>&lt;git-common-dir&gt;/hoshin/&lt;system&gt;/&lt;change&gt;/&lt;repo&gt;.json</c>.</summary>
+public sealed record WorkflowLedgerCoordinates(string System, string Change, string Repo);
+
 /// <summary>
-/// Resolves per-change workflow ledger paths (<c>.git/hoshin/changes/&lt;change&gt;/workflow-ledger.json</c>)
-/// and performs one-time migration from the legacy repo-global <c>.git/hoshin/workflow-ledger.json</c> (T07 / E1).
+/// Resolves unified per-system/change/repo ledger coordinates and performs one-time migration from legacy
+/// T07 per-change (<c>.git/hoshin/changes/&lt;change&gt;/workflow-ledger.json</c>) and repo-global
+/// (<c>.git/hoshin/workflow-ledger.json</c>) files into <see cref="RepoLedger"/>.
 /// </summary>
 public static class ChangeLedgerPaths
 {
-    public static string ResolveChangeKey(string changeFolder)
+    private static readonly JsonSerializerOptions LegacyJsonOptions = new()
     {
+        PropertyNameCaseInsensitive = true,
+    };
+
+    public static WorkflowLedgerCoordinates ResolveCoordinates(string root, string changeFolder, IFileSystem fs)
+    {
+        ArgumentNullException.ThrowIfNull(fs);
+        var (system, change) = ResolveSystemAndChange(root, changeFolder, fs);
+        var repo = ResolveRepoName(root, system, fs);
+        return new WorkflowLedgerCoordinates(Sanitize(system), Sanitize(change), Sanitize(repo));
+    }
+
+    public static string ResolveChangeKey(string changeFolder, IFileSystem fs)
+    {
+        ArgumentNullException.ThrowIfNull(fs);
         var changePath = Path.Combine(changeFolder, "change.jsonc");
-        if (File.Exists(changePath)
-            && Jsonc.TryParse(File.ReadAllText(changePath), out var parsed, out _)
-            && parsed is { ValueKind: JsonValueKind.Object } obj
-            && Jsonc.String(obj, "change") is { Length: > 0 } declared)
+        if (fs.FileExists(changePath))
         {
-            return Sanitize(declared);
+            var raw = fs.ReadAllText(changePath);
+            if (Jsonc.TryParse(raw, out var parsed, out _)
+                && parsed is { ValueKind: JsonValueKind.Object } obj
+                && Jsonc.String(obj, "change") is { Length: > 0 } declared)
+            {
+                return Sanitize(declared);
+            }
         }
 
         var trimmed = changeFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -25,51 +47,203 @@ public static class ChangeLedgerPaths
         return Sanitize(string.IsNullOrWhiteSpace(folderName) ? "default" : folderName);
     }
 
-    public static string LedgerPath(string hoshinDir, string changeKey) =>
+    public static string LegacyPerChangePath(string hoshinDir, string changeKey) =>
         Path.Combine(hoshinDir, "changes", Sanitize(changeKey), "workflow-ledger.json");
 
-    public static string LegacyLedgerPath(string hoshinDir) =>
+    public static string LegacyGlobalPath(string hoshinDir) =>
         Path.Combine(hoshinDir, "workflow-ledger.json");
 
-    public static void TryMigrateLegacyLedger(string hoshinDir, string targetLedgerPath, RunMarker? marker)
+    public static RepoLedger? TryMigrateLegacyLedger(
+        string hoshinDir,
+        string root,
+        string changeFolder,
+        WorkflowLedgerCoordinates coords,
+        RunMarker? marker,
+        IFileSystem fs,
+        LedgerStore ledgerStore)
     {
-        if (File.Exists(targetLedgerPath))
+        var ledgerDir = Path.Combine(hoshinDir, coords.System, coords.Change);
+        var targetFile = Path.Combine(ledgerDir, $"{coords.Repo}.json");
+        if (fs.FileExists(targetFile))
         {
-            return;
+            return null;
         }
 
-        var legacy = LegacyLedgerPath(hoshinDir);
-        if (!File.Exists(legacy) || marker is null)
+        var sourcePath = FindLegacySource(hoshinDir, changeFolder, coords.Change, marker, fs);
+        if (sourcePath is null)
         {
-            return;
+            return null;
         }
 
-        var changeName = !string.IsNullOrWhiteSpace(marker.Change)
-            ? Sanitize(marker.Change)
-            : !string.IsNullOrWhiteSpace(marker.ChangeFolder)
-                ? ResolveChangeKey(marker.ChangeFolder)
-                : null;
-        if (string.IsNullOrWhiteSpace(changeName))
-        {
-            return;
-        }
-
-        var destination = LedgerPath(hoshinDir, changeName);
-        if (File.Exists(destination))
-        {
-            return;
-        }
-
+        var migrated = ConvertLegacyFile(sourcePath, coords, root, fs);
+        ledgerStore.Write(ledgerDir, migrated);
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Move(legacy, destination, overwrite: false);
+            fs.DeleteFile(sourcePath);
         }
         catch (IOException)
         {
-            // Another process already moved the legacy ledger.
+            // Best-effort cleanup if another process already removed the legacy file.
         }
+
+        return migrated;
     }
+
+    private static string? FindLegacySource(
+        string hoshinDir,
+        string changeFolder,
+        string changeName,
+        RunMarker? marker,
+        IFileSystem fs)
+    {
+        var candidates = new List<string> { LegacyPerChangePath(hoshinDir, changeName) };
+        var declaredKey = ResolveChangeKey(changeFolder, fs);
+        if (!string.Equals(declaredKey, changeName, StringComparison.Ordinal))
+        {
+            candidates.Add(LegacyPerChangePath(hoshinDir, declaredKey));
+        }
+
+        foreach (var candidate in candidates)
+        {
+            if (fs.FileExists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        var legacyGlobal = LegacyGlobalPath(hoshinDir);
+        if (!fs.FileExists(legacyGlobal) || marker is null)
+        {
+            return null;
+        }
+
+        var markerChange = !string.IsNullOrWhiteSpace(marker.Change)
+            ? Sanitize(marker.Change)
+            : !string.IsNullOrWhiteSpace(marker.ChangeFolder)
+                ? ResolveChangeKey(marker.ChangeFolder, fs)
+                : null;
+        return string.Equals(markerChange, changeName, StringComparison.Ordinal)
+            || string.Equals(markerChange, declaredKey, StringComparison.Ordinal)
+            ? legacyGlobal
+            : null;
+    }
+
+    private static RepoLedger ConvertLegacyFile(
+        string sourcePath,
+        WorkflowLedgerCoordinates coords,
+        string root,
+        IFileSystem fs)
+    {
+        LegacyWorkflowLedger? parsed;
+        try
+        {
+            parsed = JsonSerializer.Deserialize<LegacyWorkflowLedger>(fs.ReadAllText(sourcePath), LegacyJsonOptions);
+        }
+        catch (JsonException e)
+        {
+            throw new CouldNotRunException($"{sourcePath} is not valid JSON: {e.Message.Split('\n')[0]}");
+        }
+
+        if (parsed is null)
+        {
+            throw new CouldNotRunException($"{sourcePath} is not valid JSON: file contains null");
+        }
+
+        return LedgerStore.Empty(coords.System, coords.Change, coords.Repo, root) with
+        {
+            Issued = NonEmpty(parsed.Issued),
+            Verdicts = NonEmpty(parsed.Verdicts),
+            Baselines = NonEmpty(parsed.Baselines),
+            Checks = NonEmpty(parsed.Checks),
+            Reviews = NonEmpty(parsed.Reviews),
+            WorkflowApprovals = NonEmpty(parsed.Approvals),
+            Published = NonEmpty(parsed.Published),
+            ActiveSubagent = parsed.ActiveSubagent,
+        };
+    }
+
+    private static (string System, string Change) ResolveSystemAndChange(string root, string changeFolder, IFileSystem fs)
+    {
+        var relative = Path.GetRelativePath(root, changeFolder).Replace('\\', '/').Trim('/');
+        var parts = relative.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 3 && parts[0].Equals("intent", StringComparison.OrdinalIgnoreCase))
+        {
+            return (parts[1], parts[2]);
+        }
+
+        var change = ResolveChangeKey(changeFolder, fs);
+        var changePath = Path.Combine(changeFolder, "change.jsonc");
+        if (fs.FileExists(changePath)
+            && Jsonc.TryParse(fs.ReadAllText(changePath), out var parsed, out _)
+            && parsed is { ValueKind: JsonValueKind.Object } obj
+            && Jsonc.String(obj, "scope") is { Length: > 0 } scope)
+        {
+            return (scope, change);
+        }
+
+        return ("default", change);
+    }
+
+    private static string ResolveRepoName(string root, string system, IFileSystem fs)
+    {
+        if (TryReadSystemObject(root, system, fs) is not { } sysObj)
+        {
+            return "master";
+        }
+
+        if (sysObj.TryGetProperty("apps", out var appsObj) && appsObj.ValueKind == JsonValueKind.Object)
+        {
+            var appNames = appsObj.EnumerateObject().Select(p => p.Name).ToList();
+            if (appNames.Count == 1)
+            {
+                return appNames[0];
+            }
+        }
+
+        return MatchMultiRepoName(root, sysObj) ?? "master";
+    }
+
+    private static JsonElement? TryReadSystemObject(string root, string system, IFileSystem fs)
+    {
+        var markerPath = Path.Combine(root, ".hoshin.json");
+        if (!fs.FileExists(markerPath) || !Jsonc.TryParse(fs.ReadAllText(markerPath), out var parsed, out _))
+        {
+            return null;
+        }
+
+        if (parsed is not { ValueKind: JsonValueKind.Object } markerObj
+            || !markerObj.TryGetProperty("systems", out var systemsObj)
+            || systemsObj.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        return systemsObj.TryGetProperty(system, out var sysObj) && sysObj.ValueKind == JsonValueKind.Object
+            ? sysObj
+            : null;
+    }
+
+    private static string? MatchMultiRepoName(string root, JsonElement sysObj)
+    {
+        if (!sysObj.TryGetProperty("repos", out var reposEl) || reposEl.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var repoFolderName = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        foreach (var item in reposEl.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String
+                && string.Equals(item.GetString(), repoFolderName, StringComparison.Ordinal))
+            {
+                return repoFolderName;
+            }
+        }
+
+        return null;
+    }
+
+    private static List<T>? NonEmpty<T>(List<T>? list) => list is { Count: > 0 } ? list : null;
 
     private static string Sanitize(string raw)
     {
@@ -77,5 +251,17 @@ public static class ChangeLedgerPaths
         var chars = raw.Trim().Select(c => invalid.Contains(c) || c is '/' or '\\' ? '-' : c).ToArray();
         var cleaned = new string(chars).Trim('.');
         return cleaned.Length == 0 ? "default" : cleaned;
+    }
+
+    private sealed class LegacyWorkflowLedger
+    {
+        public List<WorkflowIssued>? Issued { get; set; }
+        public List<WorkflowVerdict>? Verdicts { get; set; }
+        public List<WorkflowBaselineRun>? Baselines { get; set; }
+        public List<WorkflowCheckRun>? Checks { get; set; }
+        public List<WorkflowReviewRun>? Reviews { get; set; }
+        public List<WorkflowApproval>? Approvals { get; set; }
+        public List<WorkflowPublished>? Published { get; set; }
+        public ActiveSubagent? ActiveSubagent { get; set; }
     }
 }

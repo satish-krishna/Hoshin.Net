@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Events;
 
 namespace Hoshin.Cli.Hooks;
 
@@ -86,21 +87,21 @@ public static partial class GuardTamperingProtection
             return null;
         }
 
-        WorkflowLedger ledger;
+        RepoLedger ledger;
         try
         {
             ledger = repo.ReadLedger();
         }
-        catch (Exception e) when (e is IOException or System.Text.Json.JsonException)
+        catch (Exception e) when (e is IOException or System.Text.Json.JsonException or CouldNotRunException)
         {
-            return $"Hoshin run state tampering detected: run.json is missing while workflow-ledger.json exists and could not be read ({e.Message}). Stop and inform the engineer.";
+            return $"Hoshin run state tampering detected: run.json is missing while ledger exists and could not be read ({e.Message}). Stop and inform the engineer.";
         }
 
-        var hasRecords = ledger.Issued.Count > 0
-            || ledger.Verdicts.Count > 0
-            || ledger.Checks.Count > 0
-            || ledger.Reviews.Count > 0
-            || ledger.Approvals.Count > 0
+        var hasRecords = ledger.WorkflowIssued.Count > 0
+            || ledger.WorkflowVerdicts.Count > 0
+            || ledger.WorkflowChecks.Count > 0
+            || ledger.WorkflowReviews.Count > 0
+            || ledger.WorkflowApprovalRecords.Count > 0
             || ledger.ActiveSubagent is not null;
         if (!hasRecords)
         {

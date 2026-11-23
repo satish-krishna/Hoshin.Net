@@ -105,11 +105,8 @@ public sealed class DocumentCommitter(
         var reviewNum = latest?.Number ?? 1;
         var findingsCount = latest?.Findings.Count ?? 0;
         var highCount = latest?.Findings.Count(f => string.Equals(f.Severity, "high", StringComparison.OrdinalIgnoreCase)) ?? 0;
-        repo.WithLedger(l =>
-        {
-            l.Reviews.Add(new WorkflowReviewRun(codeHead, reviewNum, findingsCount, highCount, _time.GetUtcNow()));
-            return 0;
-        });
+        var reviewRun = new WorkflowReviewRun(codeHead, reviewNum, findingsCount, highCount, _time.GetUtcNow());
+        repo.UpdateLedger(l => l with { Reviews = new List<WorkflowReviewRun>(l.WorkflowReviews) { reviewRun } });
 
         return ([], commit.Sha);
     }

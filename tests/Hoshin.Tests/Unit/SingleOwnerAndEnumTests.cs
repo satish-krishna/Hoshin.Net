@@ -62,7 +62,7 @@ public sealed class SingleOwnerAndEnumTests
             Path.Combine("repo", "intent", "demo", "c1"),
             new WorkflowPlan("c1", "demo", "main", [], [], HasPlan: false),
             "abc1234",
-            new WorkflowLedger(),
+            Hoshin.Workflow.Events.LedgerStore.Empty(),
             null,
             doc,
             doc,

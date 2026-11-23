@@ -44,7 +44,8 @@ internal static class TestServices
     public static WorkflowRepo? FindRepo(string directory, string? explicitChangeFolder = null, IGitClient? git = null)
     {
         var g = git ?? Git;
-        return WorkflowRepo.Find(directory, g, g, g, FileSystem, explicitChangeFolder);
+        var ledger = git is null ? Ledger : new LedgerStore(g, FileSystem);
+        return WorkflowRepo.Find(directory, g, g, g, FileSystem, ledger, explicitChangeFolder);
     }
 
     public static WorkflowState? ReadState(WorkflowRepo repo, string? skillsRoot = null) =>
@@ -79,6 +80,7 @@ internal static class TestServices
     {
         var r = runner ?? WorkflowRunner;
         var g = git ?? Git;
+        var ledger = git is null ? Ledger : new LedgerStore(g, FileSystem);
         return new(
             adapter ?? HookAdapter,
             r,
@@ -90,6 +92,7 @@ internal static class TestServices
             g,
             g,
             FileSystem,
+            ledger,
             PlanReader,
             timeProvider ?? Time);
     }
@@ -100,6 +103,7 @@ internal static class TestServices
         TimeProvider? timeProvider = null)
     {
         var g = git ?? Git;
-        return GuardCommand.Evaluate(ev, g, g, g, FileSystem, timeProvider ?? Time);
+        var ledger = git is null ? Ledger : new LedgerStore(g, FileSystem);
+        return GuardCommand.Evaluate(ev, g, g, g, FileSystem, ledger, timeProvider ?? Time);
     }
 }

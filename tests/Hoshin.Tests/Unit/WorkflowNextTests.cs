@@ -1,4 +1,5 @@
 using Hoshin.Workflow.Engine;
+using Hoshin.Workflow.Events;
 using Xunit;
 
 namespace Hoshin.Tests.Unit;
@@ -30,14 +31,14 @@ public sealed class WorkflowNextTests
         WorkflowDocState? spec = null,
         WorkflowDocState? planDoc = null,
         WorkflowPlan? plan = null,
-        WorkflowLedger? ledger = null,
+        RepoLedger? ledger = null,
         string head = "aaaaaaa1111111") =>
         new(
             RepoRoot: "/repo",
             ChangeFolder: "/repo/.hoshin",
             Plan: plan ?? SamplePlan(),
             Head: head,
-            Ledger: ledger ?? new WorkflowLedger(),
+            Ledger: ledger ?? LedgerStore.Empty(),
             SkillsRoot: null,
             Intent: intent ?? MissingDoc("intent"),
             Spec: spec ?? MissingDoc("spec"),
@@ -91,8 +92,22 @@ public sealed class WorkflowNextTests
         Assert.Equal(1, step7.Agent.Attempt);
 
         // 9. Failed attempt 1 on T1 -> Retry T1 (attempt 2) with handoff
-        var ledger = new WorkflowLedger();
-        ledger.Verdicts.Add(new WorkflowVerdict("T1", 1, s7.Head, false, "not observed", ["red: test passed"], DateTimeOffset.UtcNow));
+        var verdicts = new List<WorkflowVerdict>
+        {
+            new("T1", 1, s7.Head, false, "not observed", ["red: test passed"], DateTimeOffset.UtcNow),
+        };
+        var checks = new List<WorkflowCheckRun>();
+        var reviews = new List<WorkflowReviewRun>();
+        var approvals = new List<WorkflowApproval>();
+        var published = new List<WorkflowPublished>();
+        var ledger = LedgerStore.Empty() with
+        {
+            Verdicts = verdicts,
+            Checks = checks,
+            Reviews = reviews,
+            WorkflowApprovals = approvals,
+            Published = published,
+        };
         var s8 = s7 with { Ledger = ledger };
         var step8 = Assert.IsType<Retry>(WorkflowEngine.Next(s8));
         Assert.Equal("T1", step8.Agent.Task);
@@ -100,36 +115,36 @@ public sealed class WorkflowNextTests
         Assert.Contains("red: test passed", step8.Handoff);
 
         // 10. T1 passes -> Implement T2 (attempt 1)
-        ledger.Verdicts.Add(new WorkflowVerdict("T1", 2, "bbbbbbb2222222", true, "observed", [], DateTimeOffset.UtcNow));
+        verdicts.Add(new WorkflowVerdict("T1", 2, "bbbbbbb2222222", true, "observed", [], DateTimeOffset.UtcNow));
         var s9 = s8 with { Head = "bbbbbbb2222222" };
         var step9 = Assert.IsType<Implement>(WorkflowEngine.Next(s9));
         Assert.Equal("T2", step9.Agent.Task);
         Assert.Equal(1, step9.Agent.Attempt);
 
         // 11. T2 passes -> RunChecks at current HEAD
-        ledger.Verdicts.Add(new WorkflowVerdict("T2", 1, "ccccccc3333333", true, "observed", [], DateTimeOffset.UtcNow));
+        verdicts.Add(new WorkflowVerdict("T2", 1, "ccccccc3333333", true, "observed", [], DateTimeOffset.UtcNow));
         var s10 = s9 with { Head = "ccccccc3333333" };
         var step10 = Assert.IsType<RunChecks>(WorkflowEngine.Next(s10));
         Assert.Equal("ccccccc3333333", step10.Head);
 
         // 12. Checks pass -> ReviewDocument
-        ledger.Checks.Add(new WorkflowCheckRun("ccccccc3333333", true, "ok", DateTimeOffset.UtcNow));
+        checks.Add(new WorkflowCheckRun("ccccccc3333333", true, "ok", DateTimeOffset.UtcNow));
         var stepReview = Assert.IsType<ReviewDocument>(WorkflowEngine.Next(s10));
         Assert.Equal("ccccccc3333333", stepReview.Head);
 
         // 13. Clean review -> NeedsApproval
-        ledger.Reviews.Add(new WorkflowReviewRun("ccccccc3333333", 1, 0, 0, DateTimeOffset.UtcNow));
+        reviews.Add(new WorkflowReviewRun("ccccccc3333333", 1, 0, 0, DateTimeOffset.UtcNow));
         var step11 = Assert.IsType<NeedsApproval>(WorkflowEngine.Next(s10));
         Assert.Equal("ccccccc3333333", step11.Head);
 
         // 14. Approved -> Publish
-        ledger.Approvals.Add(new WorkflowApproval("ccccccc3333333", true, "approved", DateTimeOffset.UtcNow));
+        approvals.Add(new WorkflowApproval("ccccccc3333333", true, "approved", DateTimeOffset.UtcNow));
         var step12 = Assert.IsType<Publish>(WorkflowEngine.Next(s10));
         Assert.Equal("ccccccc3333333", step12.Head);
         Assert.Equal("refs/heads/feat/demo", step12.Ref);
 
         // 15. Published -> Done(Success: true)
-        ledger.Published.Add(new WorkflowPublished("ccccccc3333333", "refs/heads/feat/demo", DateTimeOffset.UtcNow));
+        published.Add(new WorkflowPublished("ccccccc3333333", "refs/heads/feat/demo", DateTimeOffset.UtcNow));
         var step13 = Assert.IsType<Done>(WorkflowEngine.Next(s10));
         Assert.True(step13.Success);
         Assert.Contains("published", step13.Outcome);
@@ -139,11 +154,10 @@ public sealed class WorkflowNextTests
     public void Next_StopsWithDoneFalse_WhenRetryCapExceeded_ChecksFail_OrRejected()
     {
         // Retry cap (MaxAttempts = 3)
-        var ledgerMax = new WorkflowLedger();
-        for (var i = 1; i <= WorkflowEngine.MaxAttempts; i++)
-        {
-            ledgerMax.Verdicts.Add(new WorkflowVerdict("T1", i, "head1", false, "not observed", [$"fail {i}"], DateTimeOffset.UtcNow));
-        }
+        var maxVerdicts = Enumerable.Range(1, WorkflowEngine.MaxAttempts)
+            .Select(i => new WorkflowVerdict("T1", i, "head1", false, "not observed", [$"fail {i}"], DateTimeOffset.UtcNow))
+            .ToList();
+        var ledgerMax = LedgerStore.Empty() with { Verdicts = maxVerdicts };
 
         var doneRetry = Assert.IsType<Done>(WorkflowEngine.Next(MakeState(ledger: ledgerMax)));
         Assert.False(doneRetry.Success);
@@ -151,21 +165,31 @@ public sealed class WorkflowNextTests
         Assert.Contains("fail 3", doneRetry.Outcome);
 
         // Failed checks at HEAD
-        var ledgerChecks = new WorkflowLedger();
-        ledgerChecks.Verdicts.Add(new WorkflowVerdict("T1", 1, "h1", true, "observed", [], DateTimeOffset.UtcNow));
-        ledgerChecks.Verdicts.Add(new WorkflowVerdict("T2", 1, "h2", true, "observed", [], DateTimeOffset.UtcNow));
-        ledgerChecks.Checks.Add(new WorkflowCheckRun("h2", false, "boom", DateTimeOffset.UtcNow));
+        var ledgerChecks = LedgerStore.Empty() with
+        {
+            Verdicts =
+            [
+                new WorkflowVerdict("T1", 1, "h1", true, "observed", [], DateTimeOffset.UtcNow),
+                new WorkflowVerdict("T2", 1, "h2", true, "observed", [], DateTimeOffset.UtcNow),
+            ],
+            Checks = [new WorkflowCheckRun("h2", false, "boom", DateTimeOffset.UtcNow)],
+        };
         var doneChecks = Assert.IsType<Done>(WorkflowEngine.Next(MakeState(ledger: ledgerChecks, head: "h2")));
         Assert.False(doneChecks.Success);
         Assert.Contains("checks failed", doneChecks.Outcome);
 
         // Engineer rejected at approval
-        var ledgerReject = new WorkflowLedger();
-        ledgerReject.Verdicts.Add(new WorkflowVerdict("T1", 1, "h1", true, "observed", [], DateTimeOffset.UtcNow));
-        ledgerReject.Verdicts.Add(new WorkflowVerdict("T2", 1, "h2", true, "observed", [], DateTimeOffset.UtcNow));
-        ledgerReject.Checks.Add(new WorkflowCheckRun("h2", true, "ok", DateTimeOffset.UtcNow));
-        ledgerReject.Reviews.Add(new WorkflowReviewRun("h2", 1, 0, 0, DateTimeOffset.UtcNow));
-        ledgerReject.Approvals.Add(new WorkflowApproval("h2", false, "needs redesign", DateTimeOffset.UtcNow));
+        var ledgerReject = LedgerStore.Empty() with
+        {
+            Verdicts =
+            [
+                new WorkflowVerdict("T1", 1, "h1", true, "observed", [], DateTimeOffset.UtcNow),
+                new WorkflowVerdict("T2", 1, "h2", true, "observed", [], DateTimeOffset.UtcNow),
+            ],
+            Checks = [new WorkflowCheckRun("h2", true, "ok", DateTimeOffset.UtcNow)],
+            Reviews = [new WorkflowReviewRun("h2", 1, 0, 0, DateTimeOffset.UtcNow)],
+            WorkflowApprovals = [new WorkflowApproval("h2", false, "needs redesign", DateTimeOffset.UtcNow)],
+        };
         var doneReject = Assert.IsType<Done>(WorkflowEngine.Next(MakeState(ledger: ledgerReject, head: "h2")));
         Assert.False(doneReject.Success);
         Assert.Contains("needs redesign", doneReject.Outcome);

@@ -1,9 +1,10 @@
 using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Events;
 
 namespace Hoshin.Workflow.Engine;
 
 /// <summary>
-/// Pure snapshot of where a workflow run stands, computed from git, JSONC change documents, and the local ledger in <c>.git/hoshin/</c>.
+/// Pure snapshot of where a workflow run stands, computed from git, JSONC change documents, and the unified <see cref="RepoLedger"/> in <c>.git/hoshin/</c>.
 /// Holds nothing owned by any specific harness.
 /// </summary>
 public sealed record WorkflowState(
@@ -11,7 +12,7 @@ public sealed record WorkflowState(
     string ChangeFolder,
     WorkflowPlan Plan,
     string Head,
-    WorkflowLedger Ledger,
+    RepoLedger Ledger,
     string? SkillsRoot,
     WorkflowDocState Intent,
     WorkflowDocState Spec,
@@ -87,7 +88,7 @@ public static class WorkflowEngine
 
         foreach (var task in state.Plan.Tasks)
         {
-            var verdicts = state.Ledger.Verdicts.Where(v => v.Task == task.Id).ToList();
+            var verdicts = state.Ledger.WorkflowVerdicts.Where(v => v.Task == task.Id).ToList();
             if (verdicts.Any(v => v.Passed))
             {
                 continue;
@@ -105,7 +106,7 @@ public static class WorkflowEngine
         }
 
         var codeHead = state.EffectiveCodeHead;
-        var check = state.Ledger.Checks.LastOrDefault(c => c.Head == codeHead);
+        var check = state.Ledger.WorkflowChecks.LastOrDefault(c => c.Head == codeHead);
         if (check is null)
         {
             return new RunChecks(codeHead);
@@ -116,7 +117,7 @@ public static class WorkflowEngine
             return new Done(false, $"checks failed at {Short(codeHead)}");
         }
 
-        var review = state.Ledger.Reviews.LastOrDefault(r => r.Head == codeHead);
+        var review = state.Ledger.WorkflowReviews.LastOrDefault(r => r.Head == codeHead);
         if (review is null)
         {
             return new ReviewDocument(Path.Combine(state.ChangeFolder, "build", "review.md"), codeHead, WorkflowBriefs.Review(state));
@@ -127,7 +128,7 @@ public static class WorkflowEngine
             return new Done(false, $"review {review.ReviewNumber} has {review.HighCount} high findings");
         }
 
-        var approval = state.Ledger.Approvals.LastOrDefault(a => a.Head == codeHead);
+        var approval = state.Ledger.WorkflowApprovalRecords.LastOrDefault(a => a.Head == codeHead);
         if (approval is null)
         {
             return new NeedsApproval(codeHead, $"every task passed, checks are green, and review {review.ReviewNumber} has no high findings at {Short(codeHead)}");
@@ -139,7 +140,7 @@ public static class WorkflowEngine
         }
 
         var targetRef = $"refs/heads/{state.Plan.EffectiveBranch}";
-        var published = state.Ledger.Published.LastOrDefault(p => p.Head == codeHead || p.Head == state.Head);
+        var published = state.Ledger.WorkflowPublishedRecords.LastOrDefault(p => p.Head == codeHead || p.Head == state.Head);
         return published is not null
             ? new Done(true, string.IsNullOrEmpty(published.PullRequestUrl)
                 ? $"published {Short(codeHead)} to {targetRef}"
