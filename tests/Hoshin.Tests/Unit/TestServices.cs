@@ -71,6 +71,7 @@ internal static class TestServices
             FrontMatterEdit,
             CrossChecker,
             Default.WorkflowEventBridge,
+            Default.TaskRepoResolver,
             FileSystem,
             timeProvider ?? Time);
 

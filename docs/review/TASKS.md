@@ -168,7 +168,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | A3 | P1 | Unify: one ledger (`LedgerStore`, per change and repo) | §3.2 | A1, T07, T19 | done |
 | A4 | P1 | Unify: `WorkflowState` from `ChangeStateService` | §3.2, §6 | A1 | done |
 | A5 | P1 | Unify: the runner fires lifecycle events and writes build logs | §6 | A3, A4 | done |
-| A6 | P1 | Unify: multi-repo builds | §6 | A5 | open |
+| A6 | P1 | Unify: multi-repo builds | §6 | A5 | done |
 | A7 | P1 | Unify: start a change from `hook start` | H1 | A4 | open |
 | A8 | P1 | Unify: reject, reopen and light-track accept flows; delete the unused half | §6 | A5, A7 | open |
 | T21 | P2 | Small reader and validator fixes (batch) | L11, L12 | — | open |

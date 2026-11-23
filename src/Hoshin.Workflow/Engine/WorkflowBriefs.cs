@@ -20,7 +20,7 @@ public static class WorkflowBriefs
         b.AppendLine();
         b.AppendLine(task.Text);
         b.AppendLine();
-        b.AppendLine(CultureInfo.InvariantCulture, $"Repository: {state.RepoRoot}");
+        b.AppendLine(CultureInfo.InvariantCulture, $"Repository: {state.RepositoryPathFor(task)}");
         if (task.Test is { Length: > 0 })
         {
             b.AppendLine(CultureInfo.InvariantCulture, $"Test command for this task: `{string.Join(' ', task.Test)}`");

@@ -85,8 +85,17 @@ internal sealed class WorkflowAdvancer(
 
                     continue;
 
-                case Implement when _events.IsWorkspaceRepo(repo) && state.Ledger.WorkflowBaselines.Count == 0:
-                    _checks.RunBaseline(repo, state);
+                case Implement impl when _events.IsWorkspaceRepo(repo):
+                    var task = state.Plan.Tasks.FirstOrDefault(t => t.Id == impl.Agent.Task);
+                    var targetRepoName = !string.IsNullOrWhiteSpace(task?.Repo) ? task.Repo : repo.RepoKey;
+                    var hasBaseline = state.RepoLedgers is not null && state.RepoLedgers.TryGetValue(targetRepoName, out var repoLedger)
+                        ? repoLedger.WorkflowBaselines.Count > 0
+                        : state.Ledger.WorkflowBaselines.Count > 0;
+                    if (!hasBaseline)
+                    {
+                        _checks.RunBaseline(repo, state, targetRepoName);
+                    }
+
                     _tasks.Issue(repo, state, step, sessionId);
                     return step;
 

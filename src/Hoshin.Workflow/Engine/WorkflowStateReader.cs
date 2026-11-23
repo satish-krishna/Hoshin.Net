@@ -12,10 +12,12 @@ namespace Hoshin.Workflow.Engine;
 public sealed class WorkflowStateReader(
     PlanReader planReader,
     ChangeStateService changeState,
+    ITaskRepoResolver taskRepoResolver,
     IFileSystem fileSystem)
 {
     private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
     private readonly ChangeStateService _changeState = changeState ?? throw new ArgumentNullException(nameof(changeState));
+    private readonly ITaskRepoResolver _taskRepos = taskRepoResolver ?? throw new ArgumentNullException(nameof(taskRepoResolver));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
     public WorkflowState? Read(WorkflowRepo repo, string? skillsRoot = null)
@@ -33,6 +35,9 @@ public sealed class WorkflowStateReader(
             ? DocumentsFromChangeState(repo.ChangeFolder, changeItem.Documents)
             : (repo.DocumentStatus("intent.md"), repo.DocumentStatus("spec.md"), repo.DocumentStatus("plan.md"));
 
+        var repoLedgers = _taskRepos.ReadRepoLedgers(repo, plan);
+        var repoPaths = _taskRepos.ResolveRepoPaths(repo, plan);
+
         return new WorkflowState(
             repo.Root,
             repo.ChangeFolder,
@@ -44,7 +49,9 @@ public sealed class WorkflowStateReader(
             spec,
             planDoc,
             repo.CodeHead(),
-            changeItem);
+            changeItem,
+            repoLedgers,
+            repoPaths);
     }
 
     private ChangeStateItem? TryComputeChangeState(WorkflowRepo repo)

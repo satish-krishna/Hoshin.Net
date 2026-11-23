@@ -18,9 +18,34 @@ public sealed record WorkflowState(
     WorkflowDocState Spec,
     WorkflowDocState PlanDoc,
     string? CodeHead = null,
-    ChangeStateItem? ChangeState = null)
+    ChangeStateItem? ChangeState = null,
+    Dictionary<string, RepoLedger>? RepoLedgers = null,
+    Dictionary<string, string>? RepoPaths = null)
 {
     public string EffectiveCodeHead => string.IsNullOrWhiteSpace(CodeHead) ? Head : CodeHead;
+
+    public IReadOnlyList<WorkflowVerdict> VerdictsForTask(WorkflowTask task)
+    {
+        if (!string.IsNullOrWhiteSpace(task.Repo)
+            && RepoLedgers is not null
+            && RepoLedgers.TryGetValue(task.Repo, out var repoLedger))
+        {
+            var repoVerdicts = repoLedger.WorkflowVerdicts.Where(v => v.Task == task.Id).ToList();
+            if (repoVerdicts.Count > 0)
+            {
+                return repoVerdicts;
+            }
+        }
+
+        return Ledger.WorkflowVerdicts.Where(v => v.Task == task.Id).ToList();
+    }
+
+    public string RepositoryPathFor(WorkflowTask task) =>
+        !string.IsNullOrWhiteSpace(task.Repo)
+        && RepoPaths is not null
+        && RepoPaths.TryGetValue(task.Repo, out var path)
+            ? path
+            : RepoRoot;
 
     public WorkflowDocState Document(WorkflowDocument document) => document switch
     {
@@ -66,23 +91,9 @@ public static class WorkflowEngine
             }
         }
 
-        foreach (var task in state.Plan.Tasks)
+        if (NextScheduledTaskStep(state) is { } taskStep)
         {
-            var verdicts = state.Ledger.WorkflowVerdicts.Where(v => v.Task == task.Id).ToList();
-            if (verdicts.Any(v => v.Passed))
-            {
-                continue;
-            }
-
-            if (verdicts.Count >= state.Plan.EffectiveMaxAttempts)
-            {
-                return new Done(false, $"{task.Id} failed {verdicts.Count} attempts: {string.Join("; ", verdicts[^1].Reasons)}");
-            }
-
-            var attempt = verdicts.Count + 1;
-            return verdicts.Count == 0
-                ? new Implement(WorkflowBriefs.Implement(state, task, attempt, []))
-                : new Retry(WorkflowBriefs.Implement(state, task, attempt, verdicts[^1].Reasons), verdicts[^1].Reasons);
+            return taskStep;
         }
 
         var codeHead = state.EffectiveCodeHead;
@@ -261,9 +272,56 @@ public static class WorkflowEngine
         }
 
         var allPassedInLedger = state.Plan.Tasks.Count > 0
-            && state.Plan.Tasks.All(t => state.Ledger.WorkflowVerdicts.Any(v => v.Task == t.Id && v.Passed));
+            && state.Plan.Tasks.All(t => state.VerdictsForTask(t).Any(v => v.Passed));
         var isOnlyUnloggedTasks = ready.Review.Stop.StartsWith("These tasks have no build log entry yet:", StringComparison.Ordinal);
         return allPassedInLedger && isOnlyUnloggedTasks ? null : ready.Review.Stop;
+    }
+
+    private static Step? NextScheduledTaskStep(WorkflowState state)
+    {
+        if (state.Plan.Tasks.Count == 0)
+        {
+            return null;
+        }
+
+        var completed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var task in state.Plan.Tasks)
+        {
+            if (state.VerdictsForTask(task).Any(v => v.Passed))
+            {
+                completed.Add(task.Id);
+            }
+        }
+
+        var scheduleInputs = state.Plan.Tasks
+            .Select(t => new ScheduledTaskInput(
+                t.Id,
+                string.IsNullOrWhiteSpace(t.Repo) ? "default" : t.Repo,
+                t.DependsOn ?? []))
+            .ToList();
+        var schedule = ScheduleCalculator.Compute(scheduleInputs, completed, oneAtATime: false);
+        if (schedule.Next == "review")
+        {
+            return null;
+        }
+
+        if (schedule.Next == "blocked")
+        {
+            return new Done(false, "plan tasks are blocked by circular or unsatisfied cross-repository dependencies");
+        }
+
+        var nextId = schedule.Repos.First(r => r.State == "ready" && r.Task is not null).Task!;
+        var nextTask = state.Plan.Tasks.First(t => t.Id == nextId);
+        var verdicts = state.VerdictsForTask(nextTask);
+        if (verdicts.Count >= state.Plan.EffectiveMaxAttempts)
+        {
+            return new Done(false, $"{nextTask.Id} failed {verdicts.Count} attempts: {string.Join("; ", verdicts[^1].Reasons)}");
+        }
+
+        var attempt = verdicts.Count + 1;
+        return verdicts.Count == 0
+            ? new Implement(WorkflowBriefs.Implement(state, nextTask, attempt, []))
+            : new Retry(WorkflowBriefs.Implement(state, nextTask, attempt, verdicts[^1].Reasons), verdicts[^1].Reasons);
     }
 
     private static bool IsReadyCandidate(ReadinessMap ready, string skill) => skill switch

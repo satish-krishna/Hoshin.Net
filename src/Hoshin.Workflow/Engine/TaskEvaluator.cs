@@ -12,6 +12,7 @@ public sealed class TaskEvaluator(
     IAllowListedCommandRunner testRunner,
     BuildLogWriter buildLogWriter,
     IWorkflowEventBridge eventBridge,
+    ITaskRepoResolver taskRepoResolver,
     TimeProvider timeProvider) : ITaskEvaluator
 {
     private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
@@ -21,6 +22,7 @@ public sealed class TaskEvaluator(
     private readonly IAllowListedCommandRunner _runner = testRunner ?? throw new ArgumentNullException(nameof(testRunner));
     private readonly BuildLogWriter _buildLog = buildLogWriter ?? throw new ArgumentNullException(nameof(buildLogWriter));
     private readonly IWorkflowEventBridge _events = eventBridge ?? throw new ArgumentNullException(nameof(eventBridge));
+    private readonly ITaskRepoResolver _taskRepos = taskRepoResolver ?? throw new ArgumentNullException(nameof(taskRepoResolver));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly IReadOnlyList<ITaskVerdictPolicy> _verdictPolicies = [new NoTestPolicy(), new RedGreenPolicy()];
 
@@ -87,26 +89,27 @@ public sealed class TaskEvaluator(
     public WorkflowVerdict EvaluateAndCommitTask(WorkflowRepo repo, WorkflowState state, string taskId, int attempt)
     {
         var task = state.Plan.Tasks.First(t => t.Id == taskId);
+        var targetRepo = _taskRepos.Resolve(repo, task);
 
         using var runLock = repo.AcquireRunLock();
-        var liveLedger = repo.ReadLedger();
+        var liveLedger = targetRepo.ReadLedger();
         if (liveLedger.WorkflowVerdicts.FirstOrDefault(v => v.Task == taskId && v.Attempt == attempt) is { } existing)
         {
             return existing;
         }
 
-        var startHead = _gitQuery.CommitOf(repo.Root, "HEAD") ?? "";
+        var startHead = _gitQuery.CommitOf(targetRepo.Root, "HEAD") ?? "";
         ClearActiveSubagent(repo);
         var now = _time.GetUtcNow();
 
-        if (ValidatePreConditions(repo, liveLedger, task, attempt, startHead, now, out var changed) is { } earlyFail)
+        if (ValidatePreConditions(targetRepo, liveLedger, task, attempt, startHead, now, out var changed) is { } earlyFail)
         {
-            return RecordVerdict(repo, task, earlyFail, appendSyntheticRun: true);
+            return RecordVerdict(targetRepo, task, earlyFail, appendSyntheticRun: true);
         }
 
         var policy = _verdictPolicies.First(p => p.AppliesTo(task));
         var verdict = policy.EvaluateAndCommit(new TaskEvaluationContext(
-            repo,
+            targetRepo,
             state,
             task,
             attempt,
@@ -119,36 +122,46 @@ public sealed class TaskEvaluator(
 
         if (!verdict.Passed)
         {
-            return RecordVerdict(repo, task, verdict, appendSyntheticRun: true);
+            return RecordVerdict(targetRepo, task, verdict, appendSyntheticRun: true);
         }
 
         var isWorkspace = _events.IsWorkspaceRepo(repo);
         if (isWorkspace)
         {
-            verdict = CommitBuildLogEntry(repo, state, task, verdict);
+            verdict = CommitBuildLogEntry(repo, targetRepo, state, task, verdict);
         }
 
-        RecordVerdict(repo, task, verdict, appendSyntheticRun: !isWorkspace);
+        RecordVerdict(targetRepo, task, verdict, appendSyntheticRun: !isWorkspace);
         if (isWorkspace)
         {
-            _events.TryFire(repo, "task.done", new Dictionary<string, string>(StringComparer.Ordinal) { ["task"] = task.Id });
+            _events.TryFire(
+                repo,
+                "task.done",
+                new Dictionary<string, string>(StringComparer.Ordinal) { ["task"] = task.Id },
+                repoOverride: targetRepo.RepoKey);
         }
 
         return verdict;
     }
 
-    private WorkflowVerdict CommitBuildLogEntry(WorkflowRepo repo, WorkflowState state, WorkflowTask task, WorkflowVerdict verdict)
+    private WorkflowVerdict CommitBuildLogEntry(
+        WorkflowRepo masterRepo,
+        WorkflowRepo targetRepo,
+        WorkflowState state,
+        WorkflowTask task,
+        WorkflowVerdict verdict)
     {
         var commits = string.IsNullOrEmpty(verdict.TestCommit)
             ? new[] { verdict.Head }
             : [verdict.TestCommit, verdict.Head];
-        var logPath = _buildLog.AppendEntry(repo.ChangeFolder, repo.RepoKey, task.Id, commits, BuildLogWriter.RedValueFor(task));
-        var logRel = Path.GetRelativePath(repo.Root, logPath).Replace('\\', '/');
+        var logPath = _buildLog.AppendEntry(masterRepo.ChangeFolder, targetRepo.RepoKey, task.Id, commits, BuildLogWriter.RedValueFor(task));
+        var logRel = Path.GetRelativePath(masterRepo.Root, logPath).Replace('\\', '/');
         var logCommit = _gitCommitter.CommitPaths(
-            repo.Root,
+            masterRepo.Root,
             [logRel],
             [$"docs({state.Plan.Scope}): log {task.Id} {state.Plan.Change}", "Generated-By: hoshin"]);
-        return logCommit.Ok && !string.IsNullOrEmpty(logCommit.Sha)
+        var sameRepo = string.Equals(masterRepo.Root, targetRepo.Root, StringComparison.OrdinalIgnoreCase);
+        return sameRepo && logCommit.Ok && !string.IsNullOrEmpty(logCommit.Sha)
             ? verdict with { Head = logCommit.Sha }
             : verdict;
     }
@@ -157,18 +170,19 @@ public sealed class TaskEvaluator(
     {
         var agent = step is Implement i ? i.Agent : ((Retry)step).Agent;
         var task = state.Plan.Tasks.FirstOrDefault(t => t.Id == agent.Task);
+        var targetRepo = task is not null ? _taskRepos.Resolve(repo, task) : repo;
         var hasTest = task?.Test is { Length: > 0 };
         var taskTestFiles = hasTest
-            ? WorkflowRepo.ExtractTestFilesFromArgv(task!.Test!, repo.Root, state.Plan.EffectiveTestPatterns).ToArray()
+            ? WorkflowRepo.ExtractTestFilesFromArgv(task!.Test!, targetRepo.Root, state.Plan.EffectiveTestPatterns).ToArray()
             : null;
 
-        RecordIssued(repo, agent);
-        WriteIssuedStep(repo, state, step.Kind, agent, sessionId, hasTest, taskTestFiles);
+        RecordIssued(targetRepo, agent);
+        WriteIssuedStep(repo, targetRepo, state, step.Kind, agent, sessionId, hasTest, taskTestFiles);
     }
 
-    private void RecordIssued(WorkflowRepo repo, AgentTask agent)
+    private void RecordIssued(WorkflowRepo targetRepo, AgentTask agent)
     {
-        repo.UpdateLedger(ledger =>
+        targetRepo.UpdateLedger(ledger =>
         {
             if (ledger.WorkflowIssued.Any(x => x.Task == agent.Task && x.Attempt == agent.Attempt))
             {
@@ -176,8 +190,8 @@ public sealed class TaskEvaluator(
             }
 
             var firstForTask = ledger.WorkflowIssued.FirstOrDefault(x => x.Task == agent.Task);
-            var taskStart = firstForTask?.StartHead ?? _gitQuery.CommitOf(repo.Root, "HEAD") ?? "";
-            var snapshot = WorkingTreeSnapshot.Capture(repo, _gitStatus);
+            var taskStart = firstForTask?.StartHead ?? _gitQuery.CommitOf(targetRepo.Root, "HEAD") ?? "";
+            var snapshot = WorkingTreeSnapshot.Capture(targetRepo, _gitStatus);
             var preIssuePaths = firstForTask?.PreIssuePaths ?? snapshot.PathDigests;
             var updatedIssued = new List<WorkflowIssued>(ledger.WorkflowIssued)
             {
@@ -195,6 +209,7 @@ public sealed class TaskEvaluator(
 
     private void WriteIssuedStep(
         WorkflowRepo repo,
+        WorkflowRepo targetRepo,
         WorkflowState state,
         StepKind kind,
         AgentTask agent,
@@ -202,7 +217,7 @@ public sealed class TaskEvaluator(
         bool hasTest,
         string[]? taskTestFiles)
     {
-        var start = repo.ReadLedger().WorkflowIssued.First(x => x.Task == agent.Task).StartHead;
+        var start = targetRepo.ReadLedger().WorkflowIssued.First(x => x.Task == agent.Task).StartHead;
         var previous = repo.ReadStep();
         var same = previous is not null && previous.Task == agent.Task && previous.Attempt == agent.Attempt;
         var activeSession = sessionId ?? previous?.SessionId ?? repo.ReadRunMarker()?.SessionId;

@@ -17,7 +17,7 @@ public interface ITaskEvaluator
 /// <summary>Runs base-branch baseline checks and post-build checks.</summary>
 public interface ICheckRunner
 {
-    WorkflowBaselineRun RunBaseline(WorkflowRepo repo, WorkflowState state);
+    WorkflowBaselineRun RunBaseline(WorkflowRepo repo, WorkflowState state, string? targetRepo = null);
 
     WorkflowCheckRun RunChecks(WorkflowRepo repo, WorkflowState state);
 }

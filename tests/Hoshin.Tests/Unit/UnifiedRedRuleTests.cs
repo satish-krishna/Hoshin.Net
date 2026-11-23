@@ -128,7 +128,7 @@ public sealed class UnifiedRedRuleTests
         var missingDoc = new WorkflowDocState(Path.Combine(changeDir, "intent.md"), false, false, false, null, null);
         var state = new WorkflowState(repoRoot, changeDir, plan, fakeGit.HeadSha, Hoshin.Workflow.Events.LedgerStore.Empty(), null, missingDoc, missingDoc, missingDoc);
 
-        var evaluator = new TaskEvaluator(fakeGit, fakeGit, fakeGit, fakeGit, runner, new BuildLogWriter(fs), new NullWorkflowEventBridge(), TimeProvider.System);
+        var evaluator = new TaskEvaluator(fakeGit, fakeGit, fakeGit, fakeGit, runner, new BuildLogWriter(fs), new NullWorkflowEventBridge(), new IdentityTaskRepoResolver(), TimeProvider.System);
         var verdict = evaluator.EvaluateAndCommitTask(repo, state, "T1", 1);
         return verdict.Passed;
     }

@@ -10,7 +10,9 @@ public sealed record WorkflowTask(
     string[]? Test,
     string[]? Compile = null,
     List<string>? Files = null,
-    int? TimeoutSeconds = null);
+    int? TimeoutSeconds = null,
+    string? Repo = null,
+    List<string>? DependsOn = null);
 
 /// <summary>The change's loaded workflow plan, test patterns, and blocking <c>build.finish</c> checks.</summary>
 public sealed record WorkflowPlan(

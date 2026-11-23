@@ -36,8 +36,43 @@ public sealed class WorkflowRepo
         Root = Path.GetFullPath(root);
         HoshinDir = Path.Combine(Path.GetFullPath(gitCommonDir), "hoshin");
         ChangeFolder = Path.GetFullPath(changeFolder);
+        RedWorktreePath = Path.Combine(HoshinDir, "worktrees", "red-check");
         _coords = ChangeLedgerPaths.ResolveCoordinates(Root, ChangeFolder, _fs);
     }
+
+    private WorkflowRepo(
+        string root,
+        string hoshinDir,
+        string changeFolder,
+        string redWorktreePath,
+        WorkflowLedgerCoordinates coords,
+        IGitQuery gitQuery,
+        IGitStatus gitStatus,
+        IFileSystem fileSystem,
+        LedgerStore ledgerStore)
+    {
+        _gitQuery = gitQuery;
+        _gitStatus = gitStatus;
+        _fs = fileSystem;
+        _ledgerStore = ledgerStore;
+        Root = Path.GetFullPath(root);
+        HoshinDir = Path.GetFullPath(hoshinDir);
+        ChangeFolder = Path.GetFullPath(changeFolder);
+        RedWorktreePath = Path.GetFullPath(redWorktreePath);
+        _coords = coords;
+    }
+
+    public WorkflowRepo ForTarget(string targetRoot, string targetGitCommonDir, string repoKey) =>
+        new(
+            targetRoot,
+            HoshinDir,
+            ChangeFolder,
+            Path.Combine(Path.GetFullPath(targetGitCommonDir), "hoshin", "worktrees", "red-check"),
+            _coords with { Repo = repoKey },
+            _gitQuery,
+            _gitStatus,
+            _fs,
+            _ledgerStore);
 
     public string Root { get; }
 
@@ -69,7 +104,7 @@ public sealed class WorkflowRepo
 
     public string HooksLogPath => Path.Combine(HoshinDir, "hooks.jsonl");
 
-    public string RedWorktreePath => Path.Combine(HoshinDir, "worktrees", "red-check");
+    public string RedWorktreePath { get; }
 
     public static WorkflowRepo? Find(
         string directory,

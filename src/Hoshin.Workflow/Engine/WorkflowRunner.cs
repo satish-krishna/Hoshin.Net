@@ -39,11 +39,12 @@ public sealed class WorkflowRunner(
         FrontMatterEdit frontMatterEdit,
         CrossChecker crossChecker,
         IWorkflowEventBridge eventBridge,
+        ITaskRepoResolver taskRepoResolver,
         IFileSystem fileSystem,
         TimeProvider timeProvider)
         : this(
-            new TaskEvaluator(git, git, git, git, commandRunner, new BuildLogWriter(fileSystem), eventBridge, timeProvider),
-            new CheckRunner(git, commandRunner, eventBridge, timeProvider),
+            new TaskEvaluator(git, git, git, git, commandRunner, new BuildLogWriter(fileSystem), eventBridge, taskRepoResolver, timeProvider),
+            new CheckRunner(git, commandRunner, eventBridge, taskRepoResolver, timeProvider),
             new ApprovalRecorder(timeProvider),
             new Publisher(git, git, git, pullRequests, eventBridge, timeProvider),
             new DocumentCommitter(git, git, intentReader, specReader, planReader, reviewReader, frontMatterEdit, crossChecker, eventBridge, fileSystem, timeProvider))
@@ -62,8 +63,8 @@ public sealed class WorkflowRunner(
     public WorkflowVerdict EvaluateAndCommitTask(WorkflowRepo repo, WorkflowState state, string taskId, int attempt) =>
         _tasks.EvaluateAndCommitTask(repo, state, taskId, attempt);
 
-    public WorkflowBaselineRun RunBaseline(WorkflowRepo repo, WorkflowState state) =>
-        _checks.RunBaseline(repo, state);
+    public WorkflowBaselineRun RunBaseline(WorkflowRepo repo, WorkflowState state, string? targetRepo = null) =>
+        _checks.RunBaseline(repo, state, targetRepo);
 
     public WorkflowCheckRun RunChecks(WorkflowRepo repo, WorkflowState state) =>
         _checks.RunChecks(repo, state);

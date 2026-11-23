@@ -8,10 +8,19 @@ public sealed record ScheduledRepo(string Repo, string State, string? Task, List
 
 public sealed record ChangeSchedule(List<ScheduledRepo> Repos, string Next, bool OneAtATime);
 
+/// <summary>Minimal task projection needed for cross-repository scheduling.</summary>
+public sealed record ScheduledTaskInput(string Id, string Repo, IReadOnlyList<string> DependsOn);
+
 /// <summary>Computes the multi-repo / single-repo build schedule from plan tasks and logged entries.</summary>
 public static class ScheduleCalculator
 {
-    public static ChangeSchedule Compute(IReadOnlyList<ParsedTask> tasks, ISet<string> logged, bool oneAtATime)
+    public static ChangeSchedule Compute(IReadOnlyList<ParsedTask> tasks, ISet<string> logged, bool oneAtATime) =>
+        Compute(
+            tasks.Select(t => new ScheduledTaskInput(t.Id, t.Repo, t.DependsOn)).ToList(),
+            logged,
+            oneAtATime);
+
+    public static ChangeSchedule Compute(IReadOnlyList<ScheduledTaskInput> tasks, ISet<string> logged, bool oneAtATime)
     {
         var repoOf = new Dictionary<string, string>(StringComparer.Ordinal);
         var repoOrder = new List<string>();

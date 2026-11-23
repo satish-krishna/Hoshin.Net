@@ -139,7 +139,9 @@ public static class WorkflowPlanLoader
             t.Test,
             t.Compile,
             t.Files,
-            t.Timeout);
+            t.Timeout,
+            t.Repo,
+            t.DependsOn);
 
     private static JsonElement? TryReadChangeObject(string path, IFileSystem fs)
     {
