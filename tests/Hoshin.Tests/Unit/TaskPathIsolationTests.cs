@@ -131,8 +131,8 @@ public sealed class TaskPathIsolationTests
         var verdict = runner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
         Assert.True(verdict.Passed, string.Join("; ", verdict.Reasons));
 
-        var prodFiles = TestGitFixture.Git(repoDir, "-c", "core.quotepath=off", "show", "--name-only", "--format=", verdict.Head);
-        Assert.Equal(prodRel, prodFiles.Trim());
+        var prodFiles = TestGitFixture.Git(repoDir, "show", "--name-only", "--format=", "-z", verdict.Head);
+        Assert.Equal(prodRel, prodFiles.TrimEnd('\0', '\r', '\n'));
     }
 
     [Fact]

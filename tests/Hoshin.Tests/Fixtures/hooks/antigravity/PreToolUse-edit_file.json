@@ -1,0 +1,17 @@
+{
+  "hookEventName": "PreToolUse",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "toolCall": {
+    "id": "call-ef-0001",
+    "name": "edit_file",
+    "args": {
+      "Path": "/workspace/repo/src/greet.mjs",
+      "Target": "Hello",
+      "Replacement": "Hi"
+    }
+  }
+}

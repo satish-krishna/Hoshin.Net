@@ -1,0 +1,10 @@
+{
+  "session_id": "cc-sess-0001",
+  "transcript_path": "/home/engineer/.claude/projects/workspace-repo/cc-sess-0001.jsonl",
+  "cwd": "/workspace/repo",
+  "permission_mode": "default",
+  "hook_event_name": "UserPromptExpansion",
+  "command_name": "hoshin:build",
+  "command_args": "",
+  "prompt": "/hoshin:build"
+}

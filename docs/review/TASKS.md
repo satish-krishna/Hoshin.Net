@@ -173,7 +173,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | A8 | P1 | Unify: reject, reopen and light-track accept flows; delete the unused half | §6 | A5, A7 | done |
 | T21 | P2 | Small reader and validator fixes (batch) | L11, L12 | — | done |
 | T37 | P2 | Fix false and stale doc claims | §7 | — | done |
-| T38 | P2 | Recorded harness payload fixtures | §5.2, §9 | — | open |
+| T38 | P2 | Recorded harness payload fixtures | §5.2, §9 | — | done |
 | EPIC-B | P1 | Restore the dropped skill guidance, templates and evals | §6 | — | open (needs a human reviewer) |
 
 ---

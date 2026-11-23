@@ -1,0 +1,16 @@
+{
+  "hookEventName": "PreToolUse",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "toolCall": {
+    "id": "call-wtf-0001",
+    "name": "write_to_file",
+    "args": {
+      "TargetFile": "/workspace/repo/test/t1.test.mjs",
+      "CodeContent": "import test from 'node:test';\n"
+    }
+  }
+}

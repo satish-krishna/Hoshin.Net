@@ -45,8 +45,14 @@ public static partial class RedClassifier
     [GeneratedRegex(@"\berror\s+(CS\d{4}|TS\d{4})\b|\berror\[(E0\d{3})\]:")]
     private static partial Regex OtherCompileErrorRegex();
 
-    [GeneratedRegex(@"Cannot find (?:module|package)\s+['""]([^'""]+)['""]")]
+    [GeneratedRegex(@"Cannot find (?:module|package)\s+\\?['""]([^'""]+?)(?:\\)?['""]")]
     private static partial Regex ModuleSpecifierRegex();
+
+    [GeneratedRegex(@"\burl\s*:\s*\\?'file:///([^']+?)(?:\\)?'")]
+    private static partial Regex FileUrlSpecifierRegex();
+
+    [GeneratedRegex(@"/+")]
+    private static partial Regex MultiSlashRegex();
 
     [GeneratedRegex(@"\b(ERR_MODULE_NOT_FOUND|TS2307)\b|Cannot find (?:module|package)\b")]
     private static partial Regex ModuleNotFoundSignalRegex();
@@ -122,6 +128,11 @@ public static partial class RedClassifier
         }
 
         var specifiers = ModuleSpecifierRegex().Matches(output).Select(m => m.Groups[1].Value).ToList();
+        if (specifiers.Count == 0)
+        {
+            specifiers.AddRange(FileUrlSpecifierRegex().Matches(output).Select(m => m.Groups[1].Value));
+        }
+
         var targetMatches = specifiers.Where(spec => IsTargetModuleSpecifier(spec, prodPaths)).Distinct(StringComparer.Ordinal).ToList();
         if (targetMatches.Count > 0)
         {
@@ -137,7 +148,7 @@ public static partial class RedClassifier
 
     private static bool IsTargetModuleSpecifier(string specifier, IReadOnlyList<string>? prodPaths)
     {
-        var norm = specifier.Replace('\\', '/');
+        var norm = MultiSlashRegex().Replace(specifier.Replace('\\', '/'), "/").TrimEnd('/');
         if (norm.StartsWith("./", StringComparison.Ordinal) || norm.StartsWith("../", StringComparison.Ordinal))
         {
             return true;

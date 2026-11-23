@@ -1,0 +1,12 @@
+{
+  "hookEventName": "Stop",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "fullyIdle": true,
+  "continuationActive": false,
+  "terminationReason": "END_TURN",
+  "finalResponse": "Completed the requested step."
+}

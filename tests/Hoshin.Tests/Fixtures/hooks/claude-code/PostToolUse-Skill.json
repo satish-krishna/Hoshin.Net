@@ -1,0 +1,17 @@
+{
+  "session_id": "cc-sess-0001",
+  "transcript_path": "/home/engineer/.claude/projects/workspace-repo/cc-sess-0001.jsonl",
+  "cwd": "/workspace/repo",
+  "permission_mode": "default",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Skill",
+  "tool_use_id": "toolu_01Skill0001",
+  "tool_input": {
+    "skill": "hoshin:build",
+    "args": ""
+  },
+  "tool_response": {
+    "success": true,
+    "commandName": "hoshin:build"
+  }
+}

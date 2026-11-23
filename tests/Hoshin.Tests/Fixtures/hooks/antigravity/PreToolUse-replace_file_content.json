@@ -1,0 +1,17 @@
+{
+  "hookEventName": "PreToolUse",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "toolCall": {
+    "id": "call-rfc-0001",
+    "name": "replace_file_content",
+    "args": {
+      "TargetFile": "/workspace/repo/src/greet.mjs",
+      "TargetContent": "Hello",
+      "ReplacementContent": "Hi"
+    }
+  }
+}

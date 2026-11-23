@@ -1,0 +1,19 @@
+{
+  "hookEventName": "PostToolUse",
+  "conversationId": "agy-conv-0001",
+  "cwd": "/workspace/repo",
+  "workspacePaths": [
+    "/workspace/repo"
+  ],
+  "toolCall": {
+    "id": "call-mt-0001",
+    "name": "manage_task",
+    "args": {
+      "Action": "status",
+      "TaskId": "agy-conv-0001/task-0001"
+    }
+  },
+  "toolResponse": {
+    "status": "RUNNING"
+  }
+}

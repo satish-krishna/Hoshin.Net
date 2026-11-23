@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Git;
@@ -129,7 +130,18 @@ public sealed class DualHarnessHookIntegrationTests
         public void Dispose() => Temp.Dispose();
     }
 
-    private static (int ExitCode, string Stdout, string Stderr) RunHook(string cwd, string verb, object payload)
+    private static (int ExitCode, string Stdout, string Stderr) RunHook(string cwd, string verb, object payload) =>
+        RunHookRaw(cwd, verb, JsonSerializer.Serialize(payload));
+
+    private static (int ExitCode, string Stdout, string Stderr) RunFixture(
+        string cwd,
+        string verb,
+        string harness,
+        string fixture,
+        Action<JsonObject> patch) =>
+        RunHookRaw(cwd, verb, HookFixtureLoader.LoadAndPatch(harness, fixture, patch));
+
+    private static (int ExitCode, string Stdout, string Stderr) RunHookRaw(string cwd, string verb, string rawJson)
     {
         var args = new List<string> { HoshinDll };
         args.AddRange(verb.Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -143,7 +155,7 @@ public sealed class DualHarnessHookIntegrationTests
         var res = TestServices.CommandRunner.Run(new CommandRequest(
             WorkingDirectory: cwd,
             Argv: ["dotnet", .. args],
-            StandardInput: JsonSerializer.Serialize(payload),
+            StandardInput: rawJson,
             ExtraEnvironment: env));
 
         Assert.Equal(0, res.ExitCode); // Every hook MUST exit 0.
@@ -167,60 +179,51 @@ public sealed class DualHarnessHookIntegrationTests
         var startHead = toy.Repo.Head();
 
         // 1. /hoshin:build starts the run and injects T1 brief.
-        var (_, startOut, _) = RunHook(toy.RepoDir, "hook start", new
+        var (_, startOut, _) = RunFixture(toy.RepoDir, "hook start", "claude-code", "UserPromptExpansion", o =>
         {
-            hook_event_name = "UserPromptExpansion",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
-            command_name = "hoshin:build",
-            prompt = "/hoshin:build",
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
+            o["command_name"] = "hoshin:build";
+            o["prompt"] = "/hoshin:build";
         });
         var startCtx = ClaudeContext(startOut);
         Assert.Contains("build task T1, attempt 1", startCtx);
         Assert.Contains("# Implement one task, test first", startCtx);
 
         // 2. Guard denies premature prod edit before test file exists.
-        var (_, denyProd, _) = RunHook(toy.RepoDir, "guard", new
+        var (_, denyProd, _) = RunFixture(toy.RepoDir, "guard", "claude-code", "PreToolUse-Edit", o =>
         {
-            hook_event_name = "PreToolUse",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
-            tool_name = "Edit",
-            tool_input = new { file_path = Path.Combine(toy.RepoDir, "src", "greet.mjs") },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
+            o["tool_input"]!["file_path"] = Path.Combine(toy.RepoDir, "src", "greet.mjs");
         });
         Assert.Equal("deny", JsonDocument.Parse(denyProd).RootElement.GetProperty("hookSpecificOutput").GetProperty("permissionDecision").GetString());
 
         // 3. Guard denies manual `git commit` during active build.
-        var (_, denyCommit, _) = RunHook(toy.RepoDir, "guard", new
+        var (_, denyCommit, _) = RunFixture(toy.RepoDir, "guard", "claude-code", "PreToolUse-Bash", o =>
         {
-            hook_event_name = "PreToolUse",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
-            tool_name = "Bash",
-            tool_input = new { command = "git commit -m 'test(greet): manual'" },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
+            o["tool_input"]!["command"] = "git commit -m 'test(greet): manual'";
         });
         Assert.Equal("deny", JsonDocument.Parse(denyCommit).RootElement.GetProperty("hookSpecificOutput").GetProperty("permissionDecision").GetString());
 
         // 4. Guard allows writing the test file.
-        var (_, allowTest, _) = RunHook(toy.RepoDir, "guard", new
+        var (_, allowTest, _) = RunFixture(toy.RepoDir, "guard", "claude-code", "PreToolUse-Write", o =>
         {
-            hook_event_name = "PreToolUse",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
-            tool_name = "Write",
-            tool_input = new { file_path = Path.Combine(toy.RepoDir, "test", "t1.test.mjs") },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
+            o["tool_input"]!["file_path"] = Path.Combine(toy.RepoDir, "test", "t1.test.mjs");
         });
         Assert.Equal("", allowTest);
 
         // 5. Sloppy attempt 1 (test passes without prod): commits NOTHING and hands back Retry.
         toy.WriteTaskWork("T1", sloppy: true);
-        var (_, retryOut, _) = RunHook(toy.RepoDir, "hook result", new
+        var (_, retryOut, _) = RunFixture(toy.RepoDir, "hook result", "claude-code", "PostToolUse-Agent", o =>
         {
-            hook_event_name = "PostToolUse",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
-            tool_name = "Agent",
-            tool_input = new { prompt = toy.Repo.ReadStep()!.DispatchNonce },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
+            o["tool_input"]!["prompt"] = toy.Repo.ReadStep()!.DispatchNonce;
         });
         var retryCtx = ClaudeContext(retryOut);
         Assert.Contains("T1 attempt 1 is not accepted", retryCtx);
@@ -229,13 +232,11 @@ public sealed class DualHarnessHookIntegrationTests
 
         // 6. Attempt 2 fixes T1 test -> accepted, split into test + prod commits, advances to T2.
         toy.WriteTaskWork("T1", sloppy: false);
-        var (_, t1OkOut, _) = RunHook(toy.RepoDir, "hook result", new
+        var (_, t1OkOut, _) = RunFixture(toy.RepoDir, "hook result", "claude-code", "PostToolUse-Agent", o =>
         {
-            hook_event_name = "PostToolUse",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
-            tool_name = "Agent",
-            tool_input = new { prompt = toy.Repo.ReadStep()!.DispatchNonce },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
+            o["tool_input"]!["prompt"] = toy.Repo.ReadStep()!.DispatchNonce;
         });
         var t1OkCtx = ClaudeContext(t1OkOut);
         Assert.Contains("T1 attempt 2 is accepted", t1OkCtx);
@@ -243,13 +244,11 @@ public sealed class DualHarnessHookIntegrationTests
 
         // 7. Complete T2 -> automatically runs build.finish checks and transitions to ReviewDocument.
         toy.WriteTaskWork("T2");
-        var (_, t2OkOut, _) = RunHook(toy.RepoDir, "hook result", new
+        var (_, t2OkOut, _) = RunFixture(toy.RepoDir, "hook result", "claude-code", "PostToolUse-Agent", o =>
         {
-            hook_event_name = "PostToolUse",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
-            tool_name = "Agent",
-            tool_input = new { prompt = toy.Repo.ReadStep()!.DispatchNonce },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
+            o["tool_input"]!["prompt"] = toy.Repo.ReadStep()!.DispatchNonce;
         });
         var t2OkCtx = ClaudeContext(t2OkOut);
         Assert.Contains("T2 attempt 1 is accepted", t2OkCtx);
@@ -257,44 +256,40 @@ public sealed class DualHarnessHookIntegrationTests
 
         // 7b. Write clean review -> Stop commits review and advances to NeedsApproval.
         WriteCleanReview(toy);
-        var (_, reviewStopOut, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, reviewStopOut, _) = RunFixture(toy.RepoDir, "hook stop", "claude-code", "Stop", o =>
         {
-            hook_event_name = "Stop",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
         });
         Assert.Contains("review is committed", JsonDocument.Parse(reviewStopOut).RootElement.GetProperty("reason").GetString()!);
 
         // 8. Stop at NeedsApproval lets session end cleanly.
-        var (_, stopAtApproval, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, stopAtApproval, _) = RunFixture(toy.RepoDir, "hook stop", "claude-code", "Stop", o =>
         {
-            hook_event_name = "Stop",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
         });
         Assert.Equal("", stopAtApproval);
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
         // 9. Second session (claude-s2) invokes /hoshin:accept -> ignored, no state change!
-        var (_, otherAcceptOut, _) = RunHook(toy.RepoDir, "hook start", new
+        var (_, otherAcceptOut, _) = RunFixture(toy.RepoDir, "hook start", "claude-code", "UserPromptExpansion", o =>
         {
-            hook_event_name = "UserPromptExpansion",
-            cwd = toy.RepoDir,
-            session_id = "claude-s2",
-            command_name = "hoshin:accept",
-            prompt = "/hoshin:accept",
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s2";
+            o["command_name"] = "hoshin:accept";
+            o["prompt"] = "/hoshin:accept";
         });
         Assert.Equal("", otherAcceptOut);
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
         // 10. Original owning session (claude-s1) invokes /hoshin:accept -> records approval & publishes to origin!
-        var (_, acceptOut, _) = RunHook(toy.RepoDir, "hook start", new
+        var (_, acceptOut, _) = RunFixture(toy.RepoDir, "hook start", "claude-code", "UserPromptExpansion", o =>
         {
-            hook_event_name = "UserPromptExpansion",
-            cwd = toy.RepoDir,
-            session_id = "claude-s1",
-            command_name = "hoshin:accept",
-            prompt = "/hoshin:accept",
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-s1";
+            o["command_name"] = "hoshin:accept";
+            o["prompt"] = "/hoshin:accept";
         });
         Assert.Contains("The change is done: published", ClaudeContext(acceptOut));
         var remoteSha = TestGitFixture.Git(toy.Temp.Path, "--git-dir", toy.RemoteDir, "rev-parse", "refs/heads/change/greet-polish");
@@ -309,69 +304,60 @@ public sealed class DualHarnessHookIntegrationTests
     public void ClaudeCode_AsyncBackgroundSubagent_RefusesDuplicateWaitsOnStopAndJudgesOnSubagentStop()
     {
         using var toy = new ToyFixture();
-        RunHook(toy.RepoDir, "hook start", new
+        RunFixture(toy.RepoDir, "hook start", "claude-code", "UserPromptExpansion", o =>
         {
-            hook_event_name = "UserPromptExpansion",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            command_name = "hoshin:build",
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
+            o["command_name"] = "hoshin:build";
         });
 
         // Async launch records agentId in ledger and tells orchestrator to wait.
         var t1Nonce = toy.Repo.ReadStep()!.DispatchNonce;
-        var (_, launchedOut, _) = RunHook(toy.RepoDir, "hook result", new
+        var (_, launchedOut, _) = RunFixture(toy.RepoDir, "hook result", "claude-code", "PostToolUse-Agent-async", o =>
         {
-            hook_event_name = "PostToolUse",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            tool_name = "Agent",
-            tool_input = new { prompt = t1Nonce },
-            tool_response = new { isAsync = true, status = "async_launched", agentId = "agent-1" },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
+            o["tool_input"]!["prompt"] = t1Nonce;
+            o["tool_response"]!["agentId"] = "agent-1";
         });
         Assert.Contains("is running in the background (agent-1)", ClaudeContext(launchedOut));
         Assert.Equal("agent-1", toy.Repo.ReadLedger().ActiveSubagent?.AgentId);
 
         // Conflicting second launch is refused.
-        var (_, dupOut, _) = RunHook(toy.RepoDir, "hook result", new
+        var (_, dupOut, _) = RunFixture(toy.RepoDir, "hook result", "claude-code", "PostToolUse-Agent-async", o =>
         {
-            hook_event_name = "PostToolUse",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            tool_name = "Agent",
-            tool_input = new { prompt = t1Nonce },
-            tool_response = new { isAsync = true, status = "async_launched", agentId = "agent-2" },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
+            o["tool_input"]!["prompt"] = t1Nonce;
+            o["tool_response"]!["agentId"] = "agent-2";
         });
         Assert.Contains("already building T1", ClaudeContext(dupOut));
 
         // Stop while background task is still running allows parent to yield.
-        var (_, stopRunning, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, stopRunning, _) = RunFixture(toy.RepoDir, "hook stop", "claude-code", "Stop", o =>
         {
-            hook_event_name = "Stop",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            background_tasks = new[] { new { id = "agent-1", status = "running" } },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
+            o["background_tasks"] = new JsonArray(new JsonObject { ["id"] = "agent-1", ["status"] = "running" });
         });
         Assert.Equal("", stopRunning);
 
         // Background subagent completes work -> SubagentStop judges and commits T1.
         toy.WriteTaskWork("T1");
-        RunHook(toy.RepoDir, "hook subagent-stop", new
+        RunFixture(toy.RepoDir, "hook subagent-stop", "claude-code", "SubagentStop", o =>
         {
-            hook_event_name = "SubagentStop",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            agent_id = "agent-1",
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
+            o["agent_id"] = "agent-1";
         });
         Assert.True(toy.Repo.ReadLedger().WorkflowVerdicts.Single().Passed);
         Assert.Null(toy.Repo.ReadLedger().ActiveSubagent);
 
         // Next parent Stop blocks with T1 verdict report AND T2 brief.
-        var (_, nextStop, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, nextStop, _) = RunFixture(toy.RepoDir, "hook stop", "claude-code", "Stop", o =>
         {
-            hook_event_name = "Stop",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            background_tasks = Array.Empty<object>(),
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
         });
         var stopDoc = JsonDocument.Parse(nextStop).RootElement;
         Assert.Equal("block", stopDoc.GetProperty("decision").GetString());
@@ -381,30 +367,25 @@ public sealed class DualHarnessHookIntegrationTests
 
         // Run T2 async through SubagentStop -> next parent Stop blocks once with T2 verdict + "ready for approval".
         var t2Nonce = toy.Repo.ReadStep()!.DispatchNonce;
-        RunHook(toy.RepoDir, "hook result", new
+        RunFixture(toy.RepoDir, "hook result", "claude-code", "PostToolUse-Agent-async", o =>
         {
-            hook_event_name = "PostToolUse",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            tool_name = "Agent",
-            tool_input = new { prompt = t2Nonce },
-            tool_response = new { isAsync = true, status = "async_launched", agentId = "agent-t2" },
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
+            o["tool_input"]!["prompt"] = t2Nonce;
+            o["tool_response"]!["agentId"] = "agent-t2";
         });
         toy.WriteTaskWork("T2");
-        RunHook(toy.RepoDir, "hook subagent-stop", new
+        RunFixture(toy.RepoDir, "hook subagent-stop", "claude-code", "SubagentStop", o =>
         {
-            hook_event_name = "SubagentStop",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            agent_id = "agent-t2",
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
+            o["agent_id"] = "agent-t2";
         });
 
-        var (_, reviewStop, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, reviewStop, _) = RunFixture(toy.RepoDir, "hook stop", "claude-code", "Stop", o =>
         {
-            hook_event_name = "Stop",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            background_tasks = Array.Empty<object>(),
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
         });
         Assert.False(string.IsNullOrWhiteSpace(reviewStop), "Expected parent Stop to report T2 verdict and Review once");
         var reviewDoc = JsonDocument.Parse(reviewStop).RootElement;
@@ -415,21 +396,17 @@ public sealed class DualHarnessHookIntegrationTests
 
         // Commit clean review -> advances to NeedsApproval, and following Stop allows cleanly.
         WriteCleanReview(toy);
-        var (_, committedReviewStop, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, committedReviewStop, _) = RunFixture(toy.RepoDir, "hook stop", "claude-code", "Stop", o =>
         {
-            hook_event_name = "Stop",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            background_tasks = Array.Empty<object>(),
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
         });
         Assert.Contains("review is committed", JsonDocument.Parse(committedReviewStop).RootElement.GetProperty("reason").GetString()!);
 
-        var (_, secondApprovalStop, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, secondApprovalStop, _) = RunFixture(toy.RepoDir, "hook stop", "claude-code", "Stop", o =>
         {
-            hook_event_name = "Stop",
-            cwd = toy.RepoDir,
-            session_id = "claude-async",
-            background_tasks = Array.Empty<object>(),
+            o["cwd"] = toy.RepoDir;
+            o["session_id"] = "claude-async";
         });
         Assert.Equal("", secondApprovalStop);
     }
@@ -444,112 +421,115 @@ public sealed class DualHarnessHookIntegrationTests
         using var toy = new ToyFixture();
 
         // 1. PreInvocation with /build injects T1 brief targeting invoke_subagent.
-        var (_, startOut, _) = RunHook(toy.RepoDir, "hook start", new
+        var (_, startOut, _) = RunFixture(toy.RepoDir, "hook start", "antigravity", "PreInvocation", o =>
         {
-            hookEventName = "PreInvocation",
-            conversationId = "agy-parent-1",
-            cwd = toy.RepoDir,
-            workspacePaths = new[] { toy.RepoDir },
-            invocationNum = 0,
-            lastUserInput = "/build",
+            o["conversationId"] = "agy-parent-1";
+            o["cwd"] = toy.RepoDir;
+            o["workspacePaths"] = new JsonArray(toy.RepoDir);
+            o["invocationNum"] = 0;
+            o["lastUserInput"] = "/build";
         });
         var startMsg = AgyInjectedMessage(startOut);
         Assert.Contains("build task T1, attempt 1", startMsg);
         Assert.Contains("invoke_subagent", startMsg);
 
         // 2. Duplicate PreInvocation in same turn returns {}.
-        var (_, dupStart, _) = RunHook(toy.RepoDir, "hook start", new
+        var (_, dupStart, _) = RunFixture(toy.RepoDir, "hook start", "antigravity", "PreInvocation", o =>
         {
-            hookEventName = "PreInvocation",
-            conversationId = "agy-parent-1",
-            cwd = toy.RepoDir,
-            workspacePaths = new[] { toy.RepoDir },
-            invocationNum = 1,
-            lastUserInput = "/build",
+            o["conversationId"] = "agy-parent-1";
+            o["cwd"] = toy.RepoDir;
+            o["workspacePaths"] = new JsonArray(toy.RepoDir);
+            o["invocationNum"] = 1;
+            o["lastUserInput"] = "/build";
         });
         Assert.Equal("{}", dupStart);
 
         // 3. Session isolation: an unrelated Antigravity conversation (no active subagent launched yet) is NOT locked out!
-        var (_, unrelatedAllow, _) = RunHook(toy.RepoDir, "guard", new
+        var (_, unrelatedAllow, _) = RunFixture(toy.RepoDir, "guard", "antigravity", "PreToolUse-edit_file", o =>
         {
-            hookEventName = "PreToolUse",
-            conversationId = "agy-unrelated-session",
-            cwd = toy.RepoDir,
-            toolCall = new { id = "u1", name = "edit_file", args = new { Path = Path.Combine(toy.RepoDir, "src", "greet.mjs") } },
+            o["conversationId"] = "agy-unrelated-session";
+            o["cwd"] = toy.RepoDir;
+            o["workspacePaths"] = new JsonArray(toy.RepoDir);
+            o["toolCall"]!["args"]!["Path"] = Path.Combine(toy.RepoDir, "src", "greet.mjs");
         });
         Assert.Equal("allow", JsonDocument.Parse(unrelatedAllow).RootElement.GetProperty("decision").GetString());
 
         // 4. Execute T1 and T2 through async invoke_subagent + guard + Stop(fullyIdle).
         foreach (var task in new[] { "T1", "T2" })
         {
-            var (_, launched, _) = RunHook(toy.RepoDir, "hook result", new
+            var (_, launched, _) = RunFixture(toy.RepoDir, "hook result", "antigravity", "PostToolUse-invoke_subagent", o =>
             {
-                hookEventName = "PostToolUse",
-                conversationId = "agy-parent-1",
-                cwd = toy.RepoDir,
-                toolCall = new { id = $"call-{task}", name = "invoke_subagent", args = new { TypeName = "self", Role = $"Build {task}", Prompt = toy.Repo.ReadStep()!.DispatchNonce } },
-                toolResponse = new { conversationId = $"agy-sub-{task}" },
+                o["conversationId"] = "agy-parent-1";
+                o["cwd"] = toy.RepoDir;
+                o["workspacePaths"] = new JsonArray(toy.RepoDir);
+                o["toolCall"]!["id"] = $"call-{task}";
+                o["toolCall"]!["args"]!["Role"] = $"Build {task}";
+                o["toolCall"]!["args"]!["Prompt"] = toy.Repo.ReadStep()!.DispatchNonce;
+                o["toolResponse"]!["conversationId"] = $"agy-sub-{task}";
             });
             Assert.Equal("{}", launched);
 
             // Parent Stop while subagent runs (fullyIdle=false) yields cleanly.
-            var (_, yieldOut, _) = RunHook(toy.RepoDir, "hook stop", new
+            var (_, yieldOut, _) = RunFixture(toy.RepoDir, "hook stop", "antigravity", "Stop", o =>
             {
-                hookEventName = "Stop",
-                conversationId = "agy-parent-1",
-                cwd = toy.RepoDir,
-                fullyIdle = false,
+                o["conversationId"] = "agy-parent-1";
+                o["cwd"] = toy.RepoDir;
+                o["workspacePaths"] = new JsonArray(toy.RepoDir);
+                o["fullyIdle"] = false;
             });
             Assert.Equal("{}", yieldOut);
 
             // Subagent PreToolUse guard denies premature prod edit and manual git commit.
-            var (_, subDenyProd, _) = RunHook(toy.RepoDir, "guard", new
+            var (_, subDenyProd, _) = RunFixture(toy.RepoDir, "guard", "antigravity", "PreToolUse-replace_file_content", o =>
             {
-                hookEventName = "PreToolUse",
-                conversationId = $"agy-sub-{task}",
-                cwd = toy.RepoDir,
-                toolCall = new { id = $"e-{task}", name = "replace_file_content", args = new { TargetFile = Path.Combine(toy.RepoDir, "src", "greet.mjs") } },
+                o["conversationId"] = $"agy-sub-{task}";
+                o["cwd"] = toy.RepoDir;
+                o["workspacePaths"] = new JsonArray(toy.RepoDir);
+                o["toolCall"]!["id"] = $"e-{task}";
+                o["toolCall"]!["args"]!["TargetFile"] = Path.Combine(toy.RepoDir, "src", "greet.mjs");
             });
             Assert.Equal("deny", JsonDocument.Parse(subDenyProd).RootElement.GetProperty("decision").GetString());
 
-            var (_, subDenyCommit, _) = RunHook(toy.RepoDir, "guard", new
+            var (_, subDenyCommit, _) = RunFixture(toy.RepoDir, "guard", "antigravity", "PreToolUse-run_command", o =>
             {
-                hookEventName = "PreToolUse",
-                conversationId = $"agy-sub-{task}",
-                cwd = toy.RepoDir,
-                toolCall = new { id = $"c-{task}", name = "run_command", args = new { CommandLine = "git commit -m 'manual'" } },
+                o["conversationId"] = $"agy-sub-{task}";
+                o["cwd"] = toy.RepoDir;
+                o["workspacePaths"] = new JsonArray(toy.RepoDir);
+                o["toolCall"]!["id"] = $"c-{task}";
+                o["toolCall"]!["args"]!["CommandLine"] = "git commit -m 'manual'";
             });
             Assert.Equal("deny", JsonDocument.Parse(subDenyCommit).RootElement.GetProperty("decision").GetString());
 
             // Subagent writes test file first (allowed), then prod file.
-            var (_, subAllowTest, _) = RunHook(toy.RepoDir, "guard", new
+            var (_, subAllowTest, _) = RunFixture(toy.RepoDir, "guard", "antigravity", "PreToolUse-write_file", o =>
             {
-                hookEventName = "PreToolUse",
-                conversationId = $"agy-sub-{task}",
-                cwd = toy.RepoDir,
-                toolCall = new { id = $"w-{task}", name = "write_file", args = new { Path = Path.Combine(toy.RepoDir, "test", $"{task.ToLowerInvariant()}.test.mjs") } },
+                o["conversationId"] = $"agy-sub-{task}";
+                o["cwd"] = toy.RepoDir;
+                o["workspacePaths"] = new JsonArray(toy.RepoDir);
+                o["toolCall"]!["id"] = $"w-{task}";
+                o["toolCall"]!["args"]!["Path"] = Path.Combine(toy.RepoDir, "test", $"{task.ToLowerInvariant()}.test.mjs");
             });
             Assert.Equal("allow", JsonDocument.Parse(subAllowTest).RootElement.GetProperty("decision").GetString());
 
             toy.WriteTaskWork(task);
 
             // Subagent Stop (different conversationId) is ignored ({}).
-            var (_, subStop, _) = RunHook(toy.RepoDir, "hook stop", new
+            var (_, subStop, _) = RunFixture(toy.RepoDir, "hook stop", "antigravity", "Stop", o =>
             {
-                hookEventName = "Stop",
-                conversationId = $"agy-sub-{task}",
-                cwd = toy.RepoDir,
-                fullyIdle = true,
+                o["conversationId"] = $"agy-sub-{task}";
+                o["cwd"] = toy.RepoDir;
+                o["workspacePaths"] = new JsonArray(toy.RepoDir);
+                o["fullyIdle"] = true;
             });
             Assert.Equal("{}", subStop);
 
             // Parent Stop (fullyIdle=true) evaluates, commits test+prod, advances checks, returns decision=continue.
-            var (_, parentStop, _) = RunHook(toy.RepoDir, "hook stop", new
+            var (_, parentStop, _) = RunFixture(toy.RepoDir, "hook stop", "antigravity", "Stop", o =>
             {
-                hookEventName = "Stop",
-                conversationId = "agy-parent-1",
-                cwd = toy.RepoDir,
-                fullyIdle = true,
+                o["conversationId"] = "agy-parent-1";
+                o["cwd"] = toy.RepoDir;
+                o["workspacePaths"] = new JsonArray(toy.RepoDir);
+                o["fullyIdle"] = true;
             });
             var stopDoc = JsonDocument.Parse(parentStop).RootElement;
             Assert.Equal("continue", stopDoc.GetProperty("decision").GetString());
@@ -563,46 +543,44 @@ public sealed class DualHarnessHookIntegrationTests
 
         // 4b. Write clean review -> parent Stop commits review and advances to NeedsApproval.
         WriteCleanReview(toy);
-        var (_, reviewStopAgy, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, reviewStopAgy, _) = RunFixture(toy.RepoDir, "hook stop", "antigravity", "Stop", o =>
         {
-            hookEventName = "Stop",
-            conversationId = "agy-parent-1",
-            cwd = toy.RepoDir,
-            fullyIdle = true,
+            o["conversationId"] = "agy-parent-1";
+            o["cwd"] = toy.RepoDir;
+            o["workspacePaths"] = new JsonArray(toy.RepoDir);
+            o["fullyIdle"] = true;
         });
         Assert.Contains("review is committed", JsonDocument.Parse(reviewStopAgy).RootElement.GetProperty("reason").GetString()!);
 
         // 5. Final Stop at NeedsApproval returns {}.
-        var (_, doneStop, _) = RunHook(toy.RepoDir, "hook stop", new
+        var (_, doneStop, _) = RunFixture(toy.RepoDir, "hook stop", "antigravity", "Stop", o =>
         {
-            hookEventName = "Stop",
-            conversationId = "agy-parent-1",
-            cwd = toy.RepoDir,
-            fullyIdle = true,
+            o["conversationId"] = "agy-parent-1";
+            o["cwd"] = toy.RepoDir;
+            o["workspacePaths"] = new JsonArray(toy.RepoDir);
+            o["fullyIdle"] = true;
         });
         Assert.Equal("{}", doneStop);
 
         // 6. Unrelated session 2 gets {} with no state change; owning session 1 /accept approves and publishes to origin.
-        var (_, otherAcceptOut, _) = RunHook(toy.RepoDir, "hook start", new
+        var (_, otherAcceptOut, _) = RunFixture(toy.RepoDir, "hook start", "antigravity", "PreInvocation", o =>
         {
-            hookEventName = "PreInvocation",
-            conversationId = "agy-parent-2",
-            cwd = toy.RepoDir,
-            workspacePaths = new[] { toy.RepoDir },
-            invocationNum = 0,
-            lastUserInput = "/accept",
+            o["conversationId"] = "agy-parent-2";
+            o["cwd"] = toy.RepoDir;
+            o["workspacePaths"] = new JsonArray(toy.RepoDir);
+            o["invocationNum"] = 0;
+            o["lastUserInput"] = "/accept";
         });
         Assert.Equal("{}", otherAcceptOut);
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
-        var (_, acceptOut, _) = RunHook(toy.RepoDir, "hook start", new
+        var (_, acceptOut, _) = RunFixture(toy.RepoDir, "hook start", "antigravity", "PreInvocation", o =>
         {
-            hookEventName = "PreInvocation",
-            conversationId = "agy-parent-1",
-            cwd = toy.RepoDir,
-            workspacePaths = new[] { toy.RepoDir },
-            invocationNum = 0,
-            lastUserInput = "/accept",
+            o["conversationId"] = "agy-parent-1";
+            o["cwd"] = toy.RepoDir;
+            o["workspacePaths"] = new JsonArray(toy.RepoDir);
+            o["invocationNum"] = 0;
+            o["lastUserInput"] = "/accept";
         });
         Assert.Contains("The change is done: published", AgyInjectedMessage(acceptOut));
         var remoteSha = TestGitFixture.Git(toy.Temp.Path, "--git-dir", toy.RemoteDir, "rev-parse", "refs/heads/change/greet-polish");
