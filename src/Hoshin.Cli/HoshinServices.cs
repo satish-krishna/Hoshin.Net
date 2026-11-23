@@ -64,6 +64,7 @@ public sealed class HoshinServices
     private readonly Lazy<IPublisher> _publisher;
     private readonly Lazy<IDocumentCommitter> _documentCommitter;
     private readonly Lazy<IWorkflowRunner> _workflowRunner;
+    private readonly Lazy<WorkflowStateReader> _workflowStateReader;
     private readonly Lazy<HarnessAdapter> _hookAdapter;
     private readonly Lazy<HookOrchestrator> _hookOrchestrator;
 
@@ -123,6 +124,7 @@ public sealed class HoshinServices
     public IPublisher Publisher => _publisher.Value;
     public IDocumentCommitter DocumentCommitter => _documentCommitter.Value;
     public IWorkflowRunner WorkflowRunner => _workflowRunner.Value;
+    public WorkflowStateReader WorkflowStateReader => _workflowStateReader.Value;
     public HarnessAdapter HookAdapter => _hookAdapter.Value;
     public HookOrchestrator HookOrchestrator => _hookOrchestrator.Value;
 
@@ -243,6 +245,7 @@ public sealed class HoshinServices
             ApprovalRecorder,
             Publisher,
             DocumentCommitter));
+        _workflowStateReader = new(() => new WorkflowStateReader(PlanReader, ChangeState, FileSystem));
         _hookAdapter = new(() => new HarnessAdapter(TimeProvider));
         _hookOrchestrator = new(() => new HookOrchestrator(
             HookAdapter,
@@ -256,7 +259,7 @@ public sealed class HoshinServices
             Git,
             FileSystem,
             Ledger,
-            PlanReader,
+            WorkflowStateReader,
             TimeProvider));
     }
 }

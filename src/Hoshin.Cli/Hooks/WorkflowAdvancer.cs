@@ -1,5 +1,4 @@
 using Hoshin.Workflow.Common;
-using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
@@ -16,7 +15,7 @@ internal sealed class WorkflowAdvancer(
     IGitStatus gitStatus,
     IFileSystem fileSystem,
     LedgerStore ledgerStore,
-    PlanReader planReader)
+    WorkflowStateReader stateReader)
 {
     private readonly ITaskEvaluator _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
     private readonly ICheckRunner _checks = checks ?? throw new ArgumentNullException(nameof(checks));
@@ -26,11 +25,11 @@ internal sealed class WorkflowAdvancer(
     private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly LedgerStore _ledgerStore = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
-    private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
+    private readonly WorkflowStateReader _stateReader = stateReader ?? throw new ArgumentNullException(nameof(stateReader));
 
     public IFileSystem FileSystem => _fs;
 
-    public PlanReader PlanReader => _planReader;
+    public WorkflowStateReader StateReader => _stateReader;
 
     public WorkflowRepo? ResolveRepo(NormalizedHookEvent ev) =>
         WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _gitWorktrees, _gitQuery, _gitStatus, _fs, _ledgerStore);
@@ -40,7 +39,7 @@ internal sealed class WorkflowAdvancer(
         error = null;
         try
         {
-            return WorkflowState.Read(repo, _planReader, rolesRoot);
+            return _stateReader.Read(repo, rolesRoot);
         }
         catch (CouldNotRunException e)
         {

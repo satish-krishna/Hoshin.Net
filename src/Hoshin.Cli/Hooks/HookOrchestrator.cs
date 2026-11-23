@@ -1,5 +1,4 @@
 using Hoshin.Workflow.Common;
-using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
@@ -28,7 +27,7 @@ public sealed class HookOrchestrator
         IGitStatus gitStatus,
         IFileSystem fileSystem,
         LedgerStore ledgerStore,
-        PlanReader planReader,
+        WorkflowStateReader stateReader,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(adapter);
@@ -42,10 +41,10 @@ public sealed class HookOrchestrator
         ArgumentNullException.ThrowIfNull(gitStatus);
         ArgumentNullException.ThrowIfNull(fileSystem);
         ArgumentNullException.ThrowIfNull(ledgerStore);
-        ArgumentNullException.ThrowIfNull(planReader);
+        ArgumentNullException.ThrowIfNull(stateReader);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
-        var advancer = new WorkflowAdvancer(taskEvaluator, checkRunner, publisher, gitWorktrees, gitQuery, gitStatus, fileSystem, ledgerStore, planReader);
+        var advancer = new WorkflowAdvancer(taskEvaluator, checkRunner, publisher, gitWorktrees, gitQuery, gitStatus, fileSystem, ledgerStore, stateReader);
         _start = new StartHandler(adapter, taskEvaluator, approvals, documentCommitter, advancer, fileSystem, timeProvider);
         _result = new ResultHandler(adapter, taskEvaluator, advancer, fileSystem, timeProvider);
         _stop = new StopHandler(adapter, documentCommitter, advancer, fileSystem, timeProvider);

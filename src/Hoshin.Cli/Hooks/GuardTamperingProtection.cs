@@ -80,7 +80,7 @@ public static partial class GuardTamperingProtection
         return null;
     }
 
-    public static string? DetectMissingRunMarkerTampering(WorkflowRepo repo, PlanReader planReader, string? rolesRoot)
+    public static string? DetectMissingRunMarkerTampering(WorkflowRepo repo, WorkflowStateReader stateReader, string? rolesRoot)
     {
         if (File.Exists(repo.RunMarkerPath) || !File.Exists(repo.LedgerPath))
         {
@@ -110,7 +110,7 @@ public static partial class GuardTamperingProtection
 
         try
         {
-            var state = WorkflowState.Read(repo, planReader, rolesRoot);
+            var state = stateReader.Read(repo, rolesRoot);
             if (state is null)
             {
                 return null;

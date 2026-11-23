@@ -38,6 +38,7 @@ internal static class TestServices
     public static AppService Apps => Default.Apps;
     public static LedgerStore Ledger => Default.Ledger;
     public static IWorkflowRunner WorkflowRunner => Default.WorkflowRunner;
+    public static WorkflowStateReader WorkflowStateReader => Default.WorkflowStateReader;
     public static HarnessAdapter HookAdapter => Default.HookAdapter;
     public static HookOrchestrator HookOrchestrator => Default.HookOrchestrator;
 
@@ -49,7 +50,7 @@ internal static class TestServices
     }
 
     public static WorkflowState? ReadState(WorkflowRepo repo, string? skillsRoot = null) =>
-        WorkflowState.Read(repo, PlanReader, skillsRoot);
+        WorkflowStateReader.Read(repo, skillsRoot);
 
     public static WorkflowPlan? ReadPlan(WorkflowRepo repo) =>
         repo.ReadPlan(PlanReader);
@@ -93,7 +94,7 @@ internal static class TestServices
             g,
             FileSystem,
             ledger,
-            PlanReader,
+            WorkflowStateReader,
             timeProvider ?? Time);
     }
 

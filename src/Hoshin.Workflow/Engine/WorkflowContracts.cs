@@ -45,14 +45,15 @@ public sealed record WorkflowPlan(
         ["test/**", "tests/**", "*.test.*", "*Tests.cs", "*Test.cs"];
 }
 
-/// <summary>Status of one change document (<c>intent.md</c>, <c>spec.md</c>, or <c>plan.md</c>) in working tree and HEAD.</summary>
+/// <summary>Status of one change document (<c>intent.md</c>, <c>spec.md</c>, or <c>plan.md</c>) in working tree and HEAD, with optional upstream pin state.</summary>
 public sealed record WorkflowDocState(
     string Path,
     bool Exists,
     bool InHead,
     bool Uncommitted,
     string? WorkingStatus,
-    string? HeadStatus);
+    string? HeadStatus,
+    string? Pin = null);
 
 /// <summary>Work handed to an agent: the role's procedure text and the attempt brief.</summary>
 public sealed record AgentTask(string Role, string Task, int Attempt, string Instructions, string Brief)

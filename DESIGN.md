@@ -72,7 +72,7 @@ flowchart TB
 
 ## 3. Workflow State Machine (`WorkflowEngine.Next`)
 
-`WorkflowState` is reconstructed cleanly from git, the change's JSONC documents, and the unified per-change/per-repo `RepoLedger` at `.git/hoshin/<system>/<change>/<repo>.json` (managed atomically under `FileLock` by `LedgerStore`, mirroring task verdicts to `reds` and `runs` for `hoshin red show` and `hoshin status`). `WorkflowEngine.Next(WorkflowState)` is a pure function returning the single next `Step`:
+`WorkflowState` is constructed by `WorkflowStateReader` from `ChangeStateService` (carrying documents with upstream `source_*_commit` pins, `ReadinessMap`, schedule, and progress — with a fallback for standalone `.hoshin/` repos without `.hoshin.json`), git, and the unified per-change/per-repo `RepoLedger` at `.git/hoshin/<system>/<change>/<repo>.json` (managed atomically under `FileLock` by `LedgerStore`, mirroring task verdicts to `reds` and `runs` for `hoshin red show` and `hoshin status`). Both `WorkflowEngine.Next(WorkflowState)` and `WorkflowEngine.Gate(WorkflowState, skill)` stay pure — receiving the computed `ChangeStateItem` / `ReadinessMap` as values — and gating comes from `ChangeState` (`ReadinessMap`'s `SkillReadiness.Stop` reasons for stale pins, superseded plans, the light-track stop, and uncommitted acceptance) before falling back to step-owner gating:
 
 ```mermaid
 stateDiagram-v2

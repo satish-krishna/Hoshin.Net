@@ -29,7 +29,7 @@ internal sealed class StopHandler(
 
         if (!_fs.FileExists(repo.RunMarkerPath))
         {
-            var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, _advancer.PlanReader, rolesRoot);
+            var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, _advancer.StateReader, rolesRoot);
             return tamper is not null
                 ? (_adapter.BlockStopOutput(ev.Harness, tamper), "block: run.json tampering detected")
                 : (_adapter.EmptyOutput(ev.Harness), "no run");

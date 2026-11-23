@@ -1,11 +1,11 @@
-using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Events;
 
 namespace Hoshin.Workflow.Engine;
 
 /// <summary>
-/// Pure snapshot of where a workflow run stands, computed from git, JSONC change documents, and the unified <see cref="RepoLedger"/> in <c>.git/hoshin/</c>.
-/// Holds nothing owned by any specific harness.
+/// Pure snapshot of where a workflow run stands, computed from <see cref="ChangeStateService"/>, git, JSONC change documents,
+/// and the unified <see cref="RepoLedger"/> in <c>.git/hoshin/</c>. Holds nothing owned by any specific harness.
 /// </summary>
 public sealed record WorkflowState(
     string RepoRoot,
@@ -17,30 +17,10 @@ public sealed record WorkflowState(
     WorkflowDocState Intent,
     WorkflowDocState Spec,
     WorkflowDocState PlanDoc,
-    string? CodeHead = null)
+    string? CodeHead = null,
+    ChangeStateItem? ChangeState = null)
 {
     public string EffectiveCodeHead => string.IsNullOrWhiteSpace(CodeHead) ? Head : CodeHead;
-
-    public static WorkflowState? Read(WorkflowRepo repo, PlanReader planReader, string? skillsRoot = null)
-    {
-        var plan = repo.ReadPlan(planReader);
-        if (plan is null)
-        {
-            return null;
-        }
-
-        return new WorkflowState(
-            repo.Root,
-            repo.ChangeFolder,
-            plan,
-            repo.Head(),
-            repo.ReadLedger(),
-            skillsRoot,
-            repo.DocumentStatus("intent.md"),
-            repo.DocumentStatus("spec.md"),
-            repo.DocumentStatus("plan.md"),
-            repo.CodeHead());
-    }
 
     public WorkflowDocState Document(WorkflowDocument document) => document switch
     {
@@ -169,7 +149,14 @@ public static class WorkflowEngine
             {
                 case "rejected":
                     return new Done(false, $"the {document.ToWireName()} is rejected");
+                case "superseded" when document == WorkflowDocument.Plan:
+                    return new WriteDocument(WorkflowDocument.Plan, doc.Path, WorkflowBriefs.Plan(state));
                 case "accepted":
+                    if (NeedsRegenerationFromPin(state, document, doc))
+                    {
+                        return WriteDocumentFor(state, document, doc.Path);
+                    }
+
                     continue;
                 default:
                     return new AwaitAccept(document, doc.Path, state.Head);
@@ -179,9 +166,30 @@ public static class WorkflowEngine
         return null;
     }
 
+    private static bool NeedsRegenerationFromPin(WorkflowState state, WorkflowDocument document, WorkflowDocState doc) =>
+        document switch
+        {
+            WorkflowDocument.Spec => state.ChangeState?.Ready.Spec is { Candidate: true, Stop: null } && doc.Pin != "holds",
+            WorkflowDocument.Plan => doc.Pin is "broken" or "missing" && state.ChangeState?.Ready.Plan.Stop is null,
+            _ => false,
+        };
+
+    private static WriteDocument WriteDocumentFor(WorkflowState state, WorkflowDocument document, string path)
+    {
+        var brief = document switch
+        {
+            WorkflowDocument.Intent => WorkflowBriefs.Intent(state),
+            WorkflowDocument.Spec => WorkflowBriefs.Spec(state),
+            WorkflowDocument.Plan => WorkflowBriefs.Plan(state),
+            _ => throw new ArgumentOutOfRangeException(nameof(document)),
+        };
+        return new WriteDocument(document, path, brief);
+    }
+
     /// <summary>
     /// Gate check: returns <c>null</c> if <paramref name="skill"/> may act at the current <see cref="Next"/> step;
-    /// otherwise returns a clear refusal naming the step that comes next.
+    /// when <see cref="WorkflowState.ChangeState"/> is present, refuses with <see cref="ReadinessMap"/>'s exact
+    /// <see cref="SkillReadiness.Stop"/> reason before falling back to step-owner gating.
     /// </summary>
     public static string? Gate(WorkflowState state, string skill)
     {
@@ -189,6 +197,19 @@ public static class WorkflowEngine
         if (normalized is "setup" or "context")
         {
             return null;
+        }
+
+        if (state.ChangeState is { Ready: var ready })
+        {
+            if (ReadinessStop(state, ready, normalized) is { } stop)
+            {
+                return stop;
+            }
+
+            if (IsReadyCandidate(ready, normalized))
+            {
+                return null;
+            }
         }
 
         var step = Next(state);
@@ -215,6 +236,42 @@ public static class WorkflowEngine
 
         return $"`{skill}` cannot run on this change now. The next step is {Describe(step)}.";
     }
+
+    private static string? ReadinessStop(WorkflowState state, ReadinessMap ready, string skill) => skill switch
+    {
+        "spec" => ready.Spec.Stop,
+        "plan" => ready.Plan.Stop,
+        "build" => ready.Build.Stop,
+        "review" => ReviewReadinessStop(state, ready),
+        "reject" => ready.Reject.Stop,
+        "done" => ready.Build.Stop,
+        _ => null,
+    };
+
+    private static string? ReviewReadinessStop(WorkflowState state, ReadinessMap ready)
+    {
+        if (ready.Build.Stop is not null)
+        {
+            return ready.Build.Stop;
+        }
+
+        if (ready.Review.Stop is null)
+        {
+            return null;
+        }
+
+        var allPassedInLedger = state.Plan.Tasks.Count > 0
+            && state.Plan.Tasks.All(t => state.Ledger.WorkflowVerdicts.Any(v => v.Task == t.Id && v.Passed));
+        var isOnlyUnloggedTasks = ready.Review.Stop.StartsWith("These tasks have no build log entry yet:", StringComparison.Ordinal);
+        return allPassedInLedger && isOnlyUnloggedTasks ? null : ready.Review.Stop;
+    }
+
+    private static bool IsReadyCandidate(ReadinessMap ready, string skill) => skill switch
+    {
+        "spec" => ready.Spec.Candidate && ready.Spec.Stop is null,
+        "plan" => ready.Plan.Candidate && ready.Plan.Stop is null,
+        _ => false,
+    };
 
     public static string? OwnerOf(Step step) => step switch
     {
