@@ -1069,7 +1069,7 @@ Every rule of round 1's "How to work through this file" still applies, with thes
 
 - **Branch:** `fix/round-2`. It exists, and its first commits are the gate (`617291d`), the review docs, this part of TASKS.md and `.github/CODEOWNERS`. Don't rebase those away.
 - **Scope of the branch:** R01–R09 (tier R1) only. They are what the gate needs. R10–R20 go in later branches, one pull request per tier, after this branch merges.
-- **Pull request:** a draft, opened from a human collaborator's GitHub account (D7, and "No bypass" below), titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
+- **Pull request:** a draft, opened from the `hoshin-net-bot` account (D7, and "No bypass" below), titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
 - **Commits:** one per task, in index order, with round 1's trailers plus one:
   ```
   Task: R02
@@ -1088,10 +1088,12 @@ Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reas
 
 ### D7 — Whose GitHub identity does the implementer push and open pull requests under?
 
-Code gets no administrator bypass (CONTRIBUTING §2.1), and an author can't approve their own pull request, so the round-2 pull request has to come from someone other than the code owner. **Options:** (a) a machine-user account; (b) a GitHub App; (c) a human collaborator's account. **Answer:** (c), a human collaborator's account. The conditions:
-- the collaborator has `write` or `maintain` permission, **never `admin`**. Admins aren't enforced by the branch protection, so an admin collaborator could merge a red gate or change `CODEOWNERS` without approval;
-- the collaborator is not a code owner, so their approval never stands in for the code owner's;
-- everything the agent does under that account is the collaborator's responsibility, so they agree to it, and the token the agent uses has no more scope than this repository needs (a fine-grained token limited to this repository, with contents and pull-request write access).
+Code gets no administrator bypass (CONTRIBUTING §2.1), and an author can't approve their own pull request, so the round-2 pull request has to come from someone other than the code owner. **Options:** (a) a machine-user account; (b) a GitHub App; (c) a human collaborator's account. **Answer:** (a), the machine user `hoshin-net-bot`. The conditions:
+- `hoshin-net-bot` is a collaborator on this repository with `write` permission, **never `admin` or `maintain`**. Admins aren't enforced by the branch protection, so an admin bot could merge a red gate or change `CODEOWNERS` without approval;
+- it is not a code owner, so its approval never stands in for the code owner's;
+- it has access to this repository only, and has two-factor authentication on;
+- the agent pushes and opens pull requests with a token of the bot's, never the code owner's. Use a fine-grained token limited to this repository (contents and pull requests: read and write) if GitHub offers this repository to the bot's fine-grained tokens. Otherwise use a classic token with the `repo` scope only; the bot can reach no other repository, so `repo` reaches only this one. Either way, leave out the `workflow` scope, so the agent can't push changes to `.github/workflows/`;
+- commits are authored as `hoshin-net-bot` with its GitHub noreply address, so the history shows which commits the agent made.
 
 ## Round 2 index
 
