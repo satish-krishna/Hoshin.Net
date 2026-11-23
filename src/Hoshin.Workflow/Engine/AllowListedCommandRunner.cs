@@ -27,8 +27,6 @@ public interface IAllowListedCommandRunner
 /// </summary>
 public sealed class AllowListedCommandRunner : IAllowListedCommandRunner
 {
-    public static AllowListedCommandRunner Default { get; } = new();
-
     public static readonly IReadOnlyList<string> AllowedEnvironmentVariables =
     [
         "PATH", "HOME", "LANG", "LC_ALL", "TMPDIR", "USER", "NODE_PATH",

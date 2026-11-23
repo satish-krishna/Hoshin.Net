@@ -7,11 +7,14 @@ namespace Hoshin.Workflow.Changes;
 public sealed record ChangeDoc(string File, ReadResult Result);
 
 /// <summary>Cross-document validation: plan tasks against spec scenarios/rules, plan self-references, and build logs against plan tasks.</summary>
-public static partial class CrossChecker
+public sealed partial class CrossChecker(IFileSystem fileSystem)
 {
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+
     [GeneratedRegex(@"^\s*""([^""]+)""\s*:")]
     private static partial Regex FieldLineRegex();
-    public static List<Problem> CheckChange(IReadOnlyList<ChangeDoc> docs)
+
+    public List<Problem> CheckChange(IReadOnlyList<ChangeDoc> docs)
     {
         (ParsedSpec Doc, string File)? spec = null;
         (ParsedPlan Doc, string File, int Layout)? plan = null;
@@ -197,11 +200,11 @@ public static partial class CrossChecker
         return problems;
     }
 
-    private static bool IsSuperseded(string file)
+    private bool IsSuperseded(string file)
     {
         try
         {
-            return FrontMatter.TryGetScalar(File.ReadAllText(file), file, "status") == "superseded";
+            return _fs.FileExists(file) && FrontMatter.TryGetScalar(_fs.ReadAllText(file), file, "status") == "superseded";
         }
         catch
         {

@@ -41,26 +41,33 @@ public interface IWorkflowRunner
 /// commits on failure), and publishes branches/PRs only after approval.
 /// </summary>
 public sealed partial class WorkflowRunner(
-    IAllowListedCommandRunner? commandRunner = null,
-    IPullRequestClient? pullRequests = null,
-    IntentReader? intentReader = null,
-    SpecReader? specReader = null,
-    PlanReader? planReader = null,
-    ReviewReader? reviewReader = null) : IWorkflowRunner
+    IAllowListedCommandRunner commandRunner,
+    IPullRequestClient pullRequests,
+    IntentReader intentReader,
+    SpecReader specReader,
+    PlanReader planReader,
+    ReviewReader reviewReader,
+    FrontMatterEdit frontMatterEdit,
+    Changes.CrossChecker crossChecker,
+    IFileSystem fileSystem,
+    TimeProvider timeProvider) : IWorkflowRunner
 {
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();
-    public static WorkflowRunner Default { get; } = new();
 
     private static readonly StringComparison PathComparison =
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
-    private readonly IAllowListedCommandRunner _runner = commandRunner ?? AllowListedCommandRunner.Default;
-    private readonly IPullRequestClient _pullRequests = pullRequests ?? new GhPullRequestClient();
-    private readonly IntentReader _intentReader = intentReader ?? new IntentReader();
-    private readonly SpecReader _specReader = specReader ?? new SpecReader();
-    private readonly PlanReader _planReader = planReader ?? new PlanReader();
-    private readonly ReviewReader _reviewReader = reviewReader ?? new ReviewReader();
+    private readonly IAllowListedCommandRunner _runner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
+    private readonly IPullRequestClient _pullRequests = pullRequests ?? throw new ArgumentNullException(nameof(pullRequests));
+    private readonly IntentReader _intentReader = intentReader ?? throw new ArgumentNullException(nameof(intentReader));
+    private readonly SpecReader _specReader = specReader ?? throw new ArgumentNullException(nameof(specReader));
+    private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
+    private readonly ReviewReader _reviewReader = reviewReader ?? throw new ArgumentNullException(nameof(reviewReader));
+    private readonly FrontMatterEdit _frontMatterEdit = frontMatterEdit ?? throw new ArgumentNullException(nameof(frontMatterEdit));
+    private readonly Changes.CrossChecker _crossChecker = crossChecker ?? throw new ArgumentNullException(nameof(crossChecker));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+    private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly IReadOnlyList<ITaskVerdictPolicy> _verdictPolicies = [new NoTestPolicy(), new RedGreenPolicy()];
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
@@ -71,7 +78,7 @@ public sealed partial class WorkflowRunner(
             var agent = step is Implement i ? i.Agent : ((Retry)step).Agent;
             var task = state.Plan.Tasks.FirstOrDefault(t => t.Id == agent.Task);
             var hasTest = task?.Test is { Length: > 0 };
-            var taskTestFiles = hasTest ? WorkflowRepo.ExtractTestFilesFromArgv(task!.Test!, repo.Root, state.Plan.EffectiveTestPatterns) : null;
+            var taskTestFiles = hasTest ? WorkflowRepo.ExtractTestFilesFromArgv(task!.Test!, repo.Root, state.Plan.EffectiveTestPatterns).ToArray() : null;
 
             repo.WithLedger(ledger =>
             {
@@ -85,7 +92,7 @@ public sealed partial class WorkflowRunner(
                         agent.Task,
                         agent.Attempt,
                         taskStart,
-                        DateTimeOffset.UtcNow,
+                        _time.GetUtcNow(),
                         snapshot.IndexHadStagedChanges,
                         preIssuePaths));
                 }
@@ -102,7 +109,7 @@ public sealed partial class WorkflowRunner(
                 : $"<!-- hoshin:{agent.Task}:attempt-{agent.Attempt}:{Guid.NewGuid().ToString("N")[..8]} -->";
             var nextStep = same
                 ? previous! with { SessionId = activeSession, ChangeFolder = repo.ChangeFolder, TestPatterns = state.Plan.EffectiveTestPatterns, TaskTestFiles = taskTestFiles, DispatchNonce = nonce, HasTest = hasTest }
-                : new CurrentStep(step.Kind, agent.Task, agent.Attempt, start, DateTimeOffset.UtcNow, AgentId: null, SessionId: activeSession, ChangeFolder: repo.ChangeFolder, TestPatterns: state.Plan.EffectiveTestPatterns, TaskTestFiles: taskTestFiles, DispatchNonce: nonce, HasTest: hasTest);
+                : new CurrentStep(step.Kind, agent.Task, agent.Attempt, start, _time.GetUtcNow(), AgentId: null, SessionId: activeSession, ChangeFolder: repo.ChangeFolder, TestPatterns: state.Plan.EffectiveTestPatterns, TaskTestFiles: taskTestFiles, DispatchNonce: nonce, HasTest: hasTest);
             repo.WriteStep(nextStep);
         }
         else
@@ -116,7 +123,7 @@ public sealed partial class WorkflowRunner(
                 _ => null,
             };
             var activeSession = sessionId ?? repo.ReadRunMarker()?.SessionId;
-            repo.WriteStep(new CurrentStep(step.Kind, document, 0, null, DateTimeOffset.UtcNow, AgentId: null, SessionId: activeSession, ChangeFolder: repo.ChangeFolder));
+            repo.WriteStep(new CurrentStep(step.Kind, document, 0, null, _time.GetUtcNow(), AgentId: null, SessionId: activeSession, ChangeFolder: repo.ChangeFolder));
         }
     }
 
@@ -131,7 +138,7 @@ public sealed partial class WorkflowRunner(
                 return false;
             }
 
-            ledger.ActiveSubagent = new ActiveSubagent(taskId, attempt, agentId, DateTimeOffset.UtcNow);
+            ledger.ActiveSubagent = new ActiveSubagent(taskId, attempt, agentId, _time.GetUtcNow());
             return true;
         });
 
@@ -186,7 +193,7 @@ public sealed partial class WorkflowRunner(
 
         var startHead = repo.Head();
         ClearActiveSubagent(repo);
-        var now = DateTimeOffset.UtcNow;
+        var now = _time.GetUtcNow();
 
         if (WorkflowHeadGuard.HasUnexpectedHeadMove(liveLedger, taskId, startHead))
         {
@@ -263,7 +270,7 @@ public sealed partial class WorkflowRunner(
             outputs.Add($"$ {string.Join(' ', check)} -> {run.ExitCode}\n{run.Tail(20)}");
         }
 
-        var baseline = new WorkflowBaselineRun(sha, passed, string.Join("\n", outputs), DateTimeOffset.UtcNow);
+        var baseline = new WorkflowBaselineRun(sha, passed, string.Join("\n", outputs), _time.GetUtcNow());
         repo.WithLedger(l =>
         {
             l.Baselines.Add(baseline);
@@ -286,7 +293,7 @@ public sealed partial class WorkflowRunner(
         }
 
         var codeHead = state.EffectiveCodeHead;
-        var result = new WorkflowCheckRun(codeHead, passed, string.Join("\n", outputs), DateTimeOffset.UtcNow);
+        var result = new WorkflowCheckRun(codeHead, passed, string.Join("\n", outputs), _time.GetUtcNow());
         repo.WithLedger(l =>
         {
             l.Checks.Add(result);
@@ -298,7 +305,7 @@ public sealed partial class WorkflowRunner(
     public WorkflowApproval Answer(WorkflowRepo repo, WorkflowState state, bool approved, string note)
     {
         var codeHead = state.EffectiveCodeHead;
-        var approval = new WorkflowApproval(codeHead, approved, note, DateTimeOffset.UtcNow);
+        var approval = new WorkflowApproval(codeHead, approved, note, _time.GetUtcNow());
         repo.WithLedger(l =>
         {
             if (!l.Approvals.Any(a => a.Head == codeHead))
@@ -334,7 +341,7 @@ public sealed partial class WorkflowRunner(
             prUrl = url;
         }
 
-        var published = new WorkflowPublished(state.EffectiveCodeHead, targetRef, DateTimeOffset.UtcNow, prUrl);
+        var published = new WorkflowPublished(state.EffectiveCodeHead, targetRef, _time.GetUtcNow(), prUrl);
         repo.WithLedger(l =>
         {
             l.Published.Add(published);
@@ -430,7 +437,7 @@ public sealed partial class WorkflowRunner(
             var sha = repo.Git("log", "-1", "--format=%H", "--", intentRel).Output.Trim();
             if (sha.Length > 0)
             {
-                FrontMatterEdit.Set(path, "source_intent_commit", sha);
+                _frontMatterEdit.Set(path, "source_intent_commit", sha);
             }
         }
         else if (name == "plan" && state.Spec.InHead)
@@ -439,7 +446,7 @@ public sealed partial class WorkflowRunner(
             var sha = repo.Git("log", "-1", "--format=%H", "--", specRel).Output.Trim();
             if (sha.Length > 0)
             {
-                FrontMatterEdit.Set(path, "source_spec_commit", sha);
+                _frontMatterEdit.Set(path, "source_spec_commit", sha);
             }
         }
 
@@ -502,7 +509,7 @@ public sealed partial class WorkflowRunner(
         var highCount = latest?.Findings.Count(f => string.Equals(f.Severity, "high", StringComparison.OrdinalIgnoreCase)) ?? 0;
         repo.WithLedger(l =>
         {
-            l.Reviews.Add(new WorkflowReviewRun(codeHead, reviewNum, findingsCount, highCount, DateTimeOffset.UtcNow));
+            l.Reviews.Add(new WorkflowReviewRun(codeHead, reviewNum, findingsCount, highCount, _time.GetUtcNow()));
             return 0;
         });
 
@@ -598,7 +605,7 @@ public sealed partial class WorkflowRunner(
     {
         var path = state.Document(name).Path;
         var relative = Path.GetRelativePath(repo.Root, path).Replace('\\', '/');
-        FrontMatterEdit.Set(path, "status", "accepted");
+        _frontMatterEdit.Set(path, "status", "accepted");
         repo.Git("add", "--", relative);
         var commit = repo.Git("commit", "-q", "-m", $"docs({state.Plan.Scope}): accept {name} {state.Plan.Change}", "-m", "Generated-By: hoshin", "--", relative);
         return commit.Ok ? repo.Head() : null;
@@ -732,14 +739,14 @@ public sealed partial class WorkflowRunner(
         {
             var planRead = _planReader.Read(text, file);
             var problems = new List<Problem>(planRead.Problems);
-            if (specPath is not null && File.Exists(specPath))
+            if (specPath is not null && _fs.FileExists(specPath))
             {
                 try
                 {
-                    var specRead = _specReader.Read(File.ReadAllText(specPath), specPath);
+                    var specRead = _specReader.Read(_fs.ReadAllText(specPath), specPath);
                     if (specRead.Problems.Count == 0)
                     {
-                        var cross = Changes.CrossChecker.CheckChange([
+                        var cross = _crossChecker.CheckChange([
                             new Changes.ChangeDoc(specPath, specRead),
                             new Changes.ChangeDoc(file, planRead),
                         ]);

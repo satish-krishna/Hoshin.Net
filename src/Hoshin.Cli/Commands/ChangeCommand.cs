@@ -58,7 +58,7 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
 
         var (resolvedMaster, workspace) = ResolvePlace(o);
         var master = services.Git.MainCheckout(resolvedMaster);
-        if (!MarkerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.ContainsKey(system))
+        if (!services.MarkerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.ContainsKey(system))
         {
             throw new CouldNotRunException($"the marker lists no system {system}");
         }
@@ -127,7 +127,7 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
         }
 
         var c = Locate(o);
-        var scope = ScopeRules.ChangeScope(c.Master, c.System, c.Folder);
+        var scope = services.ScopeRules.ChangeScope(c.Master, c.System, c.Folder);
         var res = services.ChangeRename.Rename(new RenameInput(c.Master, c.Workspace, c.System, c.Change, c.Repos, to, scope));
         CliIo.PrintJson(new { change = c.Change, from = res.From, to, renamed = res.Renamed, problems = res.Problems });
         return res.Problems.Count == 0 ? ExitCodes.Pass : ExitCodes.Problems;
@@ -147,7 +147,7 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
     {
         var o = OptionParser.Parse(args, values: ["change", "system", "master", "workspace"], flags: ["json", "refresh"]);
         var c = Locate(o);
-        var record = ChangeRecordStore.Read(c.Folder);
+        var record = services.ChangeRecords.Read(c.Folder);
         Dictionary<string, string?>? states = o.Has("refresh") && record is not null
             ? record.PullRequests.ToDictionary(p => p.Url, p => services.PullRequests.StateOf(c.Master, p.Url), StringComparer.Ordinal)
             : null;
@@ -173,7 +173,7 @@ public sealed class ChangeCommand(HoshinServices services) : IHoshinCommand
             ["change"] = c.Change,
             ["system"] = c.System,
             ["master"] = c.Master,
-            ["branch"] = ChangeRecordStore.BranchOf(c.Folder),
+            ["branch"] = services.ChangeRecords.BranchOf(c.Folder),
             ["record"] = record,
             ["repos"] = repos,
         };

@@ -104,7 +104,7 @@ public sealed class DualHarnessHookIntegrationTests
                     Verify `cleanGreet('  Ada  ') === 'Hello, Ada'`.
                     """,
             });
-            Repo = WorkflowRepo.Find(RepoDir)!;
+            Repo = TestServices.FindRepo(RepoDir)!;
         }
 
         public void WriteTaskWork(string task, bool sloppy = false)
@@ -140,7 +140,7 @@ public sealed class DualHarnessHookIntegrationTests
         }
 
         var env = new Dictionary<string, string>(TestGitFixture.GitEnv) { ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1" };
-        var res = ProcessCommandRunner.Default.Run(new CommandRequest(
+        var res = TestServices.CommandRunner.Run(new CommandRequest(
             WorkingDirectory: cwd,
             Argv: ["dotnet", .. args],
             StandardInput: JsonSerializer.Serialize(payload),
@@ -273,7 +273,7 @@ public sealed class DualHarnessHookIntegrationTests
             session_id = "claude-s1",
         });
         Assert.Equal("", stopAtApproval);
-        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
         // 9. Second session (claude-s2) invokes /hoshin:accept -> ignored, no state change!
         var (_, otherAcceptOut, _) = RunHook(toy.RepoDir, "hook start", new
@@ -285,7 +285,7 @@ public sealed class DualHarnessHookIntegrationTests
             prompt = "/hoshin:accept",
         });
         Assert.Equal("", otherAcceptOut);
-        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
         // 10. Original owning session (claude-s1) invokes /hoshin:accept -> records approval & publishes to origin!
         var (_, acceptOut, _) = RunHook(toy.RepoDir, "hook start", new
@@ -593,7 +593,7 @@ public sealed class DualHarnessHookIntegrationTests
             lastUserInput = "/accept",
         });
         Assert.Equal("{}", otherAcceptOut);
-        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
         var (_, acceptOut, _) = RunHook(toy.RepoDir, "hook start", new
         {
@@ -673,7 +673,7 @@ public sealed class DualHarnessHookIntegrationTests
             l.Reviews.Add(new WorkflowReviewRun(head, 1, 0, 0, DateTimeOffset.UtcNow));
             return 0;
         });
-        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
     }
 
     [Fact]
@@ -693,10 +693,10 @@ public sealed class DualHarnessHookIntegrationTests
 
         Assert.Empty(toy.Repo.ReadLedger().Approvals);
         Assert.Empty(toy.Repo.ReadLedger().Published);
-        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
         Assert.Contains("/hoshin:accept", ClaudeContext(stdout), StringComparison.Ordinal);
 
-        var remoteCheck = ProcessCommandRunner.Default.Run(new CommandRequest(
+        var remoteCheck = TestServices.CommandRunner.Run(new CommandRequest(
             toy.Temp.Path,
             ["git", "--git-dir", toy.RemoteDir, "rev-parse", "--verify", "refs/heads/change/greet-polish"]));
         Assert.False(remoteCheck.Ok, "Remote branch must not be pushed by model-invoked accept.");
@@ -724,7 +724,7 @@ public sealed class DualHarnessHookIntegrationTests
 
         Assert.Empty(toy.Repo.ReadLedger().Approvals);
         Assert.Empty(toy.Repo.ReadLedger().Published);
-        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(WorkflowState.Read(toy.Repo)!));
+        Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
         var (_, preOut, _) = RunHook(toy.RepoDir, "hook start", new
         {
@@ -768,9 +768,9 @@ public sealed class DualHarnessHookIntegrationTests
                 q
                 """,
         });
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var headBefore = repo.Head();
-        Assert.IsType<AwaitAccept>(WorkflowEngine.Next(WorkflowState.Read(repo)!));
+        Assert.IsType<AwaitAccept>(WorkflowEngine.Next(TestServices.ReadState(repo)!));
 
         // Claude model-invoked Skill("hoshin:accept") must NOT accept the intent.
         var (_, claudeOut, _) = RunHook(repoDir, "hook start", new
@@ -782,7 +782,7 @@ public sealed class DualHarnessHookIntegrationTests
             tool_input = new { skill = "hoshin:accept" },
         });
         Assert.Equal(headBefore, repo.Head());
-        Assert.IsType<AwaitAccept>(WorkflowEngine.Next(WorkflowState.Read(repo)!));
+        Assert.IsType<AwaitAccept>(WorkflowEngine.Next(TestServices.ReadState(repo)!));
         Assert.Contains("/hoshin:accept", ClaudeContext(claudeOut), StringComparison.Ordinal);
 
         // Antigravity model-invoked view_file on accept/SKILL.md must NOT accept the intent.
@@ -799,7 +799,7 @@ public sealed class DualHarnessHookIntegrationTests
             },
         });
         Assert.Equal(headBefore, repo.Head());
-        Assert.IsType<AwaitAccept>(WorkflowEngine.Next(WorkflowState.Read(repo)!));
+        Assert.IsType<AwaitAccept>(WorkflowEngine.Next(TestServices.ReadState(repo)!));
     }
 
     // =========================================================================

@@ -9,7 +9,7 @@ public sealed record CommandRequest(
     string WorkingDirectory,
     IReadOnlyList<string> Argv,
     string? StandardInput = null,
-    IReadOnlyDictionary<string, string>? ExtraEnvironment = null,
+    Dictionary<string, string>? ExtraEnvironment = null,
     TimeSpan? Timeout = null,
     bool CaptureRawBytes = false);
 
@@ -35,8 +35,6 @@ public interface ICommandRunner
 /// <summary>Default <see cref="ICommandRunner"/> backed by <see cref="Process"/> with UTF-8 I/O, bounded drain grace, and process-tree kill on timeout.</summary>
 public sealed class ProcessCommandRunner : ICommandRunner
 {
-    public static ProcessCommandRunner Default { get; } = new();
-
     private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
     private static readonly TimeSpan DrainGracePeriod = TimeSpan.FromSeconds(2);
 

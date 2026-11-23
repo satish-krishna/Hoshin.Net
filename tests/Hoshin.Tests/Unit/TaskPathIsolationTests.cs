@@ -38,7 +38,7 @@ public sealed class TaskPathIsolationTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         return (tmp, repoDir, repo);
     }
 
@@ -51,8 +51,8 @@ public sealed class TaskPathIsolationTests
         // Pre-existing untracked notes.txt before issuing T1.
         TestGitFixture.Write(Path.Combine(repoDir, "notes.txt"), "local scratch notes\n");
 
-        var runner = WorkflowRunner.Default;
-        var state = WorkflowState.Read(repo)!;
+        var runner = TestServices.WorkflowRunner;
+        var state = TestServices.ReadState(repo)!;
         var step = Assert.IsType<Implement>(WorkflowEngine.Next(state));
         runner.Issue(repo, state, step, "s1");
 
@@ -64,7 +64,7 @@ public sealed class TaskPathIsolationTests
             Path.Combine(repoDir, "src", "math.mjs"),
             "export function add(a, b) { return a + b; }\nexport function sub(a, b) { return a - b; }\n");
 
-        var verdict = runner.EvaluateAndCommitTask(repo, WorkflowState.Read(repo)!, "T1", 1);
+        var verdict = runner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
         Assert.True(verdict.Passed, string.Join("; ", verdict.Reasons));
 
         var testCommitFiles = TestGitFixture.Git(repoDir, "show", "--name-only", "--format=", verdict.TestCommit!);
@@ -88,8 +88,8 @@ public sealed class TaskPathIsolationTests
         TestGitFixture.Git(repoDir, "add", "docs/x.md");
 
         var startHead = repo.Head();
-        var runner = WorkflowRunner.Default;
-        var state = WorkflowState.Read(repo)!;
+        var runner = TestServices.WorkflowRunner;
+        var state = TestServices.ReadState(repo)!;
         var step = Assert.IsType<Implement>(WorkflowEngine.Next(state));
         runner.Issue(repo, state, step, "s1");
 
@@ -100,7 +100,7 @@ public sealed class TaskPathIsolationTests
             Path.Combine(repoDir, "src", "math.mjs"),
             "export function add(a, b) { return a + b; }\nexport function sub(a, b) { return a - b; }\n");
 
-        var verdict = runner.EvaluateAndCommitTask(repo, WorkflowState.Read(repo)!, "T1", 1);
+        var verdict = runner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
         Assert.False(verdict.Passed);
         Assert.Contains("git: the index had staged changes before the attempt", verdict.Reasons);
         Assert.Equal(startHead, repo.Head());
@@ -116,8 +116,8 @@ public sealed class TaskPathIsolationTests
         var (tmp, repoDir, repo) = CreateFixture(prodRel);
         using var _ = tmp;
 
-        var runner = WorkflowRunner.Default;
-        var state = WorkflowState.Read(repo)!;
+        var runner = TestServices.WorkflowRunner;
+        var state = TestServices.ReadState(repo)!;
         var step = Assert.IsType<Implement>(WorkflowEngine.Next(state));
         runner.Issue(repo, state, step, "s1");
 
@@ -128,7 +128,7 @@ public sealed class TaskPathIsolationTests
             Path.Combine(repoDir, prodRel),
             "export function add(a, b) { return a + b; }\nexport function sub(a, b) { return a - b; }\n");
 
-        var verdict = runner.EvaluateAndCommitTask(repo, WorkflowState.Read(repo)!, "T1", 1);
+        var verdict = runner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
         Assert.True(verdict.Passed, string.Join("; ", verdict.Reasons));
 
         var prodFiles = TestGitFixture.Git(repoDir, "-c", "core.quotepath=off", "show", "--name-only", "--format=", verdict.Head);
@@ -188,8 +188,8 @@ public sealed class TaskPathIsolationTests
         // Dirty tracked README.md before issuing T1 (unstaged).
         TestGitFixture.Write(Path.Combine(repoDir, "README.md"), "# local tweak\n");
 
-        var runner = WorkflowRunner.Default;
-        var state = WorkflowState.Read(repo)!;
+        var runner = TestServices.WorkflowRunner;
+        var state = TestServices.ReadState(repo)!;
         var step = Assert.IsType<Implement>(WorkflowEngine.Next(state));
         runner.Issue(repo, state, step, "s1");
 
@@ -200,7 +200,7 @@ public sealed class TaskPathIsolationTests
             Path.Combine(repoDir, "src", "math.mjs"),
             "export function add(a, b) { return a + b; }\nexport function sub(a, b) { return a - b; }\n");
 
-        var verdict = runner.EvaluateAndCommitTask(repo, WorkflowState.Read(repo)!, "T1", 1);
+        var verdict = runner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
         Assert.True(verdict.Passed, string.Join("; ", verdict.Reasons));
 
         var prodFiles = TestGitFixture.Git(repoDir, "show", "--name-only", "--format=", verdict.Head);

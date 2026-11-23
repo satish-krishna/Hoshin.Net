@@ -53,7 +53,7 @@ public sealed class FrontMatterEditTests
         var path = Path.Combine(tmp.Path, "intent.md");
         File.WriteAllText(path, "```jsonc\n{\n  \"layout\": 2,\n  \"status\": \"draft\"\n}\n```\n\n# Intent\n");
 
-        FrontMatterEdit.Set(path, "status", "accepted");
+        TestServices.FrontMatterEdit.Set(path, "status", "accepted");
 
         var updated = File.ReadAllText(path);
         var props = ReadTopLevelProperties(updated);
@@ -70,7 +70,7 @@ public sealed class FrontMatterEditTests
         var path = Path.Combine(tmp.Path, "spec.md");
         File.WriteAllText(path, "```jsonc\n{\n  \"layout\": 2,\n  \"source_intent_commit\": null,\n  \"status\": \"draft\"\n}\n```\n\n# Spec\n");
 
-        FrontMatterEdit.Set(path, "source_intent_commit", "0123456789abcdef");
+        TestServices.FrontMatterEdit.Set(path, "source_intent_commit", "0123456789abcdef");
 
         var updated = File.ReadAllText(path);
         var props = ReadTopLevelProperties(updated);
@@ -87,7 +87,7 @@ public sealed class FrontMatterEditTests
         var path = Path.Combine(tmp.Path, "spec.md");
         File.WriteAllText(path, "```jsonc\n{\n  \"layout\": 2,\n  \"source_intent_commit\": 1234567\n}\n```\n\n# Spec\n");
 
-        FrontMatterEdit.Set(path, "source_intent_commit", "abcdef0");
+        TestServices.FrontMatterEdit.Set(path, "source_intent_commit", "abcdef0");
 
         var updated = File.ReadAllText(path);
         var props = ReadTopLevelProperties(updated);
@@ -105,7 +105,7 @@ public sealed class FrontMatterEditTests
         // Multi-line without trailing comma
         var p1 = Path.Combine(tmp.Path, "a.md");
         File.WriteAllText(p1, "```jsonc\n{\n  \"layout\": 2,\n  \"system\": \"demo\"\n}\n```\n");
-        FrontMatterEdit.Set(p1, "source_intent_commit", "abc1234");
+        TestServices.FrontMatterEdit.Set(p1, "source_intent_commit", "abc1234");
         var u1 = File.ReadAllText(p1);
         var props1 = ReadTopLevelProperties(u1);
         var prop1 = Assert.Single(props1, p => p.Name == "source_intent_commit");
@@ -115,7 +115,7 @@ public sealed class FrontMatterEditTests
         // Multi-line with trailing comma
         var p2 = Path.Combine(tmp.Path, "b.md");
         File.WriteAllText(p2, "```jsonc\n{\n  \"layout\": 2,\n  \"system\": \"demo\",\n}\n```\n");
-        FrontMatterEdit.Set(p2, "source_intent_commit", "def5678");
+        TestServices.FrontMatterEdit.Set(p2, "source_intent_commit", "def5678");
         var u2 = File.ReadAllText(p2);
         var props2 = ReadTopLevelProperties(u2);
         var prop2 = Assert.Single(props2, p => p.Name == "source_intent_commit");
@@ -141,7 +141,7 @@ public sealed class FrontMatterEditTests
             """;
         File.WriteAllText(path, content);
 
-        FrontMatterEdit.Set(path, "status", "accepted");
+        TestServices.FrontMatterEdit.Set(path, "status", "accepted");
 
         var updated = File.ReadAllText(path);
         Assert.Contains("// was \"status\": \"draft\"", updated, StringComparison.Ordinal);
@@ -159,8 +159,8 @@ public sealed class FrontMatterEditTests
         var content = "```jsonc\r\n{\r\n  \"layout\": 2,\r\n  \"status\": \"draft\"\r\n}\r\n```\r\n\r\n# Intent\r\nBody line.\r\n";
         File.WriteAllText(path, content);
 
-        FrontMatterEdit.Set(path, "status", "accepted");
-        FrontMatterEdit.Set(path, "source_intent_commit", "deadbeef");
+        TestServices.FrontMatterEdit.Set(path, "status", "accepted");
+        TestServices.FrontMatterEdit.Set(path, "source_intent_commit", "deadbeef");
 
         var updated = File.ReadAllText(path);
         Assert.Contains("\r\n", updated, StringComparison.Ordinal);

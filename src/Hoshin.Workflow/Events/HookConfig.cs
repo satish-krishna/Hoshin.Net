@@ -24,10 +24,8 @@ public sealed record HookConfig(
     List<string> Problems);
 
 /// <summary>Parses and merges base-branch hook configurations from <c>.hoshin.json</c> and <c>intent/&lt;system&gt;/hooks.json</c>.</summary>
-public sealed class HookConfigService(IGitClient? git = null)
+public sealed class HookConfigService(IGitClient git)
 {
-    public static HookConfigService Default { get; } = new();
-
     public static readonly string[] Events =
         ["change.start", "doc.accept", "build.start", "task.done", "build.finish", "review.finish", "change.done"];
 
@@ -49,7 +47,7 @@ public sealed class HookConfigService(IGitClient? git = null)
     private static readonly HashSet<string> HookFields = ["id", "when", "run", "repos", "apps", "timeout", "blocking", "onFailure"];
     private static readonly Regex HookIdRegex = new(@"^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
 
     public HookConfig ReadFromBaseBranch(string master, string system)
     {

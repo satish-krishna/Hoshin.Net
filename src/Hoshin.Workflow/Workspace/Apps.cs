@@ -7,23 +7,20 @@ namespace Hoshin.Workflow.Workspace;
 public sealed record RepositoryRef(string Repo, string Path);
 
 /// <summary>Single-repo app mapping, heads, touched-app detection, and uncommitted filtering.</summary>
-public sealed class AppService(IGitClient? git = null)
+public sealed class AppService(IGitClient git, MarkerReader markerReader)
 {
-    public static AppService Default { get; } = new();
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-
-    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public bool IsSingleRepo(string master)
     {
         var file = Path.Combine(master, MarkerConstants.FileName);
-        return File.Exists(file) && MarkerReader.ReadMarker(file).Layout == WorkspaceLayout.SingleRepo;
+        return _markerReader.TryReadMarker(file) is { Layout: WorkspaceLayout.SingleRepo };
     }
 
-    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public Dictionary<string, string> AppFolders(string master, string system)
     {
-        var marker = MarkerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName));
+        var marker = _markerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName));
         return marker.Systems.TryGetValue(system, out var entry)
             ? new Dictionary<string, string>(entry.Apps, StringComparer.Ordinal)
             : new Dictionary<string, string>(StringComparer.Ordinal);

@@ -8,12 +8,10 @@ public sealed record ListedChange(string Change, string? Title, string Track, st
 public sealed record ListChangesResult(string System, List<ListedChange> Changes, List<string> Problems);
 
 /// <summary>Cheap change listing reading only intent documents.</summary>
-public sealed class ChangeListService(ChangePlacer? placer = null, FinishedChecker? finishedChecker = null)
+public sealed class ChangeListService(ChangePlacer placer, FinishedChecker finishedChecker)
 {
-    public static ChangeListService Default { get; } = new();
-
-    private readonly ChangePlacer _placer = placer ?? ChangePlacer.Default;
-    private readonly FinishedChecker _finished = finishedChecker ?? FinishedChecker.Default;
+    private readonly ChangePlacer _placer = placer ?? throw new ArgumentNullException(nameof(placer));
+    private readonly FinishedChecker _finished = finishedChecker ?? throw new ArgumentNullException(nameof(finishedChecker));
 
     public ListChangesResult List(string cwd, ResolveOptions resolveOptions, string? system = null)
     {

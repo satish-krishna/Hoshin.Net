@@ -8,12 +8,16 @@ using Hoshin.Workflow.Workspace;
 namespace Hoshin.Workflow.Changes;
 
 /// <summary>Checks documents, cross-document references, <c>.hoshin.json</c>, <c>hooks.json</c>, and <c>change.jsonc</c>.</summary>
-public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitClient? git = null)
+public sealed class DocumentCheckService(
+    IDocumentReader reader,
+    IGitClient git,
+    MarkerReader markerReader,
+    CrossChecker crossChecker)
 {
-    public static DocumentCheckService Default { get; } = new();
-
-    private readonly IDocumentReader _reader = reader ?? new DocumentReader();
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+    private readonly IDocumentReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
+    private readonly CrossChecker _crossChecker = crossChecker ?? throw new ArgumentNullException(nameof(crossChecker));
 
     public List<Problem> CheckFiles(IReadOnlyList<string> files)
     {
@@ -28,7 +32,7 @@ public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitCli
             }
             else
             {
-                var marker = MarkerReader.FindMarker(file);
+                var marker = _markerReader.FindMarker(file);
                 var kind = _reader.KindOf(file);
                 IReadOnlyList<string>? allowed = null;
                 string? system = null;
@@ -66,7 +70,7 @@ public sealed class DocumentCheckService(IDocumentReader? reader = null, IGitCli
 
         foreach (var group in groups.Values)
         {
-            problems.AddRange(CrossChecker.CheckChange(group));
+            problems.AddRange(_crossChecker.CheckChange(group));
         }
 
         return ProblemFormatter.Sort(problems);

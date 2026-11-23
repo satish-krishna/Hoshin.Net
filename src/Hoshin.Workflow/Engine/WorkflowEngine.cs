@@ -1,3 +1,5 @@
+using Hoshin.Workflow.Documents;
+
 namespace Hoshin.Workflow.Engine;
 
 /// <summary>
@@ -18,9 +20,9 @@ public sealed record WorkflowState(
 {
     public string EffectiveCodeHead => string.IsNullOrWhiteSpace(CodeHead) ? Head : CodeHead;
 
-    public static WorkflowState? Read(WorkflowRepo repo, string? skillsRoot = null)
+    public static WorkflowState? Read(WorkflowRepo repo, PlanReader planReader, string? skillsRoot = null)
     {
-        var plan = repo.ReadPlan();
+        var plan = repo.ReadPlan(planReader);
         if (plan is null)
         {
             return null;

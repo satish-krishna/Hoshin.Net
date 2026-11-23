@@ -6,7 +6,7 @@ using Hoshin.Workflow.Common;
 namespace Hoshin.Workflow.Documents;
 
 /// <summary>Reads a Layout 2 review document (<c>build/review.md</c>): <c>## Review &lt;n&gt;</c> sections and <c>### F&lt;n&gt;</c> findings.</summary>
-public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
+public sealed class ReviewReader(IJsonSchemaValidator schemaValidator)
 {
     private const string HeaderSchemaName = "review-header.schema.json";
     private const string FindingSchemaName = "finding.schema.json";
@@ -17,7 +17,7 @@ public sealed class ReviewReader(IJsonSchemaValidator? schemaValidator = null)
     private static readonly Regex AnyHeading = new(@"^#{1,3} ", RegexOptions.Compiled);
     private static readonly Regex RawKey = new(@"^\s*[\[{]*\s*(""id""\s*:\s*""F[0-9]+|""review""\s*:\s*[0-9]+)", RegexOptions.Compiled);
 
-    private readonly IJsonSchemaValidator _schema = schemaValidator ?? EmbeddedSchemaValidator.Default;
+    private readonly IJsonSchemaValidator _schema = schemaValidator ?? throw new ArgumentNullException(nameof(schemaValidator));
 
     public ReviewReadResult Read(string text, string file)
     {

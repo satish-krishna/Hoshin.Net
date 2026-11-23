@@ -44,9 +44,9 @@ public sealed class SessionIsolationTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var orchestrator = new HookOrchestrator();
-        var startEv = HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var repo = TestServices.FindRepo(repoDir)!;
+        var orchestrator = TestServices.CreateOrchestrator();
+        var startEv = TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "UserPromptExpansion",
             cwd = repoDir,
@@ -65,8 +65,8 @@ public sealed class SessionIsolationTests
         using var _ = tmp;
 
         var stepBefore = File.ReadAllText(repo.StepPath);
-        var orchestrator = new HookOrchestrator();
-        var stopEv = HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var orchestrator = TestServices.CreateOrchestrator();
+        var stopEv = TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "Stop",
             cwd = repoDir,
@@ -84,8 +84,8 @@ public sealed class SessionIsolationTests
         var (tmp, repoDir, repo) = CreateActiveBuildFixture("claude-a");
         using var _ = tmp;
 
-        var orchestrator = new HookOrchestrator();
-        var resultEv = HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var orchestrator = TestServices.CreateOrchestrator();
+        var resultEv = TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PostToolUse",
             cwd = repoDir,
@@ -105,11 +105,11 @@ public sealed class SessionIsolationTests
         using var cleanup = tmp;
 
         // Register session A's active subagent so step.AgentId is set.
-        Assert.True(WorkflowRunner.Default.TryRegisterActiveSubagent(repo, "T1", 1, "agent-a1", out _));
+        Assert.True(TestServices.WorkflowRunner.TryRegisterActiveSubagent(repo, "T1", 1, "agent-a1", out _));
         var prodPath = Path.Combine(repoDir, "src", "math.mjs");
 
         // 1. Unrelated session B (even while step.AgentId is non-null!) must be allowed.
-        var evSessionB = HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var evSessionB = TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PreToolUse",
             cwd = repoDir,
@@ -117,10 +117,10 @@ public sealed class SessionIsolationTests
             tool_name = "Edit",
             tool_input = new { file_path = prodPath },
         }));
-        Assert.Null(GuardCommand.Evaluate(evSessionB).Reason);
+        Assert.Null(TestServices.EvaluateGuard(evSessionB).Reason);
 
         // 2. Unrelated agent_id from session B must be allowed.
-        var evOtherAgent = HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var evOtherAgent = TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PreToolUse",
             cwd = repoDir,
@@ -129,20 +129,20 @@ public sealed class SessionIsolationTests
             tool_name = "Edit",
             tool_input = new { file_path = prodPath },
         }));
-        Assert.Null(GuardCommand.Evaluate(evOtherAgent).Reason);
+        Assert.Null(TestServices.EvaluateGuard(evOtherAgent).Reason);
 
         // 3. Missing session_id must NOT be treated as in the run.
-        var evMissingSession = HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var evMissingSession = TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PreToolUse",
             cwd = repoDir,
             tool_name = "Edit",
             tool_input = new { file_path = prodPath },
         }));
-        Assert.Null(GuardCommand.Evaluate(evMissingSession).Reason);
+        Assert.Null(TestServices.EvaluateGuard(evMissingSession).Reason);
 
         // 4. Session A's registered subagent (agent_id == agent-a1) IS denied during red phase!
-        var evRegisteredAgent = HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var evRegisteredAgent = TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PreToolUse",
             cwd = repoDir,
@@ -151,6 +151,6 @@ public sealed class SessionIsolationTests
             tool_name = "Edit",
             tool_input = new { file_path = prodPath },
         }));
-        Assert.NotNull(GuardCommand.Evaluate(evRegisteredAgent).Reason);
+        Assert.NotNull(TestServices.EvaluateGuard(evRegisteredAgent).Reason);
     }
 }

@@ -48,8 +48,8 @@ public sealed class BaseBranchChecksTests
         // Tamper with working tree hooks.jsonc to drop all checks.
         TestGitFixture.Write(Path.Combine(repoDir, ".hoshin", "hooks.jsonc"), "{ \"hooks\": [] }\n");
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var state = WorkflowState.Read(repo)!;
+        var repo = TestServices.FindRepo(repoDir)!;
+        var state = TestServices.ReadState(repo)!;
 
         Assert.Single(state.Plan.Checks);
         Assert.Equal(["node", "-e", "process.exit(1)"], state.Plan.Checks[0]);
@@ -115,8 +115,8 @@ public sealed class BaseBranchChecksTests
         TestGitFixture.Write(Path.Combine(repoDir, ".hoshin.json"), "{ \"version\": 1, \"systems\": { \"demo\": { \"apps\": { \"app\": \".\" } } } }\n");
         TestGitFixture.Write(Path.Combine(repoDir, "intent", "demo", "hooks.json"), "{ \"version\": 1, \"hooks\": {} }\n");
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var state = WorkflowState.Read(repo)!;
+        var repo = TestServices.FindRepo(repoDir)!;
+        var state = TestServices.ReadState(repo)!;
 
         Assert.Equal(2, state.Plan.Checks.Count);
         Assert.Contains(state.Plan.Checks, c => c.SequenceEqual(["node", "-e", "process.exit(0)"]));

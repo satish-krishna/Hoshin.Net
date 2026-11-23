@@ -20,8 +20,8 @@ public sealed class IntentBriefContextTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir, Path.Combine(repoDir, "intent", "demo", "add-login"))!;
-        var state = WorkflowState.Read(repo)!;
+        var repo = TestServices.FindRepo(repoDir, Path.Combine(repoDir, "intent", "demo", "add-login"))!;
+        var state = TestServices.ReadState(repo)!;
 
         var brief = WorkflowBriefs.Intent(state);
 
@@ -44,8 +44,8 @@ public sealed class IntentBriefContextTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var state = WorkflowState.Read(repo)!;
+        var repo = TestServices.FindRepo(repoDir)!;
+        var state = TestServices.ReadState(repo)!;
 
         var brief = WorkflowBriefs.Intent(state);
 

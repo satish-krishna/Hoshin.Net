@@ -12,7 +12,7 @@ public sealed class GuardScopeTests
     private static (int ExitCode, string Stdout, string Stderr) RunCli(string cwd, string[] subArgs, object payload)
     {
         var env = new Dictionary<string, string>(TestGitFixture.GitEnv) { ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1" };
-        var res = ProcessCommandRunner.Default.Run(new CommandRequest(
+        var res = TestServices.CommandRunner.Run(new CommandRequest(
             WorkingDirectory: cwd,
             Argv: ["dotnet", HoshinDll, .. subArgs],
             StandardInput: JsonSerializer.Serialize(payload),
@@ -56,7 +56,7 @@ public sealed class GuardScopeTests
         using var tmp = new TempDir("hoshin-stale-scope-");
         var repoDir = Path.Combine(tmp.Path, "repo");
         TestGitFixture.InitRepo(repoDir, new Dictionary<string, string> { ["README.md"] = "# repo\n" });
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var staleTime = DateTimeOffset.UtcNow.AddHours(-25);
         repo.WriteRunMarker(new RunMarker(staleTime, "s1", "claude-code", repo.ChangeFolder));
         repo.WriteStep(new CurrentStep("NeedsApproval", null, 0, null, staleTime, SessionId: "s1", ChangeFolder: repo.ChangeFolder));

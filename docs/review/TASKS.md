@@ -159,7 +159,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T31 | P1 | Publishing: PR, review gate, branch default, diagnostics | E8 | D4 ✔ | done |
 | T41 | P1 | Tasks with no testable behavior | §6 | D5 ✔ | done |
 | T11 | P1 | Replace the YAML converter (`Hoshin.Migration` + YamlDotNet) | L1–L3 | D3 ✔, T10 | done |
-| T34 | P1 · SOLID | Remove `?? Default` fallbacks; inject clock and file system | §8.5 (D1–D3) | T39 | open |
+| T34 | P1 · SOLID | Remove `?? Default` fallbacks; inject clock and file system | §8.5 (D1–D3) | T39 | done |
 | T35 | P1 · SOLID | Give commands narrow dependencies; split fat interfaces | §8.4 (I1, I2) | T34 | open |
 | T36 | P1 · SOLID | One owner for duplicated rules; enums for closed sets | E13 (O1, R1) | — | open |
 | T43 | P1 · SOLID | Split `WorkflowRunner`, `WorkflowRepo` and `HookOrchestrator` | §8.1 (S1, S3) | T34 | open |

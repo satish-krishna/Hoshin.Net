@@ -26,7 +26,7 @@ public sealed class InstructionsCommand(HoshinServices services) : IHoshinComman
             r.Workspace,
             r.Master,
             services.Resolver.MasterFolderName(r.Workspace, r.Master),
-            MarkerReader.ReadMarker(Path.Combine(r.Master, MarkerConstants.FileName)),
+            services.MarkerReader.ReadMarker(Path.Combine(r.Master, MarkerConstants.FileName)),
             o.Has("write"),
             o.Has("allow-home")));
 

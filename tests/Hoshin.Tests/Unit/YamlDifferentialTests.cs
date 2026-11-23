@@ -101,7 +101,7 @@ public sealed class YamlDifferentialTests
     {
         var url = new Uri(SiblingYamlMjs).AbsoluteUri;
         var script = $"import {{ parse }} from {JsonSerializer.Serialize(url)}; const input = await new Promise(r => {{ let s=''; process.stdin.on('data', d => s += d); process.stdin.on('end', () => r(s)); }}); console.log(JSON.stringify(parse(input)));";
-        var res = ProcessCommandRunner.Default.Run(new CommandRequest(RepoRoot, ["node", "--input-type=module", "-e", script], StandardInput: yaml));
+        var res = TestServices.CommandRunner.Run(new CommandRequest(RepoRoot, ["node", "--input-type=module", "-e", script], StandardInput: yaml));
         return res.Ok ? res.Stdout.Trim() : null;
     }
 }

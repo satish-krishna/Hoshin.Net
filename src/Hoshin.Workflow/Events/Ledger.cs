@@ -57,10 +57,8 @@ public sealed record RepoLedger(
     [property: JsonPropertyName("reds"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<RedRecord>? Reds = null);
 
 /// <summary>Atomic per-repository ledger storage in <c>&lt;git-common-dir&gt;/hoshin/&lt;system&gt;/&lt;change&gt;/&lt;repo&gt;.json</c>.</summary>
-public sealed class LedgerStore(IGitClient? git = null)
+public sealed class LedgerStore(IGitClient git, IFileSystem fileSystem)
 {
-    public static LedgerStore Default { get; } = new();
-
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -68,23 +66,23 @@ public sealed class LedgerStore(IGitClient? git = null)
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
     public string LedgerFolder(string master, string system, string change) =>
         _git.GitPath(master, Path.Combine("hoshin", system, change), common: true);
 
-    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public RepoLedger? Read(string folder, string repo)
     {
         var file = Path.Combine(folder, $"{repo}.json");
-        if (!File.Exists(file))
+        if (!_fs.FileExists(file))
         {
             return null;
         }
 
         try
         {
-            var parsed = JsonSerializer.Deserialize<RepoLedger>(File.ReadAllText(file), JsonOptions);
+            var parsed = JsonSerializer.Deserialize<RepoLedger>(_fs.ReadAllText(file), JsonOptions);
             return parsed ?? throw new CouldNotRunException($"{file} is not valid JSON: file contains null");
         }
         catch (JsonException e)
@@ -95,13 +93,13 @@ public sealed class LedgerStore(IGitClient? git = null)
 
     public List<RepoLedger> ReadAll(string folder)
     {
-        if (!Directory.Exists(folder))
+        if (!_fs.DirectoryExists(folder))
         {
             return [];
         }
 
         var list = new List<RepoLedger>();
-        foreach (var file in Directory.GetFiles(folder, "*.json").OrderBy(f => Path.GetFileName(f), StringComparer.Ordinal))
+        foreach (var file in _fs.EnumerateFiles(folder, "*.json").OrderBy(f => Path.GetFileName(f), StringComparer.Ordinal))
         {
             var repo = Path.GetFileNameWithoutExtension(file);
             var ledger = Read(folder, repo);
@@ -114,14 +112,11 @@ public sealed class LedgerStore(IGitClient? git = null)
         return list;
     }
 
-    [SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected service.")]
     public void Write(string folder, RepoLedger ledger)
     {
-        Directory.CreateDirectory(folder);
+        _fs.CreateDirectory(folder);
         var file = Path.Combine(folder, $"{ledger.Repo}.json");
-        var temp = $"{file}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(ledger, JsonOptions) + "\n");
-        File.Move(temp, file, overwrite: true);
+        _fs.WriteAllTextAtomic(file, JsonSerializer.Serialize(ledger, JsonOptions) + "\n");
     }
 
     public RepoLedger Update(string folder, string repo, Func<RepoLedger, RepoLedger> transform) =>
@@ -133,7 +128,7 @@ public sealed class LedgerStore(IGitClient? git = null)
 
     public RepoLedger Update(string folder, string repo, Func<RepoLedger> createDefault, Func<RepoLedger, RepoLedger> transform)
     {
-        Directory.CreateDirectory(folder);
+        _fs.CreateDirectory(folder);
         using var gate = FileLock.Acquire(Path.Combine(folder, $"{repo}.lock"), TimeSpan.FromSeconds(10));
         var current = Read(folder, repo) ?? createDefault();
         var updated = transform(current);

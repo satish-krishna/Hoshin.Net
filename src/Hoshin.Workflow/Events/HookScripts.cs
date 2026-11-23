@@ -33,11 +33,9 @@ public sealed class ScriptFolders : IDisposable
 }
 
 /// <summary>Exports hook scripts from the master repository's base branch into a temporary directory.</summary>
-public sealed class HookScriptExporter(IGitClient? git = null)
+public sealed class HookScriptExporter(IGitClient git)
 {
-    public static HookScriptExporter Default { get; } = new();
-
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
 
     public ScriptFolders Export(string master, string? revision, string system)
     {

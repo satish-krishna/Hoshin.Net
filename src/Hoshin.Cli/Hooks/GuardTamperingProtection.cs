@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Engine;
 
 namespace Hoshin.Cli.Hooks;
@@ -78,7 +79,7 @@ public static partial class GuardTamperingProtection
         return null;
     }
 
-    public static string? DetectMissingRunMarkerTampering(WorkflowRepo repo, string? rolesRoot)
+    public static string? DetectMissingRunMarkerTampering(WorkflowRepo repo, PlanReader planReader, string? rolesRoot)
     {
         if (File.Exists(repo.RunMarkerPath) || !File.Exists(repo.LedgerPath))
         {
@@ -108,7 +109,7 @@ public static partial class GuardTamperingProtection
 
         try
         {
-            var state = WorkflowState.Read(repo, rolesRoot);
+            var state = WorkflowState.Read(repo, planReader, rolesRoot);
             if (state is null)
             {
                 return null;

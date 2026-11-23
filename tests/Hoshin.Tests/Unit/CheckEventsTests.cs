@@ -8,7 +8,7 @@ namespace Hoshin.Tests.Unit;
 public sealed class CheckEventsTests
 {
     private static string ChecksPath(string master) =>
-        CheckLog.ChecksFile(ProcessGitClient.Default, master, "demo", TestGitFixture.ChangeName);
+        CheckLog.ChecksFile(TestServices.Git, master, "demo", TestGitFixture.ChangeName);
 
     private static List<JsonElement> LinesOf(string master) =>
         File.ReadAllText(ChecksPath(master))
@@ -21,7 +21,7 @@ public sealed class CheckEventsTests
     {
         using var ws = TestGitFixture.CreateWorkspace(built: true);
         var problems = new List<string>();
-        var log = new CheckLog(ChecksPath(ws.Master), "build.finish", "app", problems);
+        var log = new CheckLog(ChecksPath(ws.Master), "build.finish", "app", problems, TestServices.Time);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             log.LoggedAsync("a", "head", 30, true, () => Task.FromException<HookRecord>(new InvalidOperationException("boom"))));
@@ -54,7 +54,7 @@ public sealed class CheckEventsTests
         var path = ChecksPath(ws.Master);
         Directory.CreateDirectory(path);
         var problems = new List<string>();
-        var log = new CheckLog(path, "build.finish", "app", problems);
+        var log = new CheckLog(path, "build.finish", "app", problems, TestServices.Time);
         log.Start("a", "head", 30);
         log.Start("b", "head", 30);
 

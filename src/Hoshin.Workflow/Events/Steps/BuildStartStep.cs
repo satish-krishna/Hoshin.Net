@@ -17,12 +17,14 @@ public sealed record ActiveBuildRecord(
 
 /// <summary><c>build.start</c>: switches product repo to change branch, writes <c>active-build.json</c>, and takes baseline.</summary>
 public sealed class BuildStartStep(
-    IGitClient? git = null,
-    AppService? apps = null,
-    EventContextFactory? contextFactory = null,
-    LedgerStore? ledgerStore = null,
-    BaselineTaker? baselineTaker = null,
-    BaselineApprovals? approvals = null) : IEventStep
+    IGitClient git,
+    AppService apps,
+    EventContextFactory contextFactory,
+    LedgerStore ledgerStore,
+    BaselineTaker baselineTaker,
+    BaselineApprovals approvals,
+    ChangeRecordStore changeRecords,
+    ScopeRules scopeRules) : IEventStep
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -31,12 +33,14 @@ public sealed class BuildStartStep(
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly AppService _apps = apps ?? new AppService(git);
-    private readonly EventContextFactory _contextFactory = contextFactory ?? new EventContextFactory(git);
-    private readonly LedgerStore _ledger = ledgerStore ?? new LedgerStore(git);
-    private readonly BaselineTaker _baselineTaker = baselineTaker ?? new BaselineTaker(git);
-    private readonly BaselineApprovals _approvals = approvals ?? new BaselineApprovals(ledgerStore);
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly EventContextFactory _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+    private readonly LedgerStore _ledger = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
+    private readonly BaselineTaker _baselineTaker = baselineTaker ?? throw new ArgumentNullException(nameof(baselineTaker));
+    private readonly BaselineApprovals _approvals = approvals ?? throw new ArgumentNullException(nameof(approvals));
+    private readonly ChangeRecordStore _changeRecords = changeRecords ?? throw new ArgumentNullException(nameof(changeRecords));
+    private readonly ScopeRules _scopeRules = scopeRules ?? throw new ArgumentNullException(nameof(scopeRules));
 
     public string EventName => "build.start";
     public bool ReusePassed => false;
@@ -64,7 +68,7 @@ public sealed class BuildStartStep(
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Task<List<string>> CheckAsync(EventContext ctx)
     {
-        var branch = ChangeRecordStore.BranchOf(ctx.Folder);
+        var branch = _changeRecords.BranchOf(ctx.Folder);
         if (_apps.IsSingleRepo(ctx.Master) && ctx.Repo != "master")
         {
             var stuck = _baselineTaker.RecoverInterrupted(ctx.Root);
@@ -122,7 +126,7 @@ public sealed class BuildStartStep(
         {
             var strangers = ScopeRules.CommitRuleProblems(
                 _git.CommitsBeyondBase(ctx.RepoPath, from, ctx.Base),
-                ScopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder));
+                _scopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder));
             if (strangers.Count > 0)
             {
                 return Task.FromResult(new List<string> { $"{ctx.Repo} already has a branch {branch} with work that is not this change's, so the build touches nothing. Pick a new branch name for the change (change rename). The commits: {string.Join("; ", strangers)}" });
@@ -134,7 +138,7 @@ public sealed class BuildStartStep(
 
     public Task<StepResult> ActAsync(EventContext ctx)
     {
-        var branch = ChangeRecordStore.BranchOf(ctx.Folder);
+        var branch = _changeRecords.BranchOf(ctx.Folder);
         var from = ctx.Branch;
         var created = false;
 
@@ -271,7 +275,7 @@ public sealed class BuildStartStep(
                     continue;
                 }
 
-                if (ChangeRecordStore.BranchOf(dir) == branch)
+                if (_changeRecords.BranchOf(dir) == branch)
                 {
                     return name;
                 }

@@ -16,7 +16,7 @@ public sealed class SingleRepoMarkerTests
     {
         var path = Path.Combine(dir.Path, $"marker-{Guid.NewGuid():N}.json");
         File.WriteAllText(path, json);
-        return MarkerReader.ReadMarker(path);
+        return TestServices.MarkerReader.ReadMarker(path);
     }
 
     private static void Mentions(List<string> problems, string text) =>

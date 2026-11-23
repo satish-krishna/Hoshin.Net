@@ -10,7 +10,7 @@ public sealed class LedgerStoreSafetyTests
     public void RedShowCli_CorruptLedger_ExitsWithCode2LeavesFileUnchangedAndNamesFile()
     {
         using var ws = TestGitFixture.CreateWorkspace();
-        var ledgerDir = LedgerStore.Default.LedgerFolder(ws.Master, "demo", TestGitFixture.ChangeName);
+        var ledgerDir = TestServices.Ledger.LedgerFolder(ws.Master, "demo", TestGitFixture.ChangeName);
         Directory.CreateDirectory(ledgerDir);
         var ledgerPath = Path.Combine(ledgerDir, "app.json");
         const string garbage = "{ not valid json !!!";
@@ -44,7 +44,7 @@ public sealed class LedgerStoreSafetyTests
         var file = Path.Combine(tmp.Path, "app.json");
         File.WriteAllText(file, "{ broken");
 
-        var ex = Assert.Throws<CouldNotRunException>(() => LedgerStore.Default.Read(tmp.Path, "app"));
+        var ex = Assert.Throws<CouldNotRunException>(() => TestServices.Ledger.Read(tmp.Path, "app"));
         Assert.Contains(file, ex.Message, StringComparison.Ordinal);
         Assert.Contains("not valid JSON", ex.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Equal("{ broken", File.ReadAllText(file));
@@ -55,14 +55,14 @@ public sealed class LedgerStoreSafetyTests
     {
         using var tmp = new TempDir("hoshin-t19-lock-");
         var initial = LedgerStore.Empty("demo", "c1", "app", tmp.Path);
-        LedgerStore.Default.Write(tmp.Path, initial);
+        TestServices.Ledger.Write(tmp.Path, initial);
 
         const int workers = 8;
         using var barrier = new Barrier(workers);
         var tasks = Enumerable.Range(0, workers).Select(i => Task.Run(() =>
         {
             barrier.SignalAndWait();
-            LedgerStore.Default.Update(tmp.Path, "app", ledger =>
+            TestServices.Ledger.Update(tmp.Path, "app", ledger =>
             {
                 var updatedBlocks = new Dictionary<string, int>(ledger.GateBlocks, StringComparer.Ordinal)
                 {
@@ -74,7 +74,7 @@ public sealed class LedgerStoreSafetyTests
 
         await Task.WhenAll(tasks);
 
-        var finalLedger = LedgerStore.Default.Read(tmp.Path, "app");
+        var finalLedger = TestServices.Ledger.Read(tmp.Path, "app");
         Assert.NotNull(finalLedger);
         Assert.Equal(workers, finalLedger!.GateBlocks.Count);
     }

@@ -30,10 +30,8 @@ public interface IPullRequestClient
 }
 
 /// <summary>Default <see cref="IPullRequestClient"/> backed by the <c>gh</c> CLI (or <c>HOSHIN_GH</c> JSON argv).</summary>
-public sealed class GhPullRequestClient(ICommandRunner? runner = null) : IPullRequestClient
+public sealed class GhPullRequestClient(ICommandRunner runner) : IPullRequestClient
 {
-    public static GhPullRequestClient Default { get; } = new();
-
     private static readonly Dictionary<string, string> GhEnv = new(StringComparer.Ordinal)
     {
         ["GH_PROMPT_DISABLED"] = "1",
@@ -43,7 +41,7 @@ public sealed class GhPullRequestClient(ICommandRunner? runner = null) : IPullRe
     private static readonly Regex ScpHost = new(@"^[\w.-]+@([\w.-]+):", RegexOptions.Compiled);
     private static readonly Regex PullNumber = new(@"/pull/(\d+)", RegexOptions.Compiled);
 
-    private readonly ICommandRunner _runner = runner ?? ProcessCommandRunner.Default;
+    private readonly ICommandRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
 
     private static string[] GhCommand()
     {

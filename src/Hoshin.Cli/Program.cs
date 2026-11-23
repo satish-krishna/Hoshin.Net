@@ -29,7 +29,7 @@ public static class Program
             new ChangeCommand(services),
             new CommitCommand(services),
             new GateCommand(services),
-            new GuardCommand(),
+            new GuardCommand(services.HookAdapter, services.AllowListedRunner, services.FileSystem, services.TimeProvider),
             new HookCommand(services),
             new BaselineCommand(services),
             new RedCommand(services),

@@ -50,11 +50,11 @@ public sealed class MarkerTestPatternsTests
         });
 
         var markerPath = Path.Combine(repoDir, ".hoshin.json");
-        var checkProblems = DocumentCheckService.Default.CheckFiles([markerPath]);
+        var checkProblems = TestServices.Default.DocumentChecker.CheckFiles([markerPath]);
         Assert.Empty(checkProblems);
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var plan = repo.ReadPlan()!;
+        var repo = TestServices.FindRepo(repoDir)!;
+        var plan = repo.ReadPlan(TestServices.PlanReader)!;
         Assert.True(WorkflowRepo.IsTestPath("spec/a.rb", plan.EffectiveTestPatterns));
         Assert.False(WorkflowRepo.IsTestPath("lib/a.rb", plan.EffectiveTestPatterns));
     }

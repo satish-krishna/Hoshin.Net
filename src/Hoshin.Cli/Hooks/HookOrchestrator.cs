@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Documents;
 using Hoshin.Workflow.Engine;
 
 namespace Hoshin.Cli.Hooks;
@@ -9,12 +10,22 @@ namespace Hoshin.Cli.Hooks;
 /// Reads <see cref="WorkflowState"/>, delegates all ordering and gate logic to <see cref="WorkflowEngine"/>,
 /// executes library-owned steps via <see cref="IWorkflowRunner"/>, and speaks both Claude Code and Antigravity hook protocols.
 /// </summary>
-public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunner? runner = null)
+public sealed class HookOrchestrator(
+    IHookAdapter adapter,
+    IWorkflowRunner runner,
+    IAllowListedCommandRunner commandRunner,
+    IFileSystem fileSystem,
+    PlanReader planReader,
+    TimeProvider timeProvider)
 {
     private const int MaxStopBlocks = 3;
 
-    private readonly IHookAdapter _adapter = adapter ?? HarnessAdapter.Default;
-    private readonly IWorkflowRunner _runner = runner ?? WorkflowRunner.Default;
+    private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+    private readonly IWorkflowRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+    private readonly IAllowListedCommandRunner _commandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+    private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
+    private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
     public (string? Output, string Decision) HandleStart(NormalizedHookEvent ev, string? rolesRoot)
@@ -32,12 +43,12 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), $"{invocation.Skill}: allowed");
         }
 
-        if (File.Exists(repo.RunMarkerPath))
+        if (_fs.FileExists(repo.RunMarkerPath))
         {
             var existingMarker = repo.ReadRunMarker();
             var existingStep = repo.ReadStep();
             if (existingStep is { Kind: "Implement" or "Retry" or "NeedsApproval" } &&
-                HookSessionScope.IsActiveNonStale(existingMarker, existingStep, DateTimeOffset.UtcNow) &&
+                HookSessionScope.IsActiveNonStale(existingMarker, existingStep, _time.GetUtcNow()) &&
                 !HookSessionScope.IsParentRunSession(existingMarker!, ev))
             {
                 return (_adapter.EmptyOutput(ev.Harness), "different session owns active build run");
@@ -100,8 +111,8 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return EmitStartContext(ev, repo, gate + " Tell the person who asked, in one or two sentences, then end your turn.", $"{invoked}: refused, next is {WorkflowEngine.Next(state).Kind}");
         }
 
-        Directory.CreateDirectory(repo.HoshinDir);
-        repo.WriteRunMarker(new RunMarker(DateTimeOffset.UtcNow, ev.SessionId, ev.HarnessName, repo.ChangeFolder));
+        _fs.CreateDirectory(repo.HoshinDir);
+        repo.WriteRunMarker(new RunMarker(_time.GetUtcNow(), ev.SessionId, ev.HarnessName, repo.ChangeFolder));
         StopCounterStore.ResetAll(repo);
 
         var prefix = "";
@@ -159,7 +170,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), "no run");
         }
 
-        if (!HookSessionScope.IsRunSession(repo, ev, DateTimeOffset.UtcNow, out var marker, out var current) ||
+        if (!HookSessionScope.IsRunSession(repo, ev, _time.GetUtcNow(), out var marker, out var current) ||
             !HookSessionScope.IsParentRunSession(marker!, ev))
         {
             return (_adapter.EmptyOutput(ev.Harness), "not the run session");
@@ -218,7 +229,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
             return (_adapter.EmptyOutput(ev.Harness), "no run");
         }
 
-        if (!HookSessionScope.IsRunSession(repo, ev, DateTimeOffset.UtcNow, out _, out var current))
+        if (!HookSessionScope.IsRunSession(repo, ev, _time.GetUtcNow(), out _, out var current))
         {
             return (_adapter.EmptyOutput(ev.Harness), "not the run session");
         }
@@ -248,7 +259,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
 
         if (!File.Exists(repo.RunMarkerPath))
         {
-            var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, rolesRoot);
+            var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, _planReader, rolesRoot);
             if (tamper is not null)
             {
                 return (_adapter.BlockStopOutput(ev.Harness, tamper), "block: run.json tampering detected");
@@ -258,7 +269,7 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         }
 
         // Only the run's owning parent session participates in Stop orchestration (unrelated sessions and subagents stay silent).
-        if (!HookSessionScope.IsRunSession(repo, ev, DateTimeOffset.UtcNow, out var marker, out var current) ||
+        if (!HookSessionScope.IsRunSession(repo, ev, _time.GetUtcNow(), out var marker, out var current) ||
             !HookSessionScope.IsParentRunSession(marker!, ev))
         {
             return (_adapter.EmptyOutput(ev.Harness), "allow: not the run parent session");
@@ -517,15 +528,15 @@ public sealed class HookOrchestrator(IHookAdapter? adapter = null, IWorkflowRunn
         return (_adapter.ContextOutput(ev, text), decision);
     }
 
-    private static WorkflowRepo? ResolveRepo(NormalizedHookEvent ev) =>
-        WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory());
+    private WorkflowRepo? ResolveRepo(NormalizedHookEvent ev) =>
+        WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _commandRunner, _fs);
 
-    private static WorkflowState? ReadState(WorkflowRepo repo, string? rolesRoot, out string? error)
+    private WorkflowState? ReadState(WorkflowRepo repo, string? rolesRoot, out string? error)
     {
         error = null;
         try
         {
-            return WorkflowState.Read(repo, rolesRoot);
+            return WorkflowState.Read(repo, _planReader, rolesRoot);
         }
         catch (CouldNotRunException e)
         {

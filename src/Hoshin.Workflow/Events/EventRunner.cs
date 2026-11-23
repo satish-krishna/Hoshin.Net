@@ -39,50 +39,31 @@ public sealed class EventRunner
     private readonly LedgerStore _ledger;
     private readonly HookScriptExporter _scripts;
     private readonly HookProcessRunner _processRunner;
+    private readonly TimeProvider _time;
     private readonly Dictionary<string, IEventStep> _steps;
 
     public EventRunner(
-        IGitClient? git = null,
-        HookConfigService? hookConfig = null,
-        LedgerStore? ledger = null,
-        HookScriptExporter? scripts = null,
-        HookProcessRunner? processRunner = null,
-        IEnumerable<IEventStep>? steps = null)
+        IGitClient git,
+        HookConfigService hookConfig,
+        LedgerStore ledger,
+        HookScriptExporter scripts,
+        HookProcessRunner processRunner,
+        IEnumerable<IEventStep> steps,
+        TimeProvider timeProvider)
     {
-        _git = git ?? ProcessGitClient.Default;
-        _hookConfig = hookConfig ?? new HookConfigService(_git);
-        _ledger = ledger ?? new LedgerStore(_git);
-        _scripts = scripts ?? new HookScriptExporter(_git);
-        _processRunner = processRunner ?? HookProcessRunner.Default;
+        _git = git ?? throw new ArgumentNullException(nameof(git));
+        _hookConfig = hookConfig ?? throw new ArgumentNullException(nameof(hookConfig));
+        _ledger = ledger ?? throw new ArgumentNullException(nameof(ledger));
+        _scripts = scripts ?? throw new ArgumentNullException(nameof(scripts));
+        _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
+        _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-        var stepList = steps?.ToList() ?? CreateDefaultSteps(_git, _ledger, _scripts, _processRunner);
+        var stepList = (steps ?? throw new ArgumentNullException(nameof(steps))).ToList();
         _steps = stepList.ToDictionary(s => s.EventName, StringComparer.Ordinal);
         if (_steps.TryGetValue("change.done", out var doneStep) && doneStep is ChangeDoneStep cds)
         {
             cds.BindRunner(RunAsync);
         }
-    }
-
-    private static List<IEventStep> CreateDefaultSteps(
-        IGitClient git,
-        LedgerStore ledger,
-        HookScriptExporter scripts,
-        HookProcessRunner processRunner)
-    {
-        var apps = new Workspace.AppService(git);
-        var contextFactory = new EventContextFactory(git, apps: apps);
-        var baselineTaker = new Baseline.BaselineTaker(git, new Baseline.BaselineStore(git), apps, contextFactory, scripts, processRunner);
-        var approvals = new Baseline.BaselineApprovals(ledger);
-        return
-        [
-            new ChangeStartStep(git, apps, new Workspace.BranchChecker(git)),
-            new DocAcceptStep(git),
-            new BuildStartStep(git, apps, contextFactory, ledger, baselineTaker, approvals),
-            new TaskDoneStep(),
-            new BuildFinishStep(git, Changes.ProgressService.Default, apps, contextFactory, baselineTaker, approvals),
-            new ReviewFinishStep(),
-            new ChangeDoneStep(git, GhPullRequestClient.Default, Changes.ProgressService.Default, new Documents.ReviewReader(), apps),
-        ];
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
@@ -117,7 +98,7 @@ public sealed class EventRunner
                 key,
                 subject,
                 updated.Outcome,
-                DateTimeOffset.UtcNow.ToString("O"),
+                _time.GetUtcNow().ToString("O"),
                 updated.Hooks,
                 updated.Problems,
                 failedSummary,
@@ -171,7 +152,7 @@ public sealed class EventRunner
         }
 
         ctx.CheckProblems = [];
-        var log = new CheckLog(CheckLog.ChecksFile(_git, ctx.Master, ctx.System, ctx.Change), ctx.Event, ctx.Repo, ctx.CheckProblems);
+        var log = new CheckLog(CheckLog.ChecksFile(_git, ctx.Master, ctx.System, ctx.Change), ctx.Event, ctx.Repo, ctx.CheckProblems, _time);
         using var scripts = _scripts.Export(ctx.Master, config.Revision, ctx.System);
 
         var details = new Dictionary<string, object?>();

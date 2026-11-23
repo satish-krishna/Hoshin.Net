@@ -12,8 +12,6 @@ namespace Hoshin.Workflow.Common;
 /// </summary>
 public sealed class EmbeddedSchemaValidator : IJsonSchemaValidator
 {
-    public static EmbeddedSchemaValidator Default { get; } = new();
-
     private readonly ConcurrentDictionary<string, JsonElement> _cache = new(StringComparer.Ordinal);
 
     public IReadOnlyList<SchemaError> Validate(string schemaName, JsonElement value)

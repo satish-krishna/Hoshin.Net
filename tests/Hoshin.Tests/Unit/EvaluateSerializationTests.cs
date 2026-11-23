@@ -41,10 +41,10 @@ public sealed class EvaluateSerializationTests
                     """,
             });
 
-            var repo = WorkflowRepo.Find(repoDir)!;
+            var repo = TestServices.FindRepo(repoDir)!;
             var startHead = repo.Head();
-            var runner = WorkflowRunner.Default;
-            var initialState = WorkflowState.Read(repo)!;
+            var runner = TestServices.WorkflowRunner;
+            var initialState = TestServices.ReadState(repo)!;
             var step = Assert.IsType<Implement>(WorkflowEngine.Next(initialState));
             runner.Issue(repo, initialState, step, "s1");
 
@@ -56,7 +56,7 @@ public sealed class EvaluateSerializationTests
                 "export function add(a, b) { return a + b; }\nexport function sub(a, b) { return a - b; }\n");
 
             // Snapshot state before either thread enters EvaluateAndCommitTask (matching Stop + SubagentStop race).
-            var sharedState = WorkflowState.Read(repo)!;
+            var sharedState = TestServices.ReadState(repo)!;
             using var barrier = new Barrier(2);
 
             var t1 = Task.Run(() =>

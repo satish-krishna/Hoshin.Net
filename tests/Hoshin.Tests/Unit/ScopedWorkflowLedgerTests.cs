@@ -44,21 +44,21 @@ public sealed class ScopedWorkflowLedgerTests
             ["intent/demo/change-b/plan.md"] = PlanText("Change B"),
         });
 
-        var repoA = WorkflowRepo.Find(repoDir, "intent/demo/change-a")!;
+        var repoA = TestServices.FindRepo(repoDir, "intent/demo/change-a")!;
         repoA.WithLedger(l =>
         {
             l.Verdicts.Add(new WorkflowVerdict("T1", 1, repoA.Head(), true, "observed", [], DateTimeOffset.UtcNow));
             return 0;
         });
 
-        Assert.IsType<RunChecks>(WorkflowEngine.Next(WorkflowState.Read(repoA)!));
+        Assert.IsType<RunChecks>(WorkflowEngine.Next(TestServices.ReadState(repoA)!));
         Assert.True(File.Exists(Path.Combine(repoA.HoshinDir, "changes", "change-a", "workflow-ledger.json")));
 
         // Switch run to change B (which also has task T1).
-        var repoB = WorkflowRepo.Find(repoDir, "intent/demo/change-b")!;
+        var repoB = TestServices.FindRepo(repoDir, "intent/demo/change-b")!;
         repoB.WriteRunMarker(new RunMarker(DateTimeOffset.UtcNow, "s1", "claude-code", repoB.ChangeFolder));
 
-        var nextB = Assert.IsType<Implement>(WorkflowEngine.Next(WorkflowState.Read(repoB)!));
+        var nextB = Assert.IsType<Implement>(WorkflowEngine.Next(TestServices.ReadState(repoB)!));
         Assert.Equal("T1", nextB.Agent.Task);
     }
 
@@ -75,7 +75,7 @@ public sealed class ScopedWorkflowLedgerTests
             ["intent/demo/change-a/plan.md"] = PlanText("Change A"),
         });
 
-        var repoA = WorkflowRepo.Find(repoDir, "intent/demo/change-a")!;
+        var repoA = TestServices.FindRepo(repoDir, "intent/demo/change-a")!;
         repoA.WriteRunMarker(new RunMarker(DateTimeOffset.UtcNow, "s1", "claude-code", repoA.ChangeFolder));
 
         var legacyPath = Path.Combine(repoA.HoshinDir, "workflow-ledger.json");

@@ -29,8 +29,10 @@ public sealed record MarkerSystem(List<string> Repos, Dictionary<string, string>
 public sealed record Marker(WorkspaceLayout Layout, Dictionary<string, MarkerSystem> Systems);
 
 /// <summary>Finds, reads, and validates <c>.hoshin.json</c> markers.</summary>
-public static class MarkerReader
+public sealed class MarkerReader(IFileSystem fileSystem)
 {
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+
     private static readonly Regex NameRegex = new(@"^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled);
     private static readonly Regex DrivePrefix = new(@"^[A-Za-z]:", RegexOptions.Compiled);
     public static readonly Regex CommitScopeRegex = new(@"^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled);
@@ -38,12 +40,12 @@ public static class MarkerReader
     private static readonly HashSet<string> MarkerFields = ["version", "layout", "systems", "hooks", "gateRetries", "env", "build", "testPatterns"];
     private static readonly HashSet<string> SystemFields = ["repos", "apps", "commitScope", "naming"];
 
-    public static string? MarkerFileIn(string folder, IReadOnlyList<string>? names = null)
+    public string? MarkerFileIn(string folder, IReadOnlyList<string>? names = null)
     {
         foreach (var n in names ?? MarkerConstants.DefaultMarkers)
         {
             var candidate = Path.Combine(folder, n);
-            if (File.Exists(candidate))
+            if (_fs.FileExists(candidate))
             {
                 return candidate;
             }
@@ -51,6 +53,8 @@ public static class MarkerReader
 
         return null;
     }
+
+    public Marker? TryReadMarker(string path) => _fs.FileExists(path) ? ReadMarker(path) : null;
 
     public static string? NormalizeFolder(JsonElement value) =>
         value.ValueKind == JsonValueKind.String ? NormalizeFolder(value.GetString()) : null;
@@ -238,12 +242,12 @@ public static class MarkerReader
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
-    public static Marker ReadMarker(string path)
+    public Marker ReadMarker(string path)
     {
         JsonDocument doc;
         try
         {
-            doc = JsonDocument.Parse(File.ReadAllText(path));
+            doc = JsonDocument.Parse(_fs.ReadAllText(path));
         }
         catch (Exception e)
         {
@@ -300,13 +304,13 @@ public static class MarkerReader
         }
     }
 
-    public static Marker? FindMarker(string file)
+    public Marker? FindMarker(string file)
     {
         var dir = Path.GetDirectoryName(Path.GetFullPath(file));
         while (!string.IsNullOrEmpty(dir))
         {
             var candidate = Path.Combine(dir, MarkerConstants.FileName);
-            if (File.Exists(candidate))
+            if (_fs.FileExists(candidate))
             {
                 return ReadMarker(candidate);
             }

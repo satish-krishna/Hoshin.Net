@@ -19,9 +19,9 @@ public sealed class SystemRead
     private readonly Dictionary<string, string?> _objects = new(StringComparer.Ordinal);
     private HashSet<string>? _reportedCache;
 
-    public SystemRead(string top, string system, IGitClient? git = null)
+    public SystemRead(string top, string system, IGitClient git)
     {
-        _git = git ?? ProcessGitClient.Default;
+        _git = git ?? throw new ArgumentNullException(nameof(git));
         Top = top;
         System = system;
         HasHead = _git.CommitOf(top, "HEAD") is not null;

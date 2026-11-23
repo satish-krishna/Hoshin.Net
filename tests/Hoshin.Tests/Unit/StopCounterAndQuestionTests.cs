@@ -22,8 +22,8 @@ public sealed class StopCounterAndQuestionTests
                 """,
         });
 
-        var orchestrator = new HookOrchestrator();
-        orchestrator.HandleStart(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var orchestrator = TestServices.CreateOrchestrator();
+        orchestrator.HandleStart(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "UserPromptExpansion",
             cwd = repoDir,
@@ -54,10 +54,10 @@ public sealed class StopCounterAndQuestionTests
         var (tmp, repoDir) = CreateInvalidIntentDraftFixture();
         using var cleanup = tmp;
 
-        var orchestrator = new HookOrchestrator();
+        var orchestrator = TestServices.CreateOrchestrator();
         for (var turn = 1; turn <= 4; turn++)
         {
-            var (output, _) = orchestrator.HandleStop(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+            var (output, _) = orchestrator.HandleStop(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
             {
                 hook_event_name = "Stop",
                 cwd = repoDir,
@@ -81,10 +81,10 @@ public sealed class StopCounterAndQuestionTests
         var (tmp, repoDir) = CreateInvalidIntentDraftFixture();
         using var cleanup = tmp;
 
-        var orchestrator = new HookOrchestrator();
+        var orchestrator = TestServices.CreateOrchestrator();
         for (var i = 1; i <= 3; i++)
         {
-            var (output, _) = orchestrator.HandleStop(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+            var (output, _) = orchestrator.HandleStop(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
             {
                 hook_event_name = "Stop",
                 cwd = repoDir,
@@ -98,7 +98,7 @@ public sealed class StopCounterAndQuestionTests
         }
 
         // 4th chained stop gives up with a system message instead of blocking.
-        var (fourthOut, fourthDecision) = orchestrator.HandleStop(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var (fourthOut, fourthDecision) = orchestrator.HandleStop(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "Stop",
             cwd = repoDir,
@@ -120,8 +120,8 @@ public sealed class StopCounterAndQuestionTests
         var (tmp, repoDir) = CreateInvalidIntentDraftFixture();
         using var cleanup = tmp;
 
-        var orchestrator = new HookOrchestrator();
-        var (output, decision) = orchestrator.HandleStop(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var orchestrator = TestServices.CreateOrchestrator();
+        var (output, decision) = orchestrator.HandleStop(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "Stop",
             cwd = repoDir,

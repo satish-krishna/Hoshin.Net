@@ -56,25 +56,23 @@ public sealed record StateResult(string System, List<ChangeStateItem> Changes, L
 
 /// <summary>Computes full change state and skill readiness gates per GRAMMAR.md.</summary>
 public sealed class ChangeStateService(
-    IGitClient? git = null,
-    ChangePlacer? placer = null,
-    FinishedChecker? finishedChecker = null,
-    FixStateService? fixState = null,
-    ProgressService? progress = null,
-    SpecReader? specReader = null,
-    ReviewReader? reviewReader = null,
-    AppService? apps = null)
+    IGitClient git,
+    ChangePlacer placer,
+    FinishedChecker finishedChecker,
+    FixStateService fixState,
+    ProgressService progress,
+    SpecReader specReader,
+    ReviewReader reviewReader,
+    AppService apps)
 {
-    public static ChangeStateService Default { get; } = new();
-
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly ChangePlacer _placer = placer ?? new ChangePlacer(git);
-    private readonly FinishedChecker _finished = finishedChecker ?? new FinishedChecker(git);
-    private readonly FixStateService _fixState = fixState ?? new FixStateService(git);
-    private readonly ProgressService _progress = progress ?? ProgressService.Default;
-    private readonly SpecReader _spec = specReader ?? new SpecReader();
-    private readonly ReviewReader _review = reviewReader ?? new ReviewReader();
-    private readonly AppService _apps = apps ?? new AppService(git);
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly ChangePlacer _placer = placer ?? throw new ArgumentNullException(nameof(placer));
+    private readonly FinishedChecker _finished = finishedChecker ?? throw new ArgumentNullException(nameof(finishedChecker));
+    private readonly FixStateService _fixState = fixState ?? throw new ArgumentNullException(nameof(fixState));
+    private readonly ProgressService _progress = progress ?? throw new ArgumentNullException(nameof(progress));
+    private readonly SpecReader _spec = specReader ?? throw new ArgumentNullException(nameof(specReader));
+    private readonly ReviewReader _review = reviewReader ?? throw new ArgumentNullException(nameof(reviewReader));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
 
     private sealed record RepositoryFacts(List<string> Uncommitted, string? From, List<TrailerCommit> Trailers);
 

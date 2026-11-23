@@ -120,7 +120,7 @@ public sealed class PublishAndReviewGateTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var codeHead = repo.Head();
         repo.WithLedger(l =>
         {
@@ -129,7 +129,7 @@ public sealed class PublishAndReviewGateTests
             return 0;
         });
 
-        var beforeReview = WorkflowState.Read(repo)!;
+        var beforeReview = TestServices.ReadState(repo)!;
         Assert.IsType<ReviewDocument>(WorkflowEngine.Next(beforeReview));
 
         var shortHead = WorkflowEngine.Short(codeHead);
@@ -149,13 +149,13 @@ public sealed class PublishAndReviewGateTests
             No findings.
             """);
 
-        var (problems, commit) = WorkflowRunner.Default.CommitReview(repo, beforeReview);
+        var (problems, commit) = TestServices.WorkflowRunner.CommitReview(repo, beforeReview);
         Assert.Empty(problems);
         Assert.NotNull(commit);
         Assert.NotEqual(codeHead, repo.Head());
 
         // Committing build/review.md moved HEAD, but NOT codeHead: Next must proceed to NeedsApproval without re-running checks or review!
-        var afterReview = WorkflowState.Read(repo)!;
+        var afterReview = TestServices.ReadState(repo)!;
         var approval = Assert.IsType<NeedsApproval>(WorkflowEngine.Next(afterReview));
         Assert.Equal(codeHead, approval.Head);
     }
@@ -202,13 +202,13 @@ public sealed class PublishAndReviewGateTests
         TestGitFixture.Git(repoDir, "remote", "add", "upstream", upstreamDir);
         TestGitFixture.Git(repoDir, "push", "-u", "upstream", "main");
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var state = WorkflowState.Read(repo)!;
+        var repo = TestServices.FindRepo(repoDir)!;
+        var state = TestServices.ReadState(repo)!;
         var targetRef = $"refs/heads/{state.Plan.EffectiveBranch}";
         Assert.Equal("refs/heads/change/t31-pub", targetRef);
 
         var fakePr = new FakePullRequestClient();
-        var runner = new WorkflowRunner(AllowListedCommandRunner.Default, fakePr);
+        var runner = TestServices.CreateWorkflowRunner(pullRequests: fakePr);
 
         // First publish: opens a new PR with base="main", head="change/t31-pub", and pushes to upstream remote.
         var first = runner.Publish(repo, state, targetRef);
@@ -261,10 +261,10 @@ public sealed class PublishAndReviewGateTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var state = WorkflowState.Read(repo)!;
+        var repo = TestServices.FindRepo(repoDir)!;
+        var state = TestServices.ReadState(repo)!;
         var fakePr = new FakePullRequestClient { OpenNewError = "gh auth required" };
-        var runner = new WorkflowRunner(AllowListedCommandRunner.Default, fakePr);
+        var runner = TestServices.CreateWorkflowRunner(pullRequests: fakePr);
 
         var result = runner.Publish(repo, state, $"refs/heads/{state.Plan.EffectiveBranch}");
         Assert.False(result.Ok);

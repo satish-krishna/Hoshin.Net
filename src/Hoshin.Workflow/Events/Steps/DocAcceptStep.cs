@@ -3,10 +3,10 @@ using Hoshin.Workflow.Git;
 namespace Hoshin.Workflow.Events.Steps;
 
 /// <summary><c>doc.accept</c>: records acceptance of <c>intent.md</c>, <c>spec.md</c>, or <c>plan.md</c>.</summary>
-public sealed class DocAcceptStep(IGitClient? git = null) : IEventStep
+public sealed class DocAcceptStep(IGitClient git) : IEventStep
 {
     private static readonly HashSet<string> Documents = ["intent.md", "spec.md", "plan.md"];
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
 
     public string EventName => "doc.accept";
     public bool ReusePassed => true;

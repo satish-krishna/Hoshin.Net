@@ -18,11 +18,10 @@ public interface IWorkspaceResolver
     string MasterFolderName(string workspace, string master, IReadOnlyList<string>? markers = null);
 }
 
-public sealed class WorkspaceResolver(IGitClient? git = null) : IWorkspaceResolver
+public sealed class WorkspaceResolver(IGitClient git, MarkerReader markerReader) : IWorkspaceResolver
 {
-    public static WorkspaceResolver Default { get; } = new();
-
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public Resolution Resolve(string cwd, ResolveOptions options, IReadOnlyList<string>? markers = null)
@@ -225,12 +224,12 @@ public sealed class WorkspaceResolver(IGitClient? git = null) : IWorkspaceResolv
     private static bool HoldsMarker(string folder, IReadOnlyList<string> markerNames) =>
         markerNames.Any(m => File.Exists(Path.Combine(folder, m)));
 
-    private static WorkspaceLayout LayoutOf(string folder, IReadOnlyList<string> markerNames)
+    private WorkspaceLayout LayoutOf(string folder, IReadOnlyList<string> markerNames)
     {
         try
         {
-            var file = MarkerReader.MarkerFileIn(folder, markerNames);
-            return file is not null && MarkerReader.ReadMarker(file).Layout == WorkspaceLayout.SingleRepo
+            var file = _markerReader.MarkerFileIn(folder, markerNames);
+            return file is not null && _markerReader.ReadMarker(file).Layout == WorkspaceLayout.SingleRepo
                 ? WorkspaceLayout.SingleRepo
                 : WorkspaceLayout.Workspace;
         }

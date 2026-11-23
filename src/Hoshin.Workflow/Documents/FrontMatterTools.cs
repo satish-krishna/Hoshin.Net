@@ -25,9 +25,10 @@ public static class FrontMatterCheck
 }
 
 /// <summary>Updates a string field inside a document's line-1 <c>```jsonc</c> front matter using real JSONC tokens, preserving comments and line endings.</summary>
-public static class FrontMatterEdit
+public sealed class FrontMatterEdit(IFileSystem fileSystem)
 {
     private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
     private sealed record ObjectScan(
         int OpenBraceByte,
@@ -37,9 +38,9 @@ public static class FrontMatterEdit
         int? FirstPropertyStart,
         int? LastValueEnd);
 
-    public static void Set(string path, string field, string value)
+    public void Set(string path, string field, string value)
     {
-        var rawText = File.ReadAllText(path);
+        var rawText = _fs.ReadAllText(path);
         var doc = Doc.Split(rawText);
         var fence = doc.Fences.FirstOrDefault(f => f.Open == 0 && Doc.IsFieldsBlock(f));
         if (fence is null || fence.Close < 0)
@@ -69,7 +70,7 @@ public static class FrontMatterEdit
         }
 
         var updatedText = string.Concat(rawText.AsSpan(0, blockStart), Utf8NoBom.GetString(updatedBlock), rawText.AsSpan(blockEnd));
-        WriteAtomic(path, updatedText);
+        _fs.WriteAllTextAtomic(path, updatedText);
     }
 
     private static ObjectScan ScanTopLevelObject(byte[] utf8, string targetField, string fileName)
@@ -305,11 +306,4 @@ public static class FrontMatterEdit
 
     private static string DetectNewline(string text) =>
         text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-
-    private static void WriteAtomic(string path, string content)
-    {
-        var tmp = $"{path}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
-        File.WriteAllText(tmp, content, Utf8NoBom);
-        File.Move(tmp, path, overwrite: true);
-    }
 }

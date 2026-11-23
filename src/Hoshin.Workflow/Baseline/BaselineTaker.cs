@@ -18,15 +18,14 @@ public sealed record TakenBaseline(
 
 /// <summary>Takes, caches, and restores baselines for a repository's blocking <c>build.finish</c> before hooks.</summary>
 public sealed class BaselineTaker(
-    IGitClient? git = null,
-    BaselineStore? store = null,
-    AppService? apps = null,
-    EventContextFactory? contextFactory = null,
-    HookScriptExporter? scriptExporter = null,
-    HookProcessRunner? processRunner = null)
+    IGitClient git,
+    BaselineStore store,
+    AppService apps,
+    EventContextFactory contextFactory,
+    HookScriptExporter scriptExporter,
+    HookProcessRunner processRunner,
+    TimeProvider timeProvider)
 {
-    public static BaselineTaker Default { get; } = new();
-
     private sealed record RestoreInfo(
         [property: JsonPropertyName("branch")] string Branch,
         [property: JsonPropertyName("head")] string Head,
@@ -37,12 +36,13 @@ public sealed class BaselineTaker(
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly BaselineStore _store = store ?? new BaselineStore(git);
-    private readonly AppService _apps = apps ?? new AppService(git);
-    private readonly EventContextFactory _contextFactory = contextFactory ?? new EventContextFactory(git);
-    private readonly HookScriptExporter _scripts = scriptExporter ?? new HookScriptExporter(git);
-    private readonly HookProcessRunner _processRunner = processRunner ?? HookProcessRunner.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly BaselineStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly EventContextFactory _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
+    private readonly HookScriptExporter _scripts = scriptExporter ?? throw new ArgumentNullException(nameof(scriptExporter));
+    private readonly HookProcessRunner _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
+    private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public static List<HookDefinition> ChecksOf(HookConfig config, string repo) =>
         HookConfigService.HooksFor(config, "build.finish", "before", repo).Where(h => h.Blocking).ToList();
@@ -157,7 +157,7 @@ public sealed class BaselineTaker(
             }
 
             var asFinish = ctx.CloneFor("build.finish", ctx.Repo, ctx.RepoPath, ctx.Root, atBase ? ctx.Branch : null, ctx.Base, baseCommit);
-            var log = new CheckLog(CheckLog.ChecksFile(_git, asFinish.Master, asFinish.System, asFinish.Change), asFinish.Event, asFinish.Repo, ctx.CheckProblems ?? []);
+            var log = new CheckLog(CheckLog.ChecksFile(_git, asFinish.Master, asFinish.System, asFinish.Change), asFinish.Event, asFinish.Repo, ctx.CheckProblems ?? [], _time);
             var extraEnv = new Dictionary<string, string>(StringComparer.Ordinal) { ["HOSHIN_BASELINE"] = "1" };
 
             foreach (var check in checks)
@@ -197,7 +197,7 @@ public sealed class BaselineTaker(
         var hooks = records
             .Select(r => new BaselineHookRecord(r.Id, r.Outcome == "passed" ? "passed" : "failed", r.ExitCode, r.Ids, r.Output))
             .ToList();
-        var entry = new BaselineEntry(baseCommit, signature, DateTimeOffset.UtcNow.ToString("O"), hooks);
+        var entry = new BaselineEntry(baseCommit, signature, _time.GetUtcNow().ToString("O"), hooks);
         _store.SaveEntry(ctx.Master, ctx.System, ctx.Repo, entry);
         return new TakenBaseline(baseCommit, entry, false, "passed", []);
     }

@@ -45,10 +45,10 @@ public sealed class SubagentNonceTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var orchestrator = new HookOrchestrator();
+        var repo = TestServices.FindRepo(repoDir)!;
+        var orchestrator = TestServices.CreateOrchestrator();
 
-        var (startOut, _) = orchestrator.HandleStart(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var (startOut, _) = orchestrator.HandleStart(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "UserPromptExpansion",
             cwd = repoDir,
@@ -63,7 +63,7 @@ public sealed class SubagentNonceTests
         var nonce = nonceMatch.Value;
 
         // 1. Explore/research Agent call without nonce must NOT burn attempt 1!
-        var (exploreOut, _) = orchestrator.HandleResult(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var (exploreOut, _) = orchestrator.HandleResult(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PostToolUse",
             cwd = repoDir,
@@ -74,7 +74,7 @@ public sealed class SubagentNonceTests
 
         Assert.Null(exploreOut);
         Assert.Empty(repo.ReadLedger().Verdicts);
-        var nextAfterExplore = Assert.IsType<Implement>(WorkflowEngine.Next(WorkflowState.Read(repo, SkillsDir)!));
+        var nextAfterExplore = Assert.IsType<Implement>(WorkflowEngine.Next(TestServices.ReadState(repo, SkillsDir)!));
         Assert.Equal("T1", nextAfterExplore.Agent.Task);
         Assert.Equal(1, nextAfterExplore.Agent.Attempt);
 
@@ -86,7 +86,7 @@ public sealed class SubagentNonceTests
             Path.Combine(repoDir, "src", "math.mjs"),
             "export function add(a, b) { return a + b; }\nexport function sub(a, b) { return a - b; }\n");
 
-        var (implOut, _) = orchestrator.HandleResult(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var (implOut, _) = orchestrator.HandleResult(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PostToolUse",
             cwd = repoDir,
@@ -131,10 +131,10 @@ public sealed class SubagentNonceTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var orchestrator = new HookOrchestrator();
+        var repo = TestServices.FindRepo(repoDir)!;
+        var orchestrator = TestServices.CreateOrchestrator();
 
-        orchestrator.HandleStart(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        orchestrator.HandleStart(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hookEventName = "PreInvocation",
             conversationId = "agy-p1",
@@ -144,7 +144,7 @@ public sealed class SubagentNonceTests
             lastUserInput = "/build",
         })), SkillsDir);
 
-        var (researchOut, _) = orchestrator.HandleResult(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var (researchOut, _) = orchestrator.HandleResult(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hookEventName = "PostToolUse",
             conversationId = "agy-p1",

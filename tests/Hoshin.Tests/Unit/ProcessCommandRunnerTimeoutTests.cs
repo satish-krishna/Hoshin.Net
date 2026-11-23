@@ -17,7 +17,7 @@ public sealed class ProcessCommandRunnerTimeoutTests
             Timeout: TimeSpan.FromSeconds(1));
 
         var sw = Stopwatch.StartNew();
-        var outcome = await ProcessCommandRunner.Default.RunAsync(request);
+        var outcome = await TestServices.CommandRunner.RunAsync(request);
         sw.Stop();
 
         Assert.True(outcome.Started);
@@ -38,7 +38,7 @@ public sealed class ProcessCommandRunnerTimeoutTests
             Timeout: TimeSpan.FromSeconds(10));
 
         var sw = Stopwatch.StartNew();
-        var outcome = await ProcessCommandRunner.Default.RunAsync(request);
+        var outcome = await TestServices.CommandRunner.RunAsync(request);
         sw.Stop();
 
         Assert.True(outcome.Ok, $"Expected Ok, got timedOut={outcome.TimedOut} exit={outcome.ExitCode} err={outcome.StartError} stderr={outcome.Stderr}");
@@ -57,7 +57,7 @@ public sealed class ProcessCommandRunnerTimeoutTests
 
         var sw = Stopwatch.StartNew();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => ProcessCommandRunner.Default.RunAsync(request, cts.Token));
+            () => TestServices.CommandRunner.RunAsync(request, cts.Token));
         sw.Stop();
 
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(3), $"Expected prompt cancellation, took {sw.Elapsed.TotalSeconds:F2}s");

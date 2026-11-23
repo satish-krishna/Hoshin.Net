@@ -34,20 +34,20 @@ public sealed record FixInput(
 
 /// <summary>Computes where a light-track fix stands per the 8-row fix-state table in GRAMMAR.md.</summary>
 public sealed class FixStateService(
-    IGitClient? git = null,
-    PlanReader? planReader = null,
-    BuildLogReader? buildLogReader = null)
+    IGitClient git,
+    PlanReader planReader,
+    BuildLogReader buildLogReader,
+    MarkerReader markerReader)
 {
-    public static FixStateService Default { get; } = new();
-
     private static readonly string[] Documents = ["intent", "spec", "plan"];
     private static readonly HashSet<string> OwnLines = ["status", "source_intent_commit", "source_spec_commit", "accepted_in_advance"];
     private static readonly Regex JsoncFieldLine = new(@"^\s*""([A-Za-z_][A-Za-z0-9_]*)""\s*:\s*(.+?)\s*,?\s*(?://.*)?$", RegexOptions.Compiled);
     private static readonly Regex HunkRegex = new(@"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,\d+)? @@", RegexOptions.Compiled);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly PlanReader _plan = planReader ?? new PlanReader();
-    private readonly BuildLogReader _buildLog = buildLogReader ?? new BuildLogReader();
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly PlanReader _plan = planReader ?? throw new ArgumentNullException(nameof(planReader));
+    private readonly BuildLogReader _buildLog = buildLogReader ?? throw new ArgumentNullException(nameof(buildLogReader));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
 
     public static string? StatusOf(string text, string file) => FrontMatter.TryGetScalar(text, file, "status");
 
@@ -378,7 +378,7 @@ public sealed class FixStateService(
         PlanReadResult? planResult;
         try
         {
-            var marker = MarkerReader.FindMarker(planFile);
+            var marker = _markerReader.FindMarker(planFile);
             var fm = FrontMatter.Parse(planText, planFile);
             var system = Jsonc.String(fm.Data, "system") ?? "";
             planResult = _plan.Read(planText, planFile, MarkerReader.AllowedPlanRepos(marker, system), system);

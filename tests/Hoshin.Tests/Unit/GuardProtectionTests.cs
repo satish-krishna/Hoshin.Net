@@ -41,7 +41,7 @@ public sealed class GuardProtectionTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var now = DateTimeOffset.UtcNow;
         repo.WriteRunMarker(new RunMarker(now, sessionId, "claude-code", repo.ChangeFolder));
         repo.WriteStep(new CurrentStep("NeedsApproval", null, 0, repo.Head(), now, SessionId: sessionId, ChangeFolder: repo.ChangeFolder));
@@ -58,8 +58,8 @@ public sealed class GuardProtectionTests
             tool_name = toolName,
             tool_input = toolInput,
         });
-        var ev = HarnessAdapter.Default.Parse(raw);
-        return GuardCommand.Evaluate(ev).Reason;
+        var ev = TestServices.HookAdapter.Parse(raw);
+        return TestServices.EvaluateGuard(ev).Reason;
     }
 
     [Theory]
@@ -109,7 +109,7 @@ public sealed class GuardProtectionTests
         var (tmp, repoDir, repo) = CreateActiveBuildFixture();
         using var _ = tmp;
 
-        var orchestrator = new HookOrchestrator();
+        var orchestrator = TestServices.CreateOrchestrator();
         var startPayload = JsonSerializer.Serialize(new
         {
             hook_event_name = "UserPromptExpansion",
@@ -117,7 +117,7 @@ public sealed class GuardProtectionTests
             session_id = "s1",
             command_name = "hoshin:build",
         });
-        orchestrator.HandleStart(HarnessAdapter.Default.Parse(startPayload), rolesRoot: null);
+        orchestrator.HandleStart(TestServices.HookAdapter.Parse(startPayload), rolesRoot: null);
         Assert.True(File.Exists(repo.RunMarkerPath));
         Assert.NotEmpty(repo.ReadLedger().Issued);
 
@@ -130,7 +130,7 @@ public sealed class GuardProtectionTests
             cwd = repoDir,
             session_id = "s1",
         });
-        var (output, decision) = orchestrator.HandleStop(HarnessAdapter.Default.Parse(stopPayload), rolesRoot: null);
+        var (output, decision) = orchestrator.HandleStop(TestServices.HookAdapter.Parse(stopPayload), rolesRoot: null);
         Assert.NotNull(output);
         using var doc = JsonDocument.Parse(output!);
         Assert.Equal("block", doc.RootElement.GetProperty("decision").GetString());

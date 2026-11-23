@@ -275,7 +275,7 @@ public sealed class DocumentMigrationTests
         var migrated = Migrator.MigrateMarkdownText(layout1Plan, "plan.md", out var changed);
         Assert.True(changed);
 
-        var read = new PlanReader().Read(migrated, "plan.md", ["app"], "demo");
+        var read = TestServices.PlanReader.Read(migrated, "plan.md", ["app"], "demo");
         Assert.Equal(2, read.Layout);
         Assert.Empty(read.Problems);
         Assert.Single(read.Document.SharedDecisions);
@@ -326,7 +326,7 @@ public sealed class DocumentMigrationTests
         var migrated = Migrator.MigrateMarkdownText(hybridLog, "build/app.md", out var changed);
         Assert.True(changed);
 
-        var read = new BuildLogReader().Read(migrated, "build/app.md");
+        var read = TestServices.BuildLogReader.Read(migrated, "build/app.md");
         Assert.Equal(2, read.Layout);
         Assert.Empty(read.Problems);
         Assert.Equal(3, read.Document.Entries.Count);
@@ -384,7 +384,7 @@ public sealed class DocumentMigrationTests
         var migrated = Migrator.MigrateMarkdownText(reviewMd, "build/review.md", out var changed);
         Assert.True(changed);
 
-        var read = new ReviewReader().Read(migrated, "build/review.md");
+        var read = TestServices.ReviewReader.Read(migrated, "build/review.md");
         Assert.Empty(read.Problems);
         Assert.Single(read.Document.Reviews);
         Assert.Equal("1234567", read.Document.Reviews[0].Commits["hoshin"]);
@@ -426,7 +426,7 @@ public sealed class DocumentMigrationTests
         var migratedPlan = Migrator.MigrateMarkdownText(planWithYamlProse, "plan.md", out var planChanged);
         Assert.True(planChanged);
         Assert.Contains("```yaml\nnote: not a record\n```", migratedPlan);
-        var planRead = new PlanReader().Read(migratedPlan, "plan.md", ["app"], "demo");
+        var planRead = TestServices.PlanReader.Read(migratedPlan, "plan.md", ["app"], "demo");
         Assert.Empty(planRead.Problems);
     }
 
@@ -764,7 +764,7 @@ public sealed class DocumentMigrationTests
 
     private static JsonElement RunTsRead(string tsTool, string file)
     {
-        var r = ProcessCommandRunner.Default.Run(new CommandRequest(Path.GetDirectoryName(file)!, ["node", tsTool, "read", "--json", file]));
+        var r = TestServices.CommandRunner.Run(new CommandRequest(Path.GetDirectoryName(file)!, ["node", tsTool, "read", "--json", file]));
         Assert.True(r.ExitCode == 0, $"TS read failed for {file}: {r.Stdout}\n{r.Stderr}");
         using var doc = JsonDocument.Parse(r.Stdout);
         return doc.RootElement.Clone();

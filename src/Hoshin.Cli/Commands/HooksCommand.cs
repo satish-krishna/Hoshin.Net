@@ -30,7 +30,7 @@ public sealed class HooksCommand(HoshinServices services) : IHoshinCommand
             throw new CouldNotRunException(string.Join('\n', r.Problems));
         }
 
-        if (!MarkerReader.ReadMarker(Path.Combine(r.Master, MarkerConstants.FileName)).Systems.ContainsKey(system))
+        if (!services.MarkerReader.ReadMarker(Path.Combine(r.Master, MarkerConstants.FileName)).Systems.ContainsKey(system))
         {
             throw new CouldNotRunException($"the marker lists no system {system}");
         }

@@ -9,7 +9,7 @@ public sealed record WorkflowTask(
     string Text,
     string[]? Test,
     string[]? Compile = null,
-    IReadOnlyList<string>? Files = null,
+    List<string>? Files = null,
     int? TimeoutSeconds = null);
 
 /// <summary>The change's loaded workflow plan, test patterns, and blocking <c>build.finish</c> checks.</summary>
@@ -22,7 +22,7 @@ public sealed record WorkflowPlan(
     bool HasPlan = true,
     string? Branch = null,
     string WorkType = "feat",
-    IReadOnlyList<string>? TestPatterns = null,
+    string[]? TestPatterns = null,
     string[]? EnvAllow = null,
     int TestTimeoutSeconds = 300,
     int CheckTimeoutSeconds = 600,
@@ -30,8 +30,8 @@ public sealed record WorkflowPlan(
 {
     public string EffectiveBranch => string.IsNullOrWhiteSpace(Branch) ? $"change/{Change}" : Branch;
 
-    public IReadOnlyList<string> EffectiveTestPatterns =>
-        TestPatterns is { Count: > 0 } ? TestPatterns : DefaultTestPatterns;
+    public string[] EffectiveTestPatterns =>
+        TestPatterns is { Length: > 0 } ? TestPatterns : DefaultTestPatterns;
 
     public TimeSpan EffectiveTaskTimeout(WorkflowTask task) =>
         TimeSpan.FromSeconds(task.TimeoutSeconds is > 0 ? task.TimeoutSeconds.Value : (TestTimeoutSeconds > 0 ? TestTimeoutSeconds : 300));
@@ -41,7 +41,7 @@ public sealed record WorkflowPlan(
 
     public int EffectiveMaxAttempts => MaxAttempts > 0 ? MaxAttempts : WorkflowEngine.MaxAttempts;
 
-    public static readonly IReadOnlyList<string> DefaultTestPatterns =
+    public static readonly string[] DefaultTestPatterns =
         ["test/**", "tests/**", "*.test.*", "*Tests.cs", "*Test.cs"];
 }
 
@@ -182,8 +182,8 @@ public sealed record CurrentStep(
     string? AgentId = null,
     string? SessionId = null,
     string? ChangeFolder = null,
-    IReadOnlyList<string>? TestPatterns = null,
-    IReadOnlyList<string>? TaskTestFiles = null,
+    string[]? TestPatterns = null,
+    string[]? TaskTestFiles = null,
     string? Change = null,
     string? DispatchNonce = null,
     bool HasTest = true);

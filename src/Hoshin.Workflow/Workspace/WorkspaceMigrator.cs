@@ -19,7 +19,12 @@ public sealed record MigrateResult(
     List<string> Problems);
 
 /// <summary>Migrates a workspace from legacy <c>ai-sdlc</c> names to <c>hoshin</c> names and rewrites legacy YAML documents / <c>change.yml</c> to Layout 2 JSONC (idempotent, dry-run by default).</summary>
-public sealed class WorkspaceMigrator(IGitClient git, IWorkspaceResolver resolver, IDocumentMigrator documentMigrator)
+public sealed class WorkspaceMigrator(
+    IGitClient git,
+    IWorkspaceResolver resolver,
+    IDocumentMigrator documentMigrator,
+    MarkerReader markerReader,
+    ScopeRules scopeRules)
 {
     private const string OldState = "ai-sdlc";
     private const string NewState = "hoshin";
@@ -32,6 +37,8 @@ public sealed class WorkspaceMigrator(IGitClient git, IWorkspaceResolver resolve
     private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
     private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
     private readonly IDocumentMigrator _documents = documentMigrator ?? throw new ArgumentNullException(nameof(documentMigrator));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
+    private readonly ScopeRules _scopeRules = scopeRules ?? throw new ArgumentNullException(nameof(scopeRules));
 
     private sealed record PlannedStep(MigrateStep Step, Func<string?>? Act, string? Branch = null);
 
@@ -54,9 +61,9 @@ public sealed class WorkspaceMigrator(IGitClient git, IWorkspaceResolver resolve
         }
 
         var main = PathHelpers.RealPath(wts[0].Path);
-        var markerFile = MarkerReader.MarkerFileIn(main, MarkerConstants.AnyMarkers)
-            ?? MarkerReader.MarkerFileIn(master, MarkerConstants.AnyMarkers)!;
-        var marker = MarkerReader.ReadMarker(markerFile);
+        var markerFile = _markerReader.MarkerFileIn(main, MarkerConstants.AnyMarkers)
+            ?? _markerReader.MarkerFileIn(master, MarkerConstants.AnyMarkers)!;
+        var marker = _markerReader.ReadMarker(markerFile);
 
         var (groups, moving) = Plan(workspace, master, main, marker);
         var planned = groups.SelectMany(g => g).ToList();
@@ -284,9 +291,9 @@ public sealed class WorkspaceMigrator(IGitClient git, IWorkspaceResolver resolve
         return why;
     }
 
-    private static string MarkerScope(string dir, string? copyName)
+    private string MarkerScope(string dir, string? copyName)
     {
-        var systems = MarkerReader.ReadMarker(MarkerReader.MarkerFileIn(dir, MarkerConstants.AnyMarkers)!).Systems.Keys.ToList();
+        var systems = _markerReader.ReadMarker(_markerReader.MarkerFileIn(dir, MarkerConstants.AnyMarkers)!).Systems.Keys.ToList();
         if (copyName is not null)
         {
             foreach (var system in systems)
@@ -294,12 +301,12 @@ public sealed class WorkspaceMigrator(IGitClient git, IWorkspaceResolver resolve
                 var folder = Path.Combine(dir, "intent", system, copyName);
                 if (Directory.Exists(folder))
                 {
-                    return ScopeRules.ChangeScope(dir, system, folder, MarkerConstants.AnyMarkers);
+                    return _scopeRules.ChangeScope(dir, system, folder, MarkerConstants.AnyMarkers);
                 }
             }
         }
 
-        return ScopeRules.SystemScope(dir, systems[0], MarkerConstants.AnyMarkers);
+        return _scopeRules.SystemScope(dir, systems[0], MarkerConstants.AnyMarkers);
     }
 
     private PlannedStep MarkerStep(string dir, string? branch, string? copyName)

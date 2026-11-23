@@ -31,7 +31,7 @@ public sealed class AuthoringAndReviewHookTests
         }
 
         var env = new Dictionary<string, string>(TestGitFixture.GitEnv) { ["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1" };
-        var res = ProcessCommandRunner.Default.Run(new CommandRequest(
+        var res = TestServices.CommandRunner.Run(new CommandRequest(
             WorkingDirectory: cwd,
             Argv: ["dotnet", .. args],
             StandardInput: JsonSerializer.Serialize(payload),
@@ -432,8 +432,8 @@ public sealed class AuthoringAndReviewHookTests
         var (_, acceptPlan, _) = RunHook(repoDir, "hook start", StartPayload(harness, repoDir, session + "-a3", "accept"));
         var acceptPlanText = ExtractStartText(harness, acceptPlan);
         Assert.Contains("plan is accepted", acceptPlanText);
-        var repo = WorkflowRepo.Find(repoDir)!;
-        Assert.IsType<Implement>(WorkflowEngine.Next(WorkflowState.Read(repo)!));
+        var repo = TestServices.FindRepo(repoDir)!;
+        Assert.IsType<Implement>(WorkflowEngine.Next(TestServices.ReadState(repo)!));
     }
 
     // =========================================================================
@@ -474,7 +474,7 @@ public sealed class AuthoringAndReviewHookTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var head = repo.Head();
         repo.WithLedger(l =>
         {
@@ -731,7 +731,7 @@ public sealed class AuthoringAndReviewHookTests
         using var outDir = new TempDir("hoshin-pkg-");
         IReadOnlyList<string> argv =
             ["pwsh", "-NoProfile", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path];
-        var res = ProcessCommandRunner.Default.Run(new CommandRequest(
+        var res = TestServices.CommandRunner.Run(new CommandRequest(
             WorkingDirectory: RepoRoot,
             Argv: argv,
             Timeout: TimeSpan.FromMinutes(3)));
@@ -804,7 +804,7 @@ public sealed class AuthoringAndReviewHookTests
         using var outDir = new TempDir("hoshin-pkg-ver-");
         IReadOnlyList<string> argv =
             ["pwsh", "-NoProfile", "-File", PackagerScript, "-Configuration", "Debug", "-OutputRoot", outDir.Path, "-Version", "9.8.7"];
-        var res = ProcessCommandRunner.Default.Run(new CommandRequest(
+        var res = TestServices.CommandRunner.Run(new CommandRequest(
             WorkingDirectory: RepoRoot,
             Argv: argv,
             Timeout: TimeSpan.FromMinutes(3)));

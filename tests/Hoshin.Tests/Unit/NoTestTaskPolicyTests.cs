@@ -47,8 +47,8 @@ public sealed class NoTestTaskPolicyTests
         using var tmp = new TempDir("hoshin-t41-load-");
         var repoDir = InitNoTestPlanRepo(tmp);
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var state = WorkflowState.Read(repo)!;
+        var repo = TestServices.FindRepo(repoDir)!;
+        var state = TestServices.ReadState(repo)!;
         var task = Assert.Single(state.Plan.Tasks);
         Assert.Null(task.Test);
 
@@ -63,11 +63,11 @@ public sealed class NoTestTaskPolicyTests
         using var tmp = new TempDir("hoshin-t41-pass-");
         var repoDir = InitNoTestPlanRepo(tmp);
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var startHead = repo.Head();
-        var state = WorkflowState.Read(repo)!;
+        var state = TestServices.ReadState(repo)!;
         var step = Assert.IsType<Implement>(WorkflowEngine.Next(state));
-        WorkflowRunner.Default.Issue(repo, state, step, "s1");
+        TestServices.WorkflowRunner.Issue(repo, state, step, "s1");
 
         // Guard allows editing config/app.json for a no-test task and denies editing test files.
         var currentStep = repo.ReadStep()!;
@@ -76,7 +76,7 @@ public sealed class NoTestTaskPolicyTests
 
         TestGitFixture.Write(Path.Combine(repoDir, "config", "app.json"), "{ \"timeout\": 60 }\n");
 
-        var verdict = WorkflowRunner.Default.EvaluateAndCommitTask(repo, WorkflowState.Read(repo)!, "T1", 1);
+        var verdict = TestServices.WorkflowRunner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
 
         Assert.True(verdict.Passed, string.Join("; ", verdict.Reasons));
         Assert.Equal("skipped: no testable behavior", verdict.Red);
@@ -94,12 +94,12 @@ public sealed class NoTestTaskPolicyTests
         using var tmp = new TempDir("hoshin-t41-empty-");
         var repoDir = InitNoTestPlanRepo(tmp);
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var startHead = repo.Head();
-        var state = WorkflowState.Read(repo)!;
-        WorkflowRunner.Default.Issue(repo, state, WorkflowEngine.Next(state), "s1");
+        var state = TestServices.ReadState(repo)!;
+        TestServices.WorkflowRunner.Issue(repo, state, WorkflowEngine.Next(state), "s1");
 
-        var verdict = WorkflowRunner.Default.EvaluateAndCommitTask(repo, WorkflowState.Read(repo)!, "T1", 1);
+        var verdict = TestServices.WorkflowRunner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
 
         Assert.False(verdict.Passed);
         Assert.Contains(verdict.Reasons, r => r.StartsWith("work:", StringComparison.Ordinal));
@@ -112,15 +112,15 @@ public sealed class NoTestTaskPolicyTests
         using var tmp = new TempDir("hoshin-t41-testchange-");
         var repoDir = InitNoTestPlanRepo(tmp);
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var startHead = repo.Head();
-        var state = WorkflowState.Read(repo)!;
-        WorkflowRunner.Default.Issue(repo, state, WorkflowEngine.Next(state), "s1");
+        var state = TestServices.ReadState(repo)!;
+        TestServices.WorkflowRunner.Issue(repo, state, WorkflowEngine.Next(state), "s1");
 
         TestGitFixture.Write(Path.Combine(repoDir, "config", "app.json"), "{ \"timeout\": 60 }\n");
         TestGitFixture.Write(Path.Combine(repoDir, "test", "accidental.test.mjs"), "export {};\n");
 
-        var verdict = WorkflowRunner.Default.EvaluateAndCommitTask(repo, WorkflowState.Read(repo)!, "T1", 1);
+        var verdict = TestServices.WorkflowRunner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
 
         Assert.False(verdict.Passed);
         Assert.Contains(verdict.Reasons, r => r.Contains("order: a task with no test must not change test files", StringComparison.Ordinal));

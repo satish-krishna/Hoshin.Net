@@ -39,7 +39,7 @@ public sealed class RelativeExecutableTests
         // Current process working directory is NOT tmp.Path.
         Assert.NotEqual(Path.GetFullPath(tmp.Path), Path.GetFullPath(Environment.CurrentDirectory));
 
-        var res = AllowListedCommandRunner.Default.Run(tmp.Path, [relArgv0]);
+        var res = TestServices.AllowListedRunner.Run(tmp.Path, [relArgv0]);
         Assert.True(res.Ok, $"Expected Ok, got exit {res.ExitCode}: {res.Output}");
         Assert.Contains("hello-from-relative", res.Output, StringComparison.Ordinal);
     }
@@ -52,7 +52,7 @@ public sealed class RelativeExecutableTests
 
         Assert.NotEqual(Path.GetFullPath(tmp.Path), Path.GetFullPath(Environment.CurrentDirectory));
 
-        var res = ProcessCommandRunner.Default.Run(new CommandRequest(tmp.Path, [relArgv0]));
+        var res = TestServices.CommandRunner.Run(new CommandRequest(tmp.Path, [relArgv0]));
         Assert.True(res.Ok, $"Expected Ok, got started={res.Started} exit={res.ExitCode} err={res.StartError} stderr={res.Stderr}");
         Assert.Contains("hello-from-relative", res.Stdout, StringComparison.Ordinal);
     }

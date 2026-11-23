@@ -12,13 +12,15 @@ namespace Hoshin.Workflow.Engine;
 public sealed class WorkflowRepo
 {
     private readonly IAllowListedCommandRunner _runner;
+    private readonly IFileSystem _fs;
 
-    private WorkflowRepo(string root, string gitCommonDir, string changeFolder, IAllowListedCommandRunner runner)
+    private WorkflowRepo(string root, string gitCommonDir, string changeFolder, IAllowListedCommandRunner runner, IFileSystem fileSystem)
     {
         Root = Path.GetFullPath(root);
         HoshinDir = Path.Combine(Path.GetFullPath(gitCommonDir), "hoshin");
         ChangeFolder = Path.GetFullPath(changeFolder);
-        _runner = runner;
+        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+        _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     }
 
     public string Root { get; }
@@ -43,16 +45,21 @@ public sealed class WorkflowRepo
 
     public string RedWorktreePath => Path.Combine(HoshinDir, "worktrees", "red-check");
 
-    public static WorkflowRepo? Find(string directory, string? explicitChangeFolder = null, IAllowListedCommandRunner? runner = null)
+    public static WorkflowRepo? Find(
+        string directory,
+        IAllowListedCommandRunner runner,
+        IFileSystem fileSystem,
+        string? explicitChangeFolder = null)
     {
-        if (!Directory.Exists(directory))
+        ArgumentNullException.ThrowIfNull(runner);
+        ArgumentNullException.ThrowIfNull(fileSystem);
+        if (!fileSystem.DirectoryExists(directory))
         {
             return null;
         }
 
-        var r = runner ?? AllowListedCommandRunner.Default;
-        var top = GitIn(r, directory, "rev-parse", "--show-toplevel");
-        var common = GitIn(r, directory, "rev-parse", "--path-format=absolute", "--git-common-dir");
+        var top = GitIn(runner, directory, "rev-parse", "--show-toplevel");
+        var common = GitIn(runner, directory, "rev-parse", "--path-format=absolute", "--git-common-dir");
         if (!top.Ok || !common.Ok)
         {
             return null;
@@ -60,12 +67,12 @@ public sealed class WorkflowRepo
 
         var root = Path.GetFullPath(top.Output.Trim());
         var commonDir = Path.GetFullPath(common.Output.Trim());
-        var changeFolder = ResolveChangeFolder(root, commonDir, explicitChangeFolder);
-        return new WorkflowRepo(root, commonDir, changeFolder, r);
+        var changeFolder = ResolveChangeFolder(root, commonDir, explicitChangeFolder, fileSystem);
+        return new WorkflowRepo(root, commonDir, changeFolder, runner, fileSystem);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
-    private static string ResolveChangeFolder(string root, string commonDir, string? explicitChangeFolder)
+    private static string ResolveChangeFolder(string root, string commonDir, string? explicitChangeFolder, IFileSystem fs)
     {
         if (!string.IsNullOrWhiteSpace(explicitChangeFolder))
         {
@@ -76,12 +83,12 @@ public sealed class WorkflowRepo
 
         // Check existing run marker first so multi-turn sessions stay pinned to the active change.
         var runPath = Path.Combine(commonDir, "hoshin", "run.json");
-        if (File.Exists(runPath))
+        if (fs.FileExists(runPath))
         {
             try
             {
-                var marker = JsonSerializer.Deserialize(File.ReadAllText(runPath), WorkflowJsonContext.Default.RunMarker);
-                if (!string.IsNullOrWhiteSpace(marker?.ChangeFolder) && Directory.Exists(marker.ChangeFolder))
+                var marker = JsonSerializer.Deserialize(fs.ReadAllText(runPath), WorkflowJsonContext.Default.RunMarker);
+                if (!string.IsNullOrWhiteSpace(marker?.ChangeFolder) && fs.DirectoryExists(marker.ChangeFolder))
                 {
                     return marker.ChangeFolder;
                 }
@@ -94,17 +101,17 @@ public sealed class WorkflowRepo
 
         // Direct `.hoshin/` change folder in repo root (used by standalone/single-change layouts).
         var dotHoshin = Path.Combine(root, ".hoshin");
-        if (File.Exists(Path.Combine(dotHoshin, "change.jsonc")) || File.Exists(Path.Combine(dotHoshin, "plan.md")) || File.Exists(Path.Combine(dotHoshin, "intent.md")))
+        if (fs.FileExists(Path.Combine(dotHoshin, "change.jsonc")) || fs.FileExists(Path.Combine(dotHoshin, "plan.md")) || fs.FileExists(Path.Combine(dotHoshin, "intent.md")))
         {
             return dotHoshin;
         }
 
         // Standard `intent/<system>/<change>/` layout: pick the sole or most recent change folder with documents.
         var intentRoot = Path.Combine(root, "intent");
-        if (Directory.Exists(intentRoot))
+        if (fs.DirectoryExists(intentRoot))
         {
             var candidates = new List<string>();
-            foreach (var sysDir in Directory.GetDirectories(intentRoot).OrderBy(d => d, StringComparer.Ordinal))
+            foreach (var sysDir in fs.EnumerateDirectories(intentRoot).OrderBy(d => d, StringComparer.Ordinal))
             {
                 var sysName = Path.GetFileName(sysDir);
                 if (sysName.Equals("hooks", StringComparison.OrdinalIgnoreCase))
@@ -112,7 +119,7 @@ public sealed class WorkflowRepo
                     continue;
                 }
 
-                foreach (var chDir in Directory.GetDirectories(sysDir).OrderByDescending(d => d, StringComparer.Ordinal))
+                foreach (var chDir in fs.EnumerateDirectories(sysDir).OrderByDescending(d => d, StringComparer.Ordinal))
                 {
                     var chName = Path.GetFileName(chDir);
                     if (chName is "context" or "hooks")
@@ -120,10 +127,10 @@ public sealed class WorkflowRepo
                         continue;
                     }
 
-                    if (File.Exists(Path.Combine(chDir, "change.jsonc")) ||
-                        File.Exists(Path.Combine(chDir, "plan.md")) ||
-                        File.Exists(Path.Combine(chDir, "intent.md")) ||
-                        File.Exists(Path.Combine(chDir, "spec.md")))
+                    if (fs.FileExists(Path.Combine(chDir, "change.jsonc")) ||
+                        fs.FileExists(Path.Combine(chDir, "plan.md")) ||
+                        fs.FileExists(Path.Combine(chDir, "intent.md")) ||
+                        fs.FileExists(Path.Combine(chDir, "spec.md")))
                     {
                         candidates.Add(chDir);
                     }
@@ -158,14 +165,14 @@ public sealed class WorkflowRepo
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: fix in T43")]
-    public WorkflowPlan? ReadPlan(PlanReader? planReader = null)
+    public WorkflowPlan? ReadPlan(PlanReader planReader)
     {
-        var reader = planReader ?? new PlanReader();
-        var settings = MarkerBuildSettings.Read(Root);
+        ArgumentNullException.ThrowIfNull(planReader);
+        var settings = MarkerBuildSettings.Read(Root, _fs);
         var planPath = Path.Combine(ChangeFolder, "plan.md");
         var changePath = Path.Combine(ChangeFolder, "change.jsonc");
 
-        if (!File.Exists(planPath))
+        if (!_fs.FileExists(planPath))
         {
             return LoadPlanMetadataOnly(changePath, settings);
         }
@@ -174,7 +181,7 @@ public sealed class WorkflowRepo
         PlanReadResult? read = null;
         try
         {
-            read = reader.Read(File.ReadAllText(planPath), "plan.md");
+            read = planReader.Read(_fs.ReadAllText(planPath), "plan.md");
         }
         catch (CouldNotRunException) when (planDocStatus.Uncommitted || !planDocStatus.InHead)
         {
@@ -193,7 +200,7 @@ public sealed class WorkflowRepo
         }
 
         JsonElement changeObj = default;
-        var hasChange = File.Exists(changePath);
+        var hasChange = _fs.FileExists(changePath);
         if (hasChange)
         {
             changeObj = ParseJsoncObject(changePath);
@@ -241,7 +248,7 @@ public sealed class WorkflowRepo
 
     private WorkflowPlan? LoadPlanMetadataOnly(string changePath, MarkerBuildSettings settings)
     {
-        if (!File.Exists(changePath))
+        if (!_fs.FileExists(changePath))
         {
             return null;
         }
@@ -270,7 +277,7 @@ public sealed class WorkflowRepo
     {
         var path = Path.Combine(ChangeFolder, fileName);
         var relative = Path.GetRelativePath(Root, path).Replace('\\', '/');
-        var exists = File.Exists(path);
+        var exists = _fs.FileExists(path);
         var head = Git("show", $"HEAD:{relative}");
         var uncommitted = Git("status", "--porcelain", "--", relative).Output.Trim().Length > 0;
         return new WorkflowDocState(
@@ -278,7 +285,7 @@ public sealed class WorkflowRepo
             exists,
             head.Ok,
             uncommitted,
-            exists ? StatusOf(File.ReadAllText(path)) : null,
+            exists ? StatusOf(_fs.ReadAllText(path)) : null,
             head.Ok ? StatusOf(head.Output) : null);
     }
 
@@ -294,9 +301,9 @@ public sealed class WorkflowRepo
         }
     }
 
-    private static JsonElement ParseJsoncObject(string path)
+    private JsonElement ParseJsoncObject(string path)
     {
-        if (!Jsonc.TryParse(File.ReadAllText(path), out var value, out var error))
+        if (!Jsonc.TryParse(_fs.ReadAllText(path), out var value, out var error))
         {
             throw new CouldNotRunException($"{Path.GetFileName(path)} is not valid JSONC: {error}");
         }
@@ -309,33 +316,33 @@ public sealed class WorkflowRepo
     public WorkflowLedger ReadLedger()
     {
         ChangeLedgerPaths.TryMigrateLegacyLedger(HoshinDir, LedgerPath, ReadRunMarker());
-        return File.Exists(LedgerPath)
-            ? JsonSerializer.Deserialize(File.ReadAllText(LedgerPath), WorkflowJsonContext.Default.WorkflowLedger) ?? new()
+        return _fs.FileExists(LedgerPath)
+            ? JsonSerializer.Deserialize(_fs.ReadAllText(LedgerPath), WorkflowJsonContext.Default.WorkflowLedger) ?? new()
             : new();
     }
 
     public void WriteLedger(WorkflowLedger ledger) =>
-        WriteAtomic(LedgerPath, JsonSerializer.Serialize(ledger, WorkflowJsonContext.Default.WorkflowLedger));
+        _fs.WriteAllTextAtomic(LedgerPath, JsonSerializer.Serialize(ledger, WorkflowJsonContext.Default.WorkflowLedger));
 
     public CurrentStep? ReadStep() =>
-        File.Exists(StepPath)
-            ? JsonSerializer.Deserialize(File.ReadAllText(StepPath), WorkflowJsonContext.Default.CurrentStep)
+        _fs.FileExists(StepPath)
+            ? JsonSerializer.Deserialize(_fs.ReadAllText(StepPath), WorkflowJsonContext.Default.CurrentStep)
             : null;
 
     public void WriteStep(CurrentStep step) =>
-        WriteAtomic(StepPath, JsonSerializer.Serialize(step, WorkflowJsonContext.Default.CurrentStep));
+        _fs.WriteAllTextAtomic(StepPath, JsonSerializer.Serialize(step, WorkflowJsonContext.Default.CurrentStep));
 
     public RunMarker? ReadRunMarker() =>
-        File.Exists(RunMarkerPath)
-            ? JsonSerializer.Deserialize(File.ReadAllText(RunMarkerPath), WorkflowJsonContext.Default.RunMarker)
+        _fs.FileExists(RunMarkerPath)
+            ? JsonSerializer.Deserialize(_fs.ReadAllText(RunMarkerPath), WorkflowJsonContext.Default.RunMarker)
             : null;
 
     public void WriteRunMarker(RunMarker marker) =>
-        WriteAtomic(RunMarkerPath, JsonSerializer.Serialize(marker, WorkflowJsonContext.Default.RunMarker));
+        _fs.WriteAllTextAtomic(RunMarkerPath, JsonSerializer.Serialize(marker, WorkflowJsonContext.Default.RunMarker));
 
     public T WithLedger<T>(Func<WorkflowLedger, T> update)
     {
-        Directory.CreateDirectory(HoshinDir);
+        _fs.CreateDirectory(HoshinDir);
         using var gate = AcquireLock();
         var ledger = ReadLedger();
         var result = update(ledger);
@@ -348,14 +355,6 @@ public sealed class WorkflowRepo
 
     private FileStream AcquireLock() =>
         FileLock.Acquire(Path.Combine(HoshinDir, "workflow-ledger.lock"), TimeSpan.FromSeconds(5));
-
-    private void WriteAtomic(string path, string text)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? HoshinDir);
-        var tmp = $"{path}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
-        File.WriteAllText(tmp, text);
-        File.Move(tmp, path, overwrite: true);
-    }
 
     /// <summary>Checks whether a repository-relative path matches any configured test glob pattern or explicit task test file.</summary>
     public static bool IsTestPath(string relativePath, IReadOnlyList<string>? testPatterns = null, IReadOnlyList<string>? taskTestFiles = null) =>

@@ -32,7 +32,7 @@ public sealed class SystemReadTests
     public void HeadBlobsAndHeadText_MatchGitByteForByte()
     {
         using var f = CreatePopulatedWorkspace(2);
-        var r = new SystemRead(f.Master, "demo");
+        var r = new SystemRead(f.Master, "demo", TestServices.Git);
         var paths = TestGitFixture.Git(f.Master, "ls-tree", "-r", "--name-only", "HEAD", "--", "intent/demo/")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(s => s.TrimEnd('\r'))
@@ -43,7 +43,7 @@ public sealed class SystemReadTests
         r.LoadTexts(paths);
         foreach (var p in paths)
         {
-            var raw = ProcessCommandRunner.Default.Run(new CommandRequest(f.Master, ["git", "show", $"HEAD:{p}"], ExtraEnvironment: TestGitFixture.GitEnv)).Stdout;
+            var raw = TestServices.CommandRunner.Run(new CommandRequest(f.Master, ["git", "show", $"HEAD:{p}"], ExtraEnvironment: TestGitFixture.GitEnv)).Stdout;
             Assert.Equal(raw, r.HeadText(p));
         }
     }
@@ -52,7 +52,7 @@ public sealed class SystemReadTests
     public void HeadTextAndObjectOf_HandleMissingAmbiguousAndNewline()
     {
         using var f = CreatePopulatedWorkspace(1);
-        var r = new SystemRead(f.Master, "demo");
+        var r = new SystemRead(f.Master, "demo", TestServices.Git);
         Assert.Null(r.HeadText("intent/demo/none/intent.md"));
         Assert.Null(r.ObjectOf("0000000^{commit}"));
         Assert.Equal(TestGitFixture.Git(f.Master, "rev-parse", "HEAD"), r.ObjectOf("HEAD^{commit}"));
@@ -65,7 +65,7 @@ public sealed class SystemReadTests
     {
         using var dir = new TempDir("hoshin-nohead-");
         TestGitFixture.Git(dir.Path, "init", "-q", "-b", "main");
-        var counter = new CountingCommandRunner(ProcessCommandRunner.Default);
+        var counter = new CountingCommandRunner(TestServices.CommandRunner);
         var git = new ProcessGitClient(counter);
         var r = new SystemRead(dir.Path, "demo", git);
         Assert.False(r.HasHead);
@@ -80,7 +80,7 @@ public sealed class SystemReadTests
     public void Reported_IsComputedOnFirstUseAndCached()
     {
         using var f = CreatePopulatedWorkspace(1);
-        var counter = new CountingCommandRunner(ProcessCommandRunner.Default);
+        var counter = new CountingCommandRunner(TestServices.CommandRunner);
         var r = new SystemRead(f.Master, "demo", new ProcessGitClient(counter));
         var before = counter.GitCount;
         var first = r.Reported;
@@ -93,7 +93,7 @@ public sealed class SystemReadTests
     public void LoadTextsAndResolve_EachStartOneProcessHoweverManyNames()
     {
         using var f = CreatePopulatedWorkspace(5);
-        var counter = new CountingCommandRunner(ProcessCommandRunner.Default);
+        var counter = new CountingCommandRunner(TestServices.CommandRunner);
         var r = new SystemRead(f.Master, "demo", new ProcessGitClient(counter));
         var paths = r.HeadBlobs.Keys.ToList();
         Assert.True(paths.Count >= 20, $"expected >= 20 paths, got {paths.Count}");
@@ -116,7 +116,7 @@ public sealed class SystemReadTests
     {
         using var f = CreatePopulatedWorkspace(1);
         TestGitFixture.Commit(f.Master, new() { ["intent/demo/2026-01-01 with space/intent.md"] = "hello\r\nworld\n" });
-        var r = new SystemRead(f.Master, "demo");
+        var r = new SystemRead(f.Master, "demo", TestServices.Git);
         Assert.Equal("hello\r\nworld\n", r.HeadText("intent/demo/2026-01-01 with space/intent.md"));
         Assert.Equal(["intent/demo/2026-01-01 with space/intent.md"], r.HeadPaths("intent/demo/2026-01-01 with space/"));
     }

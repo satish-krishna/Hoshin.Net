@@ -30,7 +30,7 @@ public sealed class HookCommand(HoshinServices services) : IHoshinCommand
             var rolesRoot = o.Get("roles") ?? DefaultRolesDir();
 
             var ev = services.HookAdapter.ReadFromStdin();
-            var repo = WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory());
+            var repo = WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), services.AllowListedRunner, services.FileSystem);
 
             var (output, decision) = sub switch
             {
@@ -43,7 +43,7 @@ public sealed class HookCommand(HoshinServices services) : IHoshinCommand
             };
 
             HarnessAdapter.WriteStdoutUtf8(output);
-            HarnessAdapter.AppendTrace(repo, $"hook {sub}", ev, output, decision, clock);
+            services.HookAdapter.AppendTrace(repo, $"hook {sub}", ev, output, decision, clock);
         }
         catch (Exception e)
         {

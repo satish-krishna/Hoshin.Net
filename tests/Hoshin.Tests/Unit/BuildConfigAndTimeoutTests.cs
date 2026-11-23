@@ -41,18 +41,18 @@ public sealed class BuildConfigAndTimeoutTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var runner = WorkflowRunner.Default;
-        var state = WorkflowState.Read(repo)!;
+        var repo = TestServices.FindRepo(repoDir)!;
+        var runner = TestServices.WorkflowRunner;
+        var state = TestServices.ReadState(repo)!;
         var step = Assert.IsType<Implement>(WorkflowEngine.Next(state));
         runner.Issue(repo, state, step, "s1");
 
         TestGitFixture.Write(Path.Combine(repoDir, "test", "t1.test.mjs"), "export {};\n");
         TestGitFixture.Write(Path.Combine(repoDir, "src", "math.mjs"), "export const x = 2;\n");
 
-        var evalState = WorkflowState.Read(repo)!;
-        var timingRunner = new RecordingRunner(AllowListedCommandRunner.Default);
-        var timedRunner = new WorkflowRunner(timingRunner);
+        var evalState = TestServices.ReadState(repo)!;
+        var timingRunner = new RecordingRunner(TestServices.AllowListedRunner);
+        var timedRunner = TestServices.CreateWorkflowRunner(commandRunner: timingRunner);
 
         var verdict = timedRunner.EvaluateAndCommitTask(repo, evalState, "T1", 1);
 

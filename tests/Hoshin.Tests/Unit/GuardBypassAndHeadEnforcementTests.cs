@@ -41,7 +41,7 @@ public sealed class GuardBypassAndHeadEnforcementTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var now = DateTimeOffset.UtcNow;
         repo.WriteRunMarker(new RunMarker(now, "s1", "claude-code", repo.ChangeFolder));
         repo.WriteStep(new CurrentStep("NeedsApproval", null, 0, repo.Head(), now, SessionId: "s1", ChangeFolder: repo.ChangeFolder));
@@ -68,7 +68,7 @@ public sealed class GuardBypassAndHeadEnforcementTests
             tool_name = "Bash",
             tool_input = new { command },
         });
-        var reason = GuardCommand.Evaluate(HarnessAdapter.Default.Parse(raw)).Reason;
+        var reason = TestServices.EvaluateGuard(TestServices.HookAdapter.Parse(raw)).Reason;
         Assert.NotNull(reason);
     }
 
@@ -78,8 +78,8 @@ public sealed class GuardBypassAndHeadEnforcementTests
         var (tmp, repoDir, repo) = CreateFixture();
         using var _ = tmp;
 
-        var runner = WorkflowRunner.Default;
-        var state = WorkflowState.Read(repo)!;
+        var runner = TestServices.WorkflowRunner;
+        var state = TestServices.ReadState(repo)!;
         var step = Assert.IsType<Implement>(WorkflowEngine.Next(state));
         runner.Issue(repo, state, step, "s1");
 
@@ -97,7 +97,7 @@ public sealed class GuardBypassAndHeadEnforcementTests
             Path.Combine(repoDir, "src", "math.mjs"),
             "export function add(a, b) { return a + b; }\nexport function sub(a, b) { return a - b; }\n");
 
-        var updatedState = WorkflowState.Read(repo)!;
+        var updatedState = TestServices.ReadState(repo)!;
         var verdict = runner.EvaluateAndCommitTask(repo, updatedState, "T1", 1);
 
         Assert.False(verdict.Passed);

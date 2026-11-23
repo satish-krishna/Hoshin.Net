@@ -6,7 +6,7 @@ namespace Hoshin.Workflow.Engine;
 
 /// <summary>Optional build configuration read from <c>.hoshin.json</c> (<c>testPatterns</c>, <c>env.allow</c>, and <c>build</c>).</summary>
 internal sealed record MarkerBuildSettings(
-    List<string>? TestPatterns,
+    string[]? TestPatterns,
     string[]? EnvAllow,
     int TestTimeoutSeconds,
     int CheckTimeoutSeconds,
@@ -22,11 +22,11 @@ internal sealed record MarkerBuildSettings(
         DefaultCheckTimeoutSeconds,
         WorkflowEngine.MaxAttempts);
 
-    public static MarkerBuildSettings Read(string repoRoot)
+    public static MarkerBuildSettings Read(string repoRoot, IFileSystem fs)
     {
         var markerPath = Path.Combine(repoRoot, MarkerConstants.FileName);
-        if (!File.Exists(markerPath) ||
-            !Jsonc.TryParse(File.ReadAllText(markerPath), out var raw, out _) ||
+        if (!fs.FileExists(markerPath) ||
+            !Jsonc.TryParse(fs.ReadAllText(markerPath), out var raw, out _) ||
             raw is not { ValueKind: JsonValueKind.Object } obj)
         {
             return Empty;
@@ -54,7 +54,7 @@ internal sealed record MarkerBuildSettings(
         }
 
         return new MarkerBuildSettings(
-            patterns.Count > 0 ? patterns : null,
+            patterns.Count > 0 ? patterns.ToArray() : null,
             envAllow,
             testTimeout,
             checkTimeout,

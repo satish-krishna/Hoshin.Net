@@ -5,12 +5,10 @@ namespace Hoshin.Workflow.Red;
 public sealed record RedVerdictResult(bool Observed, string? Reason, RedRecord? Record);
 
 /// <summary>Computes the observed-red verdict for a task from the newest ledger record.</summary>
-public sealed class RedVerdictService(LedgerStore? ledgerStore = null, RedRecorder? recorder = null)
+public sealed class RedVerdictService(LedgerStore ledgerStore, RedRecorder recorder)
 {
-    public static RedVerdictService Default { get; } = new();
-
-    private readonly LedgerStore _ledger = ledgerStore ?? LedgerStore.Default;
-    private readonly RedRecorder _recorder = recorder ?? RedRecorder.Default;
+    private readonly LedgerStore _ledger = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
+    private readonly RedRecorder _recorder = recorder ?? throw new ArgumentNullException(nameof(recorder));
 
     public RedVerdictResult Verdict(EventContext ctx, string task)
     {

@@ -41,7 +41,7 @@ public sealed class ChangeFolderAndShellWriteTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         return (tmp, repoDir, repo);
     }
 
@@ -63,8 +63,8 @@ public sealed class ChangeFolderAndShellWriteTests
             Path.Combine(repoDir, "intent", "demo", "c1", "plan.md"),
             File.ReadAllText(Path.Combine(repoDir, "intent", "demo", "c1", "plan.md")) + "\n<!-- tampered -->\n");
 
-        var state = WorkflowState.Read(repo)!;
-        var verdict = WorkflowRunner.Default.EvaluateAndCommitTask(repo, state, "T1", 1);
+        var state = TestServices.ReadState(repo)!;
+        var verdict = TestServices.WorkflowRunner.EvaluateAndCommitTask(repo, state, "T1", 1);
 
         Assert.False(verdict.Passed);
         Assert.Contains(verdict.Reasons, r => r.StartsWith("protected:", StringComparison.Ordinal));
@@ -91,7 +91,7 @@ public sealed class ChangeFolderAndShellWriteTests
                 tool_name = "Bash",
                 tool_input = new { command },
             });
-            return GuardCommand.Evaluate(HarnessAdapter.Default.Parse(raw)).Reason;
+            return TestServices.EvaluateGuard(TestServices.HookAdapter.Parse(raw)).Reason;
         }
 
         string? EvalEdit(string filePath)
@@ -104,7 +104,7 @@ public sealed class ChangeFolderAndShellWriteTests
                 tool_name = "Edit",
                 tool_input = new { file_path = filePath },
             });
-            return GuardCommand.Evaluate(HarnessAdapter.Default.Parse(raw)).Reason;
+            return TestServices.EvaluateGuard(TestServices.HookAdapter.Parse(raw)).Reason;
         }
 
         // Red-phase shell redirects and tee to production file must be denied before any test file exists.
@@ -130,7 +130,7 @@ public sealed class ChangeFolderAndShellWriteTests
         repo.WriteRunMarker(new RunMarker(now, "s1", "claude-code", repo.ChangeFolder));
         repo.WriteStep(new CurrentStep("WriteDocument", "intent", 0, repo.Head(), now, SessionId: "s1", ChangeFolder: repo.ChangeFolder));
 
-        var denyProd = GuardCommand.Evaluate(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var denyProd = TestServices.EvaluateGuard(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PreToolUse",
             cwd = repoDir,
@@ -140,7 +140,7 @@ public sealed class ChangeFolderAndShellWriteTests
         }))).Reason;
         Assert.NotNull(denyProd);
 
-        var denyTee = GuardCommand.Evaluate(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var denyTee = TestServices.EvaluateGuard(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PreToolUse",
             cwd = repoDir,
@@ -151,7 +151,7 @@ public sealed class ChangeFolderAndShellWriteTests
         Assert.NotNull(denyTee);
 
         // Redirect to the single allowed intent.md file is permitted.
-        var allowIntent = GuardCommand.Evaluate(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var allowIntent = TestServices.EvaluateGuard(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "PreToolUse",
             cwd = repoDir,

@@ -8,7 +8,7 @@ namespace Hoshin.Workflow.Documents;
 /// Reads a Layout 2 <c>plan.md</c>: tasks with JSONC field blocks under <c>### T&lt;n&gt;: name</c>,
 /// <c>####</c> prose sections, and <c>## Shared decisions</c> as a JSONC array.
 /// </summary>
-public sealed class PlanReader(IJsonSchemaValidator? schemaValidator = null)
+public sealed class PlanReader(IJsonSchemaValidator schemaValidator)
 {
     private const string TaskSchemaName = "plan-task.schema.json";
     private const string DecisionSchemaName = "shared-decision.schema.json";
@@ -20,7 +20,7 @@ public sealed class PlanReader(IJsonSchemaValidator? schemaValidator = null)
     private static readonly Regex SharedHeading = new(@"^## Shared decisions\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex RawKey = new(@"^\s*[\[{]*\s*""id""\s*:\s*""T[0-9]+", RegexOptions.Compiled);
 
-    private readonly IJsonSchemaValidator _schema = schemaValidator ?? EmbeddedSchemaValidator.Default;
+    private readonly IJsonSchemaValidator _schema = schemaValidator ?? throw new ArgumentNullException(nameof(schemaValidator));
 
     public PlanReadResult Read(string text, string file, IReadOnlyList<string>? allowedRepos = null, string? systemName = null)
     {

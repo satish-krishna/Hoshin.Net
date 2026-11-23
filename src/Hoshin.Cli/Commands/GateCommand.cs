@@ -53,7 +53,7 @@ public sealed class GateCommand(HoshinServices services) : IHoshinCommand
         }
 
         var folder = Path.Combine(active.Master, "intent", active.System, active.Change);
-        if (!Directory.Exists(folder) || services.Git.CurrentBranch(top) != ChangeRecordStore.BranchOf(folder))
+        if (!Directory.Exists(folder) || services.Git.CurrentBranch(top) != services.ChangeRecords.BranchOf(folder))
         {
             return (null, null);
         }

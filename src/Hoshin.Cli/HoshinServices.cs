@@ -13,13 +13,21 @@ using Hoshin.Workflow.Workspace;
 
 namespace Hoshin.Cli;
 
-/// <summary>Composition root wiring all SOLID workflow interfaces with their default implementations.</summary>
+/// <summary>Composition root wiring all SOLID workflow interfaces with their implementations.</summary>
 public sealed class HoshinServices
 {
+    public TimeProvider TimeProvider { get; }
+    public IFileSystem FileSystem { get; }
     public IJsonSchemaValidator SchemaValidator { get; }
     public ICommandRunner CommandRunner { get; }
     public IGitClient Git { get; }
     public IPullRequestClient PullRequests { get; }
+    public MarkerReader MarkerReader { get; }
+    public ChangeRecordStore ChangeRecords { get; }
+    public FrontMatterEdit FrontMatterEdit { get; }
+    public CrossChecker CrossChecker { get; }
+    public ScopeRules ScopeRules { get; }
+    public IntentReader IntentReader { get; }
     public SpecReader SpecReader { get; }
     public PlanReader PlanReader { get; }
     public BuildLogReader BuildLogReader { get; }
@@ -60,68 +68,109 @@ public sealed class HoshinServices
     public HarnessAdapter HookAdapter { get; }
     public HookOrchestrator HookOrchestrator { get; }
 
-    public HoshinServices(
-        IJsonSchemaValidator? schemaValidator = null,
-        ICommandRunner? commandRunner = null,
-        IGitClient? git = null,
-        IPullRequestClient? pullRequests = null)
+    public HoshinServices()
+        : this(new EmbeddedSchemaValidator(), new ProcessCommandRunner(), TimeProvider.System, new PhysicalFileSystem())
     {
-        SchemaValidator = schemaValidator ?? EmbeddedSchemaValidator.Default;
-        CommandRunner = commandRunner ?? ProcessCommandRunner.Default;
-        Git = git ?? new ProcessGitClient(CommandRunner);
-        PullRequests = pullRequests ?? new GhPullRequestClient(CommandRunner);
+    }
 
+    public HoshinServices(
+        IJsonSchemaValidator schemaValidator,
+        ICommandRunner commandRunner,
+        TimeProvider timeProvider,
+        IFileSystem fileSystem)
+        : this(
+            schemaValidator,
+            commandRunner,
+            new ProcessGitClient(commandRunner),
+            new GhPullRequestClient(commandRunner),
+            timeProvider,
+            fileSystem)
+    {
+    }
+
+    public HoshinServices(
+        IJsonSchemaValidator schemaValidator,
+        ICommandRunner commandRunner,
+        IGitClient git,
+        IPullRequestClient pullRequests,
+        TimeProvider timeProvider,
+        IFileSystem fileSystem)
+    {
+        TimeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        FileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+        SchemaValidator = schemaValidator ?? throw new ArgumentNullException(nameof(schemaValidator));
+        CommandRunner = commandRunner ?? throw new ArgumentNullException(nameof(commandRunner));
+        Git = git ?? throw new ArgumentNullException(nameof(git));
+        PullRequests = pullRequests ?? throw new ArgumentNullException(nameof(pullRequests));
+
+        MarkerReader = new MarkerReader(FileSystem);
+        ChangeRecords = new ChangeRecordStore(FileSystem);
+        FrontMatterEdit = new FrontMatterEdit(FileSystem);
+        CrossChecker = new CrossChecker(FileSystem);
+        ScopeRules = new ScopeRules(ChangeRecords, MarkerReader, FileSystem);
+
+        IntentReader = new IntentReader();
         SpecReader = new SpecReader();
         PlanReader = new PlanReader(SchemaValidator);
         BuildLogReader = new BuildLogReader(SchemaValidator);
         ReviewReader = new ReviewReader(SchemaValidator);
         DocumentReader = new DocumentReader(SpecReader, PlanReader, BuildLogReader, ReviewReader);
 
-        Resolver = new WorkspaceResolver(Git);
-        Apps = new AppService(Git);
+        Resolver = new WorkspaceResolver(Git, MarkerReader);
+        Apps = new AppService(Git, MarkerReader);
         BranchChecker = new BranchChecker(Git);
-        ChangeLocator = new ChangeLocator(Git, Apps);
-        Progress = new ProgressService(PlanReader, BuildLogReader);
-        FixState = new FixStateService(Git, PlanReader, BuildLogReader);
-        ChangePlacer = new ChangePlacer(Git, Resolver, ChangeLocator);
+        ChangeLocator = new ChangeLocator(Git, Apps, MarkerReader);
+        Progress = new ProgressService(PlanReader, BuildLogReader, MarkerReader);
+        FixState = new FixStateService(Git, PlanReader, BuildLogReader, MarkerReader);
+        ChangePlacer = new ChangePlacer(Git, Resolver, ChangeLocator, MarkerReader);
         FinishedChecker = new FinishedChecker(Git);
         ChangeList = new ChangeListService(ChangePlacer, FinishedChecker);
         ChangeState = new ChangeStateService(Git, ChangePlacer, FinishedChecker, FixState, Progress, SpecReader, ReviewReader, Apps);
         StaleChecker = new StaleChecker(Git, Resolver, ChangeLocator, Apps);
-        DocumentChecker = new DocumentCheckService(DocumentReader, Git);
-        Committer = new Committer(Git, Resolver, ChangeLocator, Apps, DocumentChecker, Progress, ReviewReader);
-        ChangeRename = new ChangeRenameService(Git, Apps, BranchChecker);
-        ChangeRemove = new ChangeRemoveService(Git, Apps);
+        DocumentChecker = new DocumentCheckService(DocumentReader, Git, MarkerReader, CrossChecker);
+        Committer = new Committer(Git, Resolver, ChangeLocator, Apps, DocumentChecker, Progress, ReviewReader, MarkerReader, ScopeRules);
+        ChangeRename = new ChangeRenameService(Git, Apps, BranchChecker, ChangeRecords);
+        ChangeRemove = new ChangeRemoveService(Git, Apps, ChangeRecords);
         YamlConverter = new YamlToJsoncConverter();
         DocumentMigrator = new DocumentMigrator(YamlConverter);
-        Migrator = new WorkspaceMigrator(Git, Resolver, DocumentMigrator);
+        Migrator = new WorkspaceMigrator(Git, Resolver, DocumentMigrator, MarkerReader, ScopeRules);
 
         HookConfig = new HookConfigService(Git);
-        Ledger = new LedgerStore(Git);
+        Ledger = new LedgerStore(Git, FileSystem);
         HookScripts = new HookScriptExporter(Git);
         HookProcess = new HookProcessRunner(CommandRunner);
         EventContext = new EventContextFactory(Git, Resolver, ChangeLocator, Apps);
         BaselineStore = new BaselineStore(Git);
-        BaselineApprovals = new BaselineApprovals(Ledger);
-        BaselineTaker = new BaselineTaker(Git, BaselineStore, Apps, EventContext, HookScripts, HookProcess);
-        RedRecorder = new RedRecorder(Git, PlanReader, Apps, EventContext, Ledger, HookProcess);
+        BaselineApprovals = new BaselineApprovals(Ledger, TimeProvider);
+        BaselineTaker = new BaselineTaker(Git, BaselineStore, Apps, EventContext, HookScripts, HookProcess, TimeProvider);
+        RedRecorder = new RedRecorder(Git, PlanReader, Apps, EventContext, Ledger, HookProcess, TimeProvider);
         RedVerdict = new RedVerdictService(Ledger, RedRecorder);
 
-        BuildStartStep = new BuildStartStep(Git, Apps, EventContext, Ledger, BaselineTaker, BaselineApprovals);
+        BuildStartStep = new BuildStartStep(Git, Apps, EventContext, Ledger, BaselineTaker, BaselineApprovals, ChangeRecords, ScopeRules);
         var steps = new IEventStep[]
         {
-            new ChangeStartStep(Git, Apps, BranchChecker),
+            new ChangeStartStep(Git, Apps, BranchChecker, ChangeRecords),
             new DocAcceptStep(Git),
             BuildStartStep,
             new TaskDoneStep(),
-            new BuildFinishStep(Git, Progress, Apps, EventContext, BaselineTaker, BaselineApprovals),
+            new BuildFinishStep(Git, Progress, Apps, EventContext, BaselineTaker, BaselineApprovals, ChangeRecords, ScopeRules),
             new ReviewFinishStep(),
-            new ChangeDoneStep(Git, PullRequests, Progress, ReviewReader, Apps),
+            new ChangeDoneStep(Git, PullRequests, Progress, ReviewReader, Apps, ChangeRecords, ScopeRules),
         };
-        EventRunner = new EventRunner(Git, HookConfig, Ledger, HookScripts, HookProcess, steps);
-        AllowListedRunner = AllowListedCommandRunner.Default;
-        WorkflowRunner = new WorkflowRunner(AllowListedRunner, PullRequests, new IntentReader(), SpecReader, PlanReader, ReviewReader);
-        HookAdapter = HarnessAdapter.Default;
-        HookOrchestrator = new HookOrchestrator(HookAdapter, WorkflowRunner);
+        EventRunner = new EventRunner(Git, HookConfig, Ledger, HookScripts, HookProcess, steps, TimeProvider);
+        AllowListedRunner = new AllowListedCommandRunner();
+        WorkflowRunner = new WorkflowRunner(
+            AllowListedRunner,
+            PullRequests,
+            IntentReader,
+            SpecReader,
+            PlanReader,
+            ReviewReader,
+            FrontMatterEdit,
+            CrossChecker,
+            FileSystem,
+            TimeProvider);
+        HookAdapter = new HarnessAdapter(TimeProvider);
+        HookOrchestrator = new HookOrchestrator(HookAdapter, WorkflowRunner, AllowListedRunner, FileSystem, PlanReader, TimeProvider);
     }
 }

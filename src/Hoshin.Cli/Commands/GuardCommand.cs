@@ -13,8 +13,17 @@ namespace Hoshin.Cli.Commands;
 /// <c>.git/hoshin/run.json</c> + <c>step.json</c> (never recomputes <see cref="WorkflowState"/> and never locks out
 /// unrelated sessions). Always exits <c>0</c> and logs errors to <c>stderr</c>.
 /// </summary>
-public sealed class GuardCommand : IHoshinCommand
+public sealed class GuardCommand(
+    HarnessAdapter adapter,
+    IAllowListedCommandRunner allowListedRunner,
+    IFileSystem fileSystem,
+    TimeProvider timeProvider) : IHoshinCommand
 {
+    private readonly HarnessAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+    private readonly IAllowListedCommandRunner _runner = allowListedRunner ?? throw new ArgumentNullException(nameof(allowListedRunner));
+    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+    private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
     private const string GitPrefix = @"\bgit\s+(?:(?:(?:-C|-c|--git-dir|--work-tree|--namespace)(?:=\S+|\s+\S+)|--?[\w-]+(?:=\S+)?)\s+)*";
 
     private static readonly (Regex Pattern, string What)[] Protected =
@@ -68,17 +77,16 @@ public sealed class GuardCommand : IHoshinCommand
                 return Task.FromResult(ExitCodes.Pass);
             }
 
-            var adapter = HarnessAdapter.Default;
-            var ev = adapter.Parse(raw);
+            var ev = _adapter.Parse(raw);
             var (repo, why) = Evaluate(ev);
 
             var output = why is null
-                ? adapter.AllowOutput(ev.Harness)
-                : adapter.DenyOutput(ev.Harness, why);
+                ? _adapter.AllowOutput(ev.Harness)
+                : _adapter.DenyOutput(ev.Harness, why);
             HarnessAdapter.WriteStdoutUtf8(output);
             if (repo is not null)
             {
-                HarnessAdapter.AppendTrace(repo, "guard", ev, output, why is null ? "allow" : $"deny: {why}", clock);
+                _adapter.AppendTrace(repo, "guard", ev, output, why is null ? "allow" : $"deny: {why}", clock);
             }
         }
         catch (Exception e)
@@ -89,17 +97,24 @@ public sealed class GuardCommand : IHoshinCommand
         return Task.FromResult(ExitCodes.Pass);
     }
 
-    public static (WorkflowRepo? Repo, string? Reason) Evaluate(NormalizedHookEvent ev)
+    public (WorkflowRepo? Repo, string? Reason) Evaluate(NormalizedHookEvent ev) =>
+        Evaluate(ev, _runner, _fs, _time);
+
+    public static (WorkflowRepo? Repo, string? Reason) Evaluate(
+        NormalizedHookEvent ev,
+        IAllowListedCommandRunner runner,
+        IFileSystem fileSystem,
+        TimeProvider timeProvider)
     {
         // 1. Scope first (D2): guard applies only inside a repository with an active, non-stale hoshin run for this session.
         var cwd = string.IsNullOrWhiteSpace(ev.Cwd) ? Directory.GetCurrentDirectory() : ev.Cwd;
-        var repo = WorkflowRepo.Find(cwd);
-        if (repo is null || !File.Exists(repo.RunMarkerPath))
+        var repo = WorkflowRepo.Find(cwd, runner, fileSystem);
+        if (repo is null || !fileSystem.FileExists(repo.RunMarkerPath))
         {
             return (null, null);
         }
 
-        if (!HookSessionScope.IsRunSession(repo, ev, DateTimeOffset.UtcNow, out _, out var step))
+        if (!HookSessionScope.IsRunSession(repo, ev, timeProvider.GetUtcNow(), out _, out var step))
         {
             return (null, null);
         }

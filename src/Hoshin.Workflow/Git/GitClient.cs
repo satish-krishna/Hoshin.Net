@@ -62,10 +62,8 @@ public interface IGitClient
 }
 
 /// <summary>Default <see cref="IGitClient"/> shelling out to the <c>git</c> CLI via <see cref="ICommandRunner"/>.</summary>
-public sealed class ProcessGitClient(ICommandRunner? runner = null) : IGitClient
+public sealed class ProcessGitClient(ICommandRunner runner) : IGitClient
 {
-    public static ProcessGitClient Default { get; } = new();
-
     public static readonly string[] BaseOptions = ["-c", "core.quotepath=off", "--no-optional-locks"];
     public static readonly string[] DiffOptions = ["--no-ext-diff", "--no-textconv"];
 
@@ -77,20 +75,10 @@ public sealed class ProcessGitClient(ICommandRunner? runner = null) : IGitClient
     private const int LockWaitMs = 2000;
     private const int LockRetries = 5;
 
-    private readonly ICommandRunner _runner = runner ?? ProcessCommandRunner.Default;
-
-    private static void RecordGitInvocation()
-    {
-        var countFile = Environment.GetEnvironmentVariable("HOSHIN_GIT_COUNT_FILE");
-        if (!string.IsNullOrEmpty(countFile))
-        {
-            File.AppendAllText(countFile, "1\n");
-        }
-    }
+    private readonly ICommandRunner _runner = runner ?? throw new ArgumentNullException(nameof(runner));
 
     public GitResult Run(string cwd, IReadOnlyList<string> args, string? input = null)
     {
-        RecordGitInvocation();
         var argv = new List<string>(1 + BaseOptions.Length + args.Count) { "git" };
         argv.AddRange(BaseOptions);
         argv.AddRange(args);
@@ -105,7 +93,6 @@ public sealed class ProcessGitClient(ICommandRunner? runner = null) : IGitClient
 
     public byte[] RunBytes(string cwd, IReadOnlyList<string> args, string? input = null)
     {
-        RecordGitInvocation();
         var argv = new List<string>(1 + BaseOptions.Length + args.Count) { "git" };
         argv.AddRange(BaseOptions);
         argv.AddRange(args);

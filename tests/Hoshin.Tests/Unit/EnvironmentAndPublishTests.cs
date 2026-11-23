@@ -75,9 +75,9 @@ public sealed class EnvironmentAndPublishTests
                     """,
             });
 
-            var repo = WorkflowRepo.Find(repoDir)!;
-            var runner = WorkflowRunner.Default;
-            var state = WorkflowState.Read(repo)!;
+            var repo = TestServices.FindRepo(repoDir)!;
+            var runner = TestServices.WorkflowRunner;
+            var state = TestServices.ReadState(repo)!;
             var step = Assert.IsType<Implement>(WorkflowEngine.Next(state));
             runner.Issue(repo, state, step, "s1");
 
@@ -88,7 +88,7 @@ public sealed class EnvironmentAndPublishTests
                 Path.Combine(repoDir, "src", "math.mjs"),
                 "export function add(a, b) { return a + b; }\nexport function sub(a, b) { return a - b; }\n");
 
-            var verdict = runner.EvaluateAndCommitTask(repo, WorkflowState.Read(repo)!, "T1", 1);
+            var verdict = runner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
             Assert.True(verdict.Passed, string.Join("; ", verdict.Reasons));
         }
         finally
@@ -130,9 +130,9 @@ public sealed class EnvironmentAndPublishTests
 
         TestGitFixture.Git(repoDir, "remote", "set-url", "origin", Path.Combine(tmp.Path, "does-not-exist.git"));
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var state = WorkflowState.Read(repo)!;
-        var result = WorkflowRunner.Default.Publish(repo, state, "refs/heads/hoshin/t17-pub");
+        var repo = TestServices.FindRepo(repoDir)!;
+        var state = TestServices.ReadState(repo)!;
+        var result = TestServices.WorkflowRunner.Publish(repo, state, "refs/heads/hoshin/t17-pub");
 
         Assert.False(result.Ok);
         Assert.Null(result.Published);

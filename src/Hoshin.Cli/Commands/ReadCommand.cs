@@ -27,7 +27,7 @@ public sealed class ReadCommand(HoshinServices services) : IHoshinCommand
                 throw new CouldNotRunException($"{file}: cannot read the file: ENOENT");
             }
 
-            var marker = MarkerReader.FindMarker(file);
+            var marker = services.MarkerReader.FindMarker(file);
             var fm = FrontMatter.Parse(File.ReadAllText(file), file);
             system = Jsonc.String(fm.Data, "system") ?? "";
             allowed = MarkerReader.AllowedPlanRepos(marker, system);

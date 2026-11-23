@@ -257,7 +257,7 @@ public sealed class WorkflowNextTests
             Environment.SetEnvironmentVariable("GH_TOKEN", "ghp_secret_must_not_leak");
             Environment.SetEnvironmentVariable("SSH_AUTH_SOCK", "/tmp/ssh-agent-sock");
             Environment.SetEnvironmentVariable("HTTPS_PROXY", "http://x");
-            var res = AllowListedCommandRunner.Default.Run(
+            var res = TestServices.AllowListedRunner.Run(
                 Directory.GetCurrentDirectory(),
                 ["node", "-e", "process.stdout.write([process.env.ANTHROPIC_API_KEY || 'STRIPPED', process.env.GH_TOKEN || 'STRIPPED', process.env.SSH_AUTH_SOCK || 'STRIPPED', process.env.HTTPS_PROXY || 'MISSING'].join('|'))"]);
             Assert.True(res.Ok, res.Output);
@@ -346,9 +346,9 @@ public sealed class WorkflowNextTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         var startHead = repo.Head();
-        var runner = WorkflowRunner.Default;
+        var runner = TestServices.WorkflowRunner;
 
         // Attempt 1 (BAD): test passes even without prod change -> Red not observed -> ZERO commits made!
         TestGitFixture.Write(Path.Combine(repoDir, "test", "t1.test.mjs"), """
@@ -358,7 +358,7 @@ public sealed class WorkflowNextTests
             """);
         TestGitFixture.Write(Path.Combine(repoDir, "src", "math.mjs"), "export function add(a, b) { return a + b; }\nexport function multiply(a, b) { return a * b; }\n");
 
-        var state1 = WorkflowState.Read(repo)!;
+        var state1 = TestServices.ReadState(repo)!;
         var v1 = runner.EvaluateAndCommitTask(repo, state1, "T1", 1);
         Assert.False(v1.Passed);
         Assert.Equal(startHead, repo.Head()); // ZERO commits on failure!
@@ -373,7 +373,7 @@ public sealed class WorkflowNextTests
             test('multiply', () => { assert.equal(multiply(2, 3), 6); });
             """);
 
-        var state2 = WorkflowState.Read(repo)!;
+        var state2 = TestServices.ReadState(repo)!;
         var v2 = runner.EvaluateAndCommitTask(repo, state2, "T1", 2);
         Assert.True(v2.Passed, string.Join("; ", v2.Reasons));
         Assert.NotNull(v2.TestCommit);
@@ -461,11 +461,11 @@ public sealed class WorkflowNextTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
+        var repo = TestServices.FindRepo(repoDir)!;
         TestGitFixture.Write(Path.Combine(repoDir, "tests", "WidgetTests.cs"), "public class WidgetTests { Widget w = new(); }\n");
         TestGitFixture.Write(Path.Combine(repoDir, "src", "Widget.cs"), "public sealed class Widget {}\n");
 
-        var verdict = WorkflowRunner.Default.EvaluateAndCommitTask(repo, WorkflowState.Read(repo)!, "T1", 1);
+        var verdict = TestServices.WorkflowRunner.EvaluateAndCommitTask(repo, TestServices.ReadState(repo)!, "T1", 1);
         Assert.True(verdict.Passed, string.Join("; ", verdict.Reasons));
         Assert.Contains("CS0246", verdict.Red);
     }

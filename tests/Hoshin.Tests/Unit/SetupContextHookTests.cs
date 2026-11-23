@@ -41,11 +41,11 @@ public sealed class SetupContextHookTests
                 """,
         });
 
-        var repo = WorkflowRepo.Find(repoDir)!;
-        var orchestrator = new HookOrchestrator();
+        var repo = TestServices.FindRepo(repoDir)!;
+        var orchestrator = TestServices.CreateOrchestrator();
 
         // Session A starts an Implement run.
-        orchestrator.HandleStart(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        orchestrator.HandleStart(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "UserPromptExpansion",
             cwd = repoDir,
@@ -58,7 +58,7 @@ public sealed class SetupContextHookTests
         var stepBefore = File.ReadAllText(repo.StepPath);
 
         // Session B starts context -> empty output, run.json and step.json untouched.
-        var (ctxOut, _) = orchestrator.HandleStart(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var (ctxOut, _) = orchestrator.HandleStart(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "UserPromptExpansion",
             cwd = repoDir,
@@ -71,7 +71,7 @@ public sealed class SetupContextHookTests
         Assert.Equal(stepBefore, File.ReadAllText(repo.StepPath));
 
         // Session B's next Stop returns empty output.
-        var (stopOut, _) = orchestrator.HandleStop(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var (stopOut, _) = orchestrator.HandleStop(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "Stop",
             cwd = repoDir,
@@ -90,9 +90,9 @@ public sealed class SetupContextHookTests
             ["README.md"] = "# plain repo without change.jsonc\n",
         });
 
-        var orchestrator = new HookOrchestrator();
+        var orchestrator = TestServices.CreateOrchestrator();
 
-        var (claudeOut, claudeDecision) = orchestrator.HandleStart(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var (claudeOut, claudeDecision) = orchestrator.HandleStart(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "UserPromptExpansion",
             cwd = repoDir,
@@ -103,7 +103,7 @@ public sealed class SetupContextHookTests
         Assert.Null(claudeOut);
         Assert.Contains("allowed", claudeDecision, StringComparison.OrdinalIgnoreCase);
 
-        var (agyOut, agyDecision) = orchestrator.HandleStart(HarnessAdapter.Default.Parse(JsonSerializer.Serialize(new
+        var (agyOut, agyDecision) = orchestrator.HandleStart(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hookEventName = "PreInvocation",
             conversationId = "agy-setup",

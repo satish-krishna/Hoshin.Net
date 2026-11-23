@@ -10,9 +10,10 @@ public sealed record StepResult(
     List<string> Problems,
     Dictionary<string, object?>? Details = null,
     FailedHookInfo? Failed = null,
-    string? Outcome = null,
-    HookJudge? Judge = null)
+    string? Outcome = null)
 {
+    public HookJudge? Judge { get; init; }
+
     public static StepResult Empty { get; } = new([]);
 }
 

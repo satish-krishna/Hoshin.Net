@@ -8,22 +8,25 @@ namespace Hoshin.Workflow.Events.Steps;
 
 /// <summary><c>change.done</c>: verifies full readiness, runs stale <c>build.finish</c>, pushes branches, opens PRs, and records them in <c>change.jsonc</c>.</summary>
 public sealed class ChangeDoneStep(
-    IGitClient? git = null,
-    IPullRequestClient? prClient = null,
-    ProgressService? progress = null,
-    ReviewReader? reviewReader = null,
-    AppService? apps = null,
-    Func<EventContext, EventRunOptions?, Task<EventOutcome>>? runEventCallback = null) : IEventStep
+    IGitClient git,
+    IPullRequestClient prClient,
+    ProgressService progress,
+    ReviewReader reviewReader,
+    AppService apps,
+    ChangeRecordStore changeRecords,
+    ScopeRules scopeRules) : IEventStep
 {
     private static readonly HashSet<string> BlockingSeverities = ["critical", "high"];
     private static readonly Regex NothingToCommit = new(@"nothing to commit|no changes added", RegexOptions.Compiled);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly IPullRequestClient _pr = prClient ?? GhPullRequestClient.Default;
-    private readonly ProgressService _progress = progress ?? ProgressService.Default;
-    private readonly ReviewReader _review = reviewReader ?? new ReviewReader();
-    private readonly AppService _apps = apps ?? new AppService(git);
-    private Func<EventContext, EventRunOptions?, Task<EventOutcome>>? _runEvent = runEventCallback;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IPullRequestClient _pr = prClient ?? throw new ArgumentNullException(nameof(prClient));
+    private readonly ProgressService _progress = progress ?? throw new ArgumentNullException(nameof(progress));
+    private readonly ReviewReader _review = reviewReader ?? throw new ArgumentNullException(nameof(reviewReader));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly ChangeRecordStore _changeRecords = changeRecords ?? throw new ArgumentNullException(nameof(changeRecords));
+    private readonly ScopeRules _scopeRules = scopeRules ?? throw new ArgumentNullException(nameof(scopeRules));
+    private Func<EventContext, EventRunOptions?, Task<EventOutcome>>? _runEvent;
 
     public string EventName => "change.done";
     public bool ReusePassed => false;
@@ -93,7 +96,7 @@ public sealed class ChangeDoneStep(
         }
 
         var repoList = Touched(ctx, branch);
-        var scope = ScopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder);
+        var scope = _scopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder);
         foreach (var r in repoList)
         {
             var broken = ScopeRules.CommitRuleProblems(_git.CommitsBeyondBase(r.Path, $"refs/heads/{branch}", _git.BaseBranch(r.Path)!), scope);
@@ -231,7 +234,7 @@ public sealed class ChangeDoneStep(
 
         string? Save(string header)
         {
-            var file = ChangeRecordStore.Write(ctx.Folder, record with { PullRequests = opened });
+            var file = _changeRecords.Write(ctx.Folder, record with { PullRequests = opened });
             var r = _git.CommitPaths(ctx.Master, [file], [header, Committer.Trailer]);
             return r.Ok || NothingToCommit.IsMatch(r.Output) ? null : $"the commit \"{header}\" failed: {r.Error}";
         }
@@ -352,7 +355,7 @@ public sealed class ChangeDoneStep(
         var touched = _apps.TouchedApps(ctx.Master, ctx.System, ctx.Master, baseBranch, branchRef);
         string HeadOfApp(string app) => _apps.AppHead(ctx.Master, branchRef, folders[app], baseBranch);
 
-        var broken = ScopeRules.CommitRuleProblems(_git.CommitsBeyondBase(ctx.Master, branchRef, baseBranch), ScopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder));
+        var broken = ScopeRules.CommitRuleProblems(_git.CommitsBeyondBase(ctx.Master, branchRef, baseBranch), _scopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder));
         if (broken.Count > 0)
         {
             problems.Add($"commits on {branch} break the commit rules: {string.Join("; ", broken)}");
@@ -479,7 +482,7 @@ public sealed class ChangeDoneStep(
         }
 
         opened.Add(new PullRequestRecord("master", prRef.Url, prRef.Number, pushedHead));
-        var file = ChangeRecordStore.Write(ctx.Folder, record with { PullRequests = opened });
+        var file = _changeRecords.Write(ctx.Folder, record with { PullRequests = opened });
         var commitRes = _git.CommitPaths(ctx.Master, [file], [header, Committer.Trailer]);
         if (!commitRes.Ok && !NothingToCommit.IsMatch(commitRes.Output))
         {
@@ -583,9 +586,9 @@ public sealed class ChangeDoneStep(
         return NamingService.RenderNaming(naming.Setting, new NamingValues(record.Type, record.Scope, ctx.Change, title)).PullRequestTitle ?? title;
     }
 
-    private static ChangeRecord RecordOf(EventContext ctx)
+    private ChangeRecord RecordOf(EventContext ctx)
     {
-        var found = ChangeRecordStore.Read(ctx.Folder);
+        var found = _changeRecords.Read(ctx.Folder);
         if (found is not null)
         {
             return found;
@@ -593,9 +596,9 @@ public sealed class ChangeDoneStep(
 
         return new ChangeRecord(
             1,
-            ChangeRecordStore.BranchOf(ctx.Folder),
+            _changeRecords.BranchOf(ctx.Folder),
             "feat",
-            ScopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder),
+            _scopeRules.ChangeScope(ctx.Master, ctx.System, ctx.Folder),
             ctx.Base ?? "main",
             []);
     }

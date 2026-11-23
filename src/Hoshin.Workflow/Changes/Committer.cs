@@ -30,16 +30,16 @@ public sealed record CommitOutcome(
 
 /// <summary>Performs all skill-requested commits with document checks, conventional headers, and trailers.</summary>
 public sealed class Committer(
-    IGitClient? git = null,
-    IWorkspaceResolver? resolver = null,
-    ChangeLocator? locator = null,
-    AppService? apps = null,
-    DocumentCheckService? checker = null,
-    ProgressService? progress = null,
-    ReviewReader? reviewReader = null)
+    IGitClient git,
+    IWorkspaceResolver resolver,
+    ChangeLocator locator,
+    AppService apps,
+    DocumentCheckService checker,
+    ProgressService progress,
+    ReviewReader reviewReader,
+    MarkerReader markerReader,
+    ScopeRules scopeRules)
 {
-    public static Committer Default { get; } = new();
-
     public const string Trailer = "Generated-By: hoshin";
 
     public static readonly Regex HeaderRegex = new(@"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([^)\s]+\))?!?: \S.*$", RegexOptions.Compiled);
@@ -74,13 +74,15 @@ public sealed class Committer(
 
     private sealed record TargetInfo(string Repository, string System, string Scope, string? Folder, string? Change);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly IWorkspaceResolver _resolver = resolver ?? new WorkspaceResolver(git);
-    private readonly ChangeLocator _locator = locator ?? new ChangeLocator(git);
-    private readonly AppService _apps = apps ?? new AppService(git);
-    private readonly DocumentCheckService _checker = checker ?? new DocumentCheckService(git: git);
-    private readonly ProgressService _progress = progress ?? ProgressService.Default;
-    private readonly ReviewReader _review = reviewReader ?? new ReviewReader();
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly ChangeLocator _locator = locator ?? throw new ArgumentNullException(nameof(locator));
+    private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
+    private readonly DocumentCheckService _checker = checker ?? throw new ArgumentNullException(nameof(checker));
+    private readonly ProgressService _progress = progress ?? throw new ArgumentNullException(nameof(progress));
+    private readonly ReviewReader _review = reviewReader ?? throw new ArgumentNullException(nameof(reviewReader));
+    private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
+    private readonly ScopeRules _scopeRules = scopeRules ?? throw new ArgumentNullException(nameof(scopeRules));
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public CommitOutcome Commit(CommitRequest req)
@@ -191,7 +193,7 @@ public sealed class Committer(
 
         if (rule.Needs is "system" or "none")
         {
-            var systems = MarkerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.Keys.ToList();
+            var systems = _markerReader.ReadMarker(Path.Combine(master, MarkerConstants.FileName)).Systems.Keys.ToList();
             var system = rule.Needs == "system"
                 ? Need(req.System, "--system <system>", req.Kind)
                 : systems.FirstOrDefault() ?? throw new CouldNotRunException("the marker lists no systems");
@@ -200,13 +202,13 @@ public sealed class Committer(
                 throw new CouldNotRunException($"the marker lists no system {system}");
             }
 
-            return new TargetInfo(PathHelpers.RealPath(master), system, ScopeRules.SystemScope(master, system), null, null);
+            return new TargetInfo(PathHelpers.RealPath(master), system, _scopeRules.SystemScope(master, system), null, null);
         }
 
         var change = Need(req.Change, "--change <change>", req.Kind);
         var found = _locator.FindChange(master, workspace, change, req.System);
         var folder = Path.Combine(found.Master, "intent", found.System, change);
-        var scope = ScopeRules.ChangeScope(found.Master, found.System, folder);
+        var scope = _scopeRules.ChangeScope(found.Master, found.System, folder);
         if (rule.Needs == "change")
         {
             return new TargetInfo(PathHelpers.RealPath(found.Master), found.System, scope, folder, change);
