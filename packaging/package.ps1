@@ -53,7 +53,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "dotnet publish failed with exit code $LASTEXITCODE"
 }
 
-$requiredDlls = @("hoshin.dll", "Hoshin.Workflow.dll", "Markdig.dll", "Gherkin.dll", "hoshin.runtimeconfig.json", "hoshin.deps.json")
+$requiredDlls = @("hoshin.dll", "Hoshin.Workflow.dll", "Hoshin.Migration.dll", "Markdig.dll", "Gherkin.dll", "YamlDotNet.dll", "hoshin.runtimeconfig.json", "hoshin.deps.json")
 foreach ($file in $requiredDlls) {
     $full = Join-Path $portableLibDir $file
     if (-not (Test-Path $full)) {

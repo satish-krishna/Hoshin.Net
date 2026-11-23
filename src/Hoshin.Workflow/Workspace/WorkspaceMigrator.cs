@@ -19,10 +19,8 @@ public sealed record MigrateResult(
     List<string> Problems);
 
 /// <summary>Migrates a workspace from legacy <c>ai-sdlc</c> names to <c>hoshin</c> names and rewrites legacy YAML documents / <c>change.yml</c> to Layout 2 JSONC (idempotent, dry-run by default).</summary>
-public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver? resolver = null, IDocumentMigrator? documentMigrator = null)
+public sealed class WorkspaceMigrator(IGitClient git, IWorkspaceResolver resolver, IDocumentMigrator documentMigrator)
 {
-    public static WorkspaceMigrator Default { get; } = new();
-
     private const string OldState = "ai-sdlc";
     private const string NewState = "hoshin";
     private const string OldStart = "<!-- ai-sdlc:start -->";
@@ -31,9 +29,9 @@ public sealed class WorkspaceMigrator(IGitClient? git = null, IWorkspaceResolver
     private static readonly string[] MergeOrRebaseFiles = ["MERGE_HEAD", "rebase-merge", "rebase-apply"];
     private static readonly Regex LineSplitWithNewline = new(@"(?<=\n)", RegexOptions.Compiled);
 
-    private readonly IGitClient _git = git ?? ProcessGitClient.Default;
-    private readonly IWorkspaceResolver _resolver = resolver ?? new WorkspaceResolver(git);
-    private readonly IDocumentMigrator _documents = documentMigrator ?? DocumentMigrator.Default;
+    private readonly IGitClient _git = git ?? throw new ArgumentNullException(nameof(git));
+    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly IDocumentMigrator _documents = documentMigrator ?? throw new ArgumentNullException(nameof(documentMigrator));
 
     private sealed record PlannedStep(MigrateStep Step, Func<string?>? Act, string? Branch = null);
 

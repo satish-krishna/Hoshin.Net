@@ -92,7 +92,7 @@ public sealed class HoshinServices
         Committer = new Committer(Git, Resolver, ChangeLocator, Apps, DocumentChecker, Progress, ReviewReader);
         ChangeRename = new ChangeRenameService(Git, Apps, BranchChecker);
         ChangeRemove = new ChangeRemoveService(Git, Apps);
-        YamlConverter = YamlToJsoncConverter.Default;
+        YamlConverter = new YamlToJsoncConverter();
         DocumentMigrator = new DocumentMigrator(YamlConverter);
         Migrator = new WorkspaceMigrator(Git, Resolver, DocumentMigrator);
 
