@@ -46,7 +46,14 @@ public sealed class ReviewReader(IJsonSchemaValidator schemaValidator)
             var m = ReviewHeading.Match(doc.Lines[i]);
             if (m.Success)
             {
-                heads.Add((i, int.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)));
+                if (int.TryParse(m.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var num))
+                {
+                    heads.Add((i, num));
+                }
+                else
+                {
+                    problems.Add(new Problem(file, i + 1, $"review number '{m.Groups[1].Value}' is not a valid integer"));
+                }
             }
         }
 

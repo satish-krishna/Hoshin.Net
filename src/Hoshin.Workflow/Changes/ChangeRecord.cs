@@ -28,7 +28,7 @@ public sealed class ChangeRecordStore(IFileSystem fileSystem)
 
     private static readonly HashSet<string> AllowedFields = ["version", "branch", "type", "scope", "base", "pullRequests"];
     private static readonly Regex HttpUrl = new(@"^https?://", RegexOptions.Compiled);
-    private static readonly Regex CommitSha = new(@"^[0-9a-f]{7,40}$", RegexOptions.Compiled);
+    private static readonly Regex CommitSha = new(@"^[0-9a-f]{7,40}\z", RegexOptions.Compiled);
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
     public static List<string> RecordProblems(JsonElement? raw)
@@ -113,9 +113,9 @@ public sealed class ChangeRecordStore(IFileSystem fileSystem)
             return null;
         }
 
-        if (!Jsonc.TryParse(_fs.ReadAllText(file), out var raw, out _) || raw is null)
+        if (!Jsonc.TryParse(_fs.ReadAllText(file), out var raw, out var error) || raw is null)
         {
-            return null;
+            throw new CouldNotRunException($"{file} is not valid JSONC: {error ?? "empty file"}");
         }
 
         if (RecordProblems(raw).Count > 0)

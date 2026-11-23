@@ -174,7 +174,7 @@ public sealed class HoshinServices
         _markerReader = new(() => new MarkerReader(FileSystem));
         _changeRecords = new(() => new ChangeRecordStore(FileSystem));
         _frontMatterEdit = new(() => new FrontMatterEdit(FileSystem));
-        _crossChecker = new(() => new CrossChecker(FileSystem));
+        _crossChecker = new(() => new CrossChecker());
         _scopeRules = new(() => new ScopeRules(ChangeRecords, MarkerReader, FileSystem));
 
         _intentReader = new(() => new IntentReader());

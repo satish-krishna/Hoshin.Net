@@ -33,9 +33,9 @@ public sealed class MarkerReader(IFileSystem fileSystem)
 {
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
-    private static readonly Regex NameRegex = new(@"^[A-Za-z0-9][A-Za-z0-9._-]*$", RegexOptions.Compiled);
+    private static readonly Regex NameRegex = new(@"^[A-Za-z0-9][A-Za-z0-9._-]*\z", RegexOptions.Compiled);
     private static readonly Regex DrivePrefix = new(@"^[A-Za-z]:", RegexOptions.Compiled);
-    public static readonly Regex CommitScopeRegex = new(@"^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled);
+    public static readonly Regex CommitScopeRegex = new(@"^[a-z0-9]+(?:-[a-z0-9]+)*\z", RegexOptions.Compiled);
 
     private static readonly HashSet<string> MarkerFields = ["version", "layout", "systems", "hooks", "gateRetries", "env", "build", "testPatterns"];
     private static readonly HashSet<string> SystemFields = ["repos", "apps", "commitScope", "naming"];

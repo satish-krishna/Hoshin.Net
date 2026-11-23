@@ -12,6 +12,9 @@ namespace Hoshin.Workflow.Common;
 /// </summary>
 public sealed class EmbeddedSchemaValidator : IJsonSchemaValidator
 {
+    private static readonly TimeSpan PatternMatchTimeout = TimeSpan.FromSeconds(1);
+    private static readonly HashSet<string> UnsupportedKeywords = ["$ref", "oneOf", "anyOf", "if", "const"];
+
     private readonly ConcurrentDictionary<string, JsonElement> _cache = new(StringComparer.Ordinal);
 
     public IReadOnlyList<SchemaError> Validate(string schemaName, JsonElement value)
@@ -20,6 +23,58 @@ public sealed class EmbeddedSchemaValidator : IJsonSchemaValidator
         var errors = new List<SchemaError>();
         Check(root, value, "", errors);
         return errors;
+    }
+
+    /// <summary>Validates that a loaded schema uses only supported keywords (refusing <c>$ref</c>, <c>oneOf</c>, <c>anyOf</c>, <c>if</c>, <c>const</c>).</summary>
+    public static void ValidateSchemaDefinition(JsonElement schema, string schemaName, string path = "")
+    {
+        if (schema.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        foreach (var prop in schema.EnumerateObject())
+        {
+            if (UnsupportedKeywords.Contains(prop.Name))
+            {
+                var where = path.Length == 0 ? "" : $" at '{path}'";
+                throw new NotSupportedException($"Schema '{schemaName}'{where} uses unsupported JSON Schema keyword '{prop.Name}'.");
+            }
+        }
+
+        if (schema.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in props.EnumerateObject())
+            {
+                ValidateSchemaDefinition(prop.Value, schemaName, Join(path, prop.Name));
+            }
+        }
+
+        if (schema.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Object)
+        {
+            ValidateSchemaDefinition(items, schemaName, Join(path, "items"));
+        }
+
+        if (schema.TryGetProperty("additionalProperties", out var additional) && additional.ValueKind == JsonValueKind.Object)
+        {
+            ValidateSchemaDefinition(additional, schemaName, Join(path, "additionalProperties"));
+        }
+    }
+
+    private static string NormalizeEndAnchor(string pattern)
+    {
+        if (!pattern.EndsWith('$'))
+        {
+            return pattern;
+        }
+
+        var backslashes = 0;
+        for (var i = pattern.Length - 2; i >= 0 && pattern[i] == '\\'; i--)
+        {
+            backslashes++;
+        }
+
+        return backslashes % 2 == 0 ? pattern[..^1] + @"\z" : pattern;
     }
 
     /// <summary>Formats schema errors in GRAMMAR.md / doc.ts wording.</summary>
@@ -40,7 +95,9 @@ public sealed class EmbeddedSchemaValidator : IJsonSchemaValidator
         using var stream = typeof(EmbeddedSchemaValidator).Assembly.GetManifestResourceStream(resource)
             ?? throw new InvalidOperationException($"Embedded schema '{resource}' was not found.");
         using var doc = JsonDocument.Parse(stream);
-        return doc.RootElement.Clone();
+        var root = doc.RootElement.Clone();
+        ValidateSchemaDefinition(root, name);
+        return root;
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "CA1502:Avoid excessive complexity", Justification = "baselined: existing method")]
@@ -103,7 +160,8 @@ public sealed class EmbeddedSchemaValidator : IJsonSchemaValidator
                     errors.Add(new SchemaError("minLength", path, $"must NOT have fewer than {minLength.GetInt32()} characters", null));
                 }
 
-                if (schema.TryGetProperty("pattern", out var pattern) && !Regex.IsMatch(s, pattern.GetString()!))
+                if (schema.TryGetProperty("pattern", out var pattern)
+                    && !Regex.IsMatch(s, NormalizeEndAnchor(pattern.GetString()!), RegexOptions.None, PatternMatchTimeout))
                 {
                     errors.Add(new SchemaError("pattern", path, $"must match pattern \"{pattern.GetString()}\"", null));
                 }

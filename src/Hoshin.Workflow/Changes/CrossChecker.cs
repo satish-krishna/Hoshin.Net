@@ -7,17 +7,16 @@ namespace Hoshin.Workflow.Changes;
 public sealed record ChangeDoc(string File, ReadResult Result);
 
 /// <summary>Cross-document validation: plan tasks against spec scenarios/rules, plan self-references, and build logs against plan tasks.</summary>
-public sealed partial class CrossChecker(IFileSystem fileSystem)
+public sealed partial class CrossChecker
 {
-    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
-
     [GeneratedRegex(@"^\s*""([^""]+)""\s*:")]
     private static partial Regex FieldLineRegex();
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance method on injected cross-checker service.")]
     public List<Problem> CheckChange(IReadOnlyList<ChangeDoc> docs)
     {
         (ParsedSpec Doc, string File)? spec = null;
-        (ParsedPlan Doc, string File, int Layout)? plan = null;
+        (ParsedPlan Doc, string File, int Layout, System.Text.Json.JsonElement FrontMatter)? plan = null;
         var logs = new List<(ParsedBuildLog Doc, string File)>();
 
         foreach (var d in docs)
@@ -28,7 +27,7 @@ public sealed partial class CrossChecker(IFileSystem fileSystem)
                     spec = (s.Document, d.File);
                     break;
                 case PlanReadResult p:
-                    plan = (p.Document, d.File, p.Layout);
+                    plan = (p.Document, d.File, p.Layout, p.FrontMatter);
                     break;
                 case BuildLogReadResult b:
                     logs.Add((b.Document, d.File));
@@ -44,7 +43,7 @@ public sealed partial class CrossChecker(IFileSystem fileSystem)
 
         if (plan.Value.Layout >= 2)
         {
-            var checkSpec = IsSuperseded(plan.Value.File) ? null : spec;
+            var checkSpec = IsSuperseded(plan.Value.FrontMatter) ? null : spec;
             problems.AddRange(CheckPlan(plan.Value.Doc, plan.Value.File, checkSpec));
         }
 
@@ -200,15 +199,6 @@ public sealed partial class CrossChecker(IFileSystem fileSystem)
         return problems;
     }
 
-    private bool IsSuperseded(string file)
-    {
-        try
-        {
-            return _fs.FileExists(file) && FrontMatter.TryGetScalar(_fs.ReadAllText(file), file, "status") == "superseded";
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    private static bool IsSuperseded(System.Text.Json.JsonElement frontMatter) =>
+        string.Equals(Jsonc.String(frontMatter, "status"), "superseded", StringComparison.Ordinal);
 }

@@ -9,7 +9,6 @@
                        "C3:src/Hoshin.Workflow/Baseline/BaselineTaker.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Changes/ChangeLocator.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Changes/ChangeRecord.cs#catch-1",
-                       "C3:src/Hoshin.Workflow/Changes/CrossChecker.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Changes/DocumentCheckService.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Changes/FixState.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Changes/ScopeRules.cs#catch-1",
