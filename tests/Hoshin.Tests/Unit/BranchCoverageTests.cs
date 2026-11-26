@@ -536,6 +536,7 @@ public sealed class BranchCoverageTests
             new SequenceRunner(
                 new AllowListedCommandResult(0, "compiled", false, TimeSpan.Zero),
                 new AllowListedCommandResult(0, "green", false, TimeSpan.Zero),
+                new AllowListedCommandResult(0, "compiled red", false, TimeSpan.Zero),
                 new AllowListedCommandResult(1, "Assert.Equal failed", false, TimeSpan.Zero)), now));
         Assert.False(resTestCommit.Passed);
         Assert.Equal(1, testCommitFail.Resets);
@@ -550,6 +551,7 @@ public sealed class BranchCoverageTests
             new SequenceRunner(
                 new AllowListedCommandResult(0, "compiled", false, TimeSpan.Zero),
                 new AllowListedCommandResult(0, "green", false, TimeSpan.Zero),
+                new AllowListedCommandResult(0, "compiled red", false, TimeSpan.Zero),
                 new AllowListedCommandResult(1, "Assert.Equal failed", false, TimeSpan.Zero)), now));
         Assert.False(resProdCommit.Passed);
         Assert.Equal(1, prodCommitFail.Resets);
@@ -561,6 +563,7 @@ public sealed class BranchCoverageTests
             new SequenceRunner(
                 new AllowListedCommandResult(0, "compiled", false, TimeSpan.Zero),
                 new AllowListedCommandResult(0, "green", false, TimeSpan.Zero),
+                new AllowListedCommandResult(0, "compiled red", false, TimeSpan.Zero),
                 new AllowListedCommandResult(1, "Assert.Equal failed", false, TimeSpan.Zero),
                 new AllowListedCommandResult(1, "green at head failed", false, TimeSpan.Zero)), now));
         Assert.False(resGreenHead.Passed);

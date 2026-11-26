@@ -1093,7 +1093,7 @@ Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reas
 | R01 | R1 | A hook crash reaches the session | W14 | — | all (diagnosis) | done |
 | R02 | R1 | Every hook finds the run and the change's checkout the same way | W11, W12, W13 | R01 | 1 | done |
 | R03 | R1 | One workspace locator; sessions anywhere; a session builds only its repository | W4, W5, W13 | R02 | 2, 3 | done |
-| R04 | R1 | Red runs `compile`, and sees the repository's gitignored tools | E14, E15 | — | 2, 3 | open |
+| R04 | R1 | Red runs `compile`, and sees the repository's gitignored tools | E14, E15 | — | 2, 3 | done |
 | R05 | R1 | Progress comes from the committed build logs | W6 | R02 | — (own test) | open |
 | R06 | R1 | A fix loop after checks, review and approval | W3 | R02, D6 for the approval part | 4, 5, 6 | open |
 | R07 | R1 | Publishing reaches `Done` and stays there | W1 | R02 | 8, 9 | open |

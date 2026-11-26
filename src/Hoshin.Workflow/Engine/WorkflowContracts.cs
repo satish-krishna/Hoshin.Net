@@ -28,7 +28,8 @@ public sealed record WorkflowPlan(
     string[]? EnvAllow = null,
     int TestTimeoutSeconds = 300,
     int CheckTimeoutSeconds = 600,
-    int MaxAttempts = WorkflowEngine.MaxAttempts)
+    int MaxAttempts = WorkflowEngine.MaxAttempts,
+    string[]? LinkDirs = null)
 {
     public string EffectiveBranch => string.IsNullOrWhiteSpace(Branch) ? $"change/{Change}" : Branch;
 

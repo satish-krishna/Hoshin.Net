@@ -162,9 +162,10 @@ sequenceDiagram
         Runner->>Git: Record failed verdict (0 commits, working tree kept)
         Runner-->>Agent: Retry with diagnostic handoff
     else Green passes
-        Runner->>WT: Checkout startHead + overlay ONLY testFiles
-        Runner->>WT: Run task.Test (isolated Red check)
+        Runner->>WT: Checkout startHead + link gitignored deps + overlay ONLY testFiles
+        Runner->>WT: Run task.Compile (if set) then task.Test (isolated Red check)
         Runner->>Runner: RedClassifier.Classify(output)
+        Runner->>WT: Unlink gitignored deps + clean worktree
         alt Valid Red (assertion failure or missing symbol CS0246/CS0103/CS1061/TS2304/ESM)
             Runner->>Git: Commit testFiles -> test(scope): title + Plan-Task + Generated-By
             Runner->>Git: Commit prodFiles -> feat/fix(scope): title + Plan-Task + Generated-By
@@ -179,6 +180,8 @@ sequenceDiagram
 ```
 
 ### Strongly-Typed Red Classification (`RedClassifier`)
+
+Before running the task's `test` command in the detached Red worktree (`.git/hoshin/worktrees/red-check`), `RedWorktree` temporarily links gitignored dependency directories (`node_modules`, `.venv`, `venv`, plus any relative folders listed in `.hoshin.json` `build.linkDirs`) from the main checkout into the worktree without copying files (symbolic links on Unix/Windows, falling back to NTFS directory junctions on Windows when symlink creation is unprivileged) and unlinks them before cleaning the worktree so nothing from them is ever modified or committed. If the task defines a `compile` command, `RedWorktree` runs `compile` in the worktree first; a compile failure counts as valid Red only when `RedClassifier` classifies it as `RedKind.MissingSymbol` (any other compile failure is rejected as invalid Red).
 
 - **Valid Red:**
   - Test assertion / runtime failure (`RedKind.AssertionFailure`).

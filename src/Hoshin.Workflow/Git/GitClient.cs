@@ -630,7 +630,7 @@ public sealed class ProcessGitClient(ICommandRunner runner) : IGitClient
             var checkout = Run(worktreeDir, ["checkout", "--detach", "--force", rev]);
             if (checkout.Ok)
             {
-                Run(worktreeDir, ["clean", "-fd", "--quiet"]);
+                Run(worktreeDir, ["clean", "-fdx", "--quiet"]);
                 return checkout;
             }
 
@@ -650,7 +650,7 @@ public sealed class ProcessGitClient(ICommandRunner runner) : IGitClient
     public GitResult CleanDetachedWorktree(string worktreeDir, string rev)
     {
         var reset = Run(worktreeDir, ["reset", "--hard", "--quiet", rev]);
-        Run(worktreeDir, ["clean", "-fd", "--quiet"]);
+        Run(worktreeDir, ["clean", "-fdx", "--quiet"]);
         return reset;
     }
 
