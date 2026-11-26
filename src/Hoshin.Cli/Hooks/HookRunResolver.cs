@@ -107,10 +107,33 @@ public sealed class HookRunResolver(
             return null;
         }
 
-        var changeFolder = ChangeFolderResolver.Resolve(resolution.Master, masterCommon, explicitChangeFolder: null, _fs);
-        var checkoutRoot = ResolveCheckoutHoldingChangeFolder(resolution.Master, masterCommon, changeFolder);
-        var workflowRepo = new WorkflowRepo(checkoutRoot, masterCommon, changeFolder, _gitQuery, _gitStatus, _fs, _ledgerStore);
+        var hoshinCommon = ResolveRunCommonDir(masterCommon, sessionRoot);
+        var changeFolder = ChangeFolderResolver.Resolve(resolution.Master, hoshinCommon, explicitChangeFolder: null, _fs);
+        var checkoutRoot = PathHelpers.PathsEqual(hoshinCommon, masterCommon)
+            ? ResolveCheckoutHoldingChangeFolder(resolution.Master, masterCommon, changeFolder)
+            : sessionRoot!;
+        var workflowRepo = new WorkflowRepo(checkoutRoot, hoshinCommon, changeFolder, _gitQuery, _gitStatus, _fs, _ledgerStore);
         return new ResolvedHookRun(workflowRepo, sessionRoot, sessionRepoName, resolution.Workspace, masterMain);
+    }
+
+    private string ResolveRunCommonDir(string masterCommon, string? sessionRoot)
+    {
+        if (_fs.FileExists(Path.Combine(masterCommon, "hoshin", "run.json")) || string.IsNullOrWhiteSpace(sessionRoot))
+        {
+            return masterCommon;
+        }
+
+        var sessionDirs = _gitWorktrees.GitDirs(sessionRoot);
+        if (sessionDirs is null)
+        {
+            return masterCommon;
+        }
+
+        var sessionCommon = Path.GetFullPath(sessionDirs.Common);
+        return !PathHelpers.PathsEqual(sessionCommon, masterCommon)
+            && _fs.FileExists(Path.Combine(sessionCommon, "hoshin", "run.json"))
+            ? sessionCommon
+            : masterCommon;
     }
 
     private bool TryClassifyWorkspaceSession(

@@ -21,6 +21,9 @@ public sealed class SingleOwnerAndEnumTests
             HarnessTools.ToMatcher(HarnessTools.ClaudeGuardTools),
             claudeHooks.GetProperty("PreToolUse")[0].GetProperty("matcher").GetString());
         Assert.Equal(
+            HarnessTools.ClaudeMcpWritePushMatcher,
+            claudeHooks.GetProperty("PreToolUse")[1].GetProperty("matcher").GetString());
+        Assert.Equal(
             HarnessTools.ToMatcher(HarnessTools.ClaudeSkillTools),
             claudeHooks.GetProperty("PostToolUse")[0].GetProperty("matcher").GetString());
         Assert.Equal(

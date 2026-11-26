@@ -167,6 +167,11 @@ public sealed class GuardCommand(
 
     private static string? CheckDuringBuildStep(NormalizedHookEvent ev, WorkflowRepo repo, CurrentStep step)
     {
+        if (HarnessTools.IsMcpWriteOrPushTool(ev.ToolName))
+        {
+            return "MCP file-write and push tools are not allowed during a build; edit only the working tree with the harness file tools and let hoshin commit and push.";
+        }
+
         if (ev.IsShellTool)
         {
             var command = GuardShellNormalizer.Normalize(ev.CommandLine ?? "");
@@ -202,6 +207,11 @@ public sealed class GuardCommand(
 
     private static string? CheckWhileWriting(NormalizedHookEvent ev, WorkflowRepo repo, CurrentStep step, IReadOnlyList<string> allowedFiles, string label)
     {
+        if (HarnessTools.IsMcpWriteOrPushTool(ev.ToolName))
+        {
+            return $"While the {label} is written, MCP file-write and push tools are not allowed.";
+        }
+
         if (ev.IsShellTool)
         {
             var command = GuardShellNormalizer.Normalize(ev.CommandLine ?? "");
