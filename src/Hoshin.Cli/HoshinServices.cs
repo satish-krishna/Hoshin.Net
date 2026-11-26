@@ -238,7 +238,7 @@ public sealed class HoshinServices
         _allowListedRunner = new(() => new AllowListedCommandRunner());
         _buildLogWriter = new(() => new BuildLogWriter(FileSystem));
         _workspaceLocator = new(() => new WorkspaceLocator(Resolver));
-        _workflowEventBridge = new(() => new WorkflowEventBridge(EventContext, EventRunner, WorkspaceLocator, FileSystem));
+        _workflowEventBridge = new(() => new WorkflowEventBridge(EventContext, EventRunner, HookConfig, WorkspaceLocator, FileSystem));
         _taskRepoResolver = new(() => new TaskRepoResolver(WorkspaceLocator, Apps, Git, FileSystem, Ledger));
         _taskEvaluator = new(() => new TaskEvaluator(Git, Git, Git, Git, AllowListedRunner, BuildLogWriter, WorkflowEventBridge, TaskRepoResolver, TimeProvider));
         _checkRunner = new(() => new CheckRunner(Git, AllowListedRunner, WorkflowEventBridge, TaskRepoResolver, TimeProvider));
@@ -262,7 +262,7 @@ public sealed class HoshinServices
             ApprovalRecorder,
             Publisher,
             DocumentCommitter));
-        _workflowStateReader = new(() => new WorkflowStateReader(PlanReader, ChangeState, TaskRepoResolver, WorkspaceLocator, FileSystem));
+        _workflowStateReader = new(() => new WorkflowStateReader(PlanReader, ReviewReader, ChangeState, TaskRepoResolver, WorkspaceLocator, FileSystem));
         _changeStarter = new(() => new ChangeStarter(WorkspaceLocator, MarkerReader, ChangeLocator, ChangeList, ScopeRules, EventRunner, Git, Git, Git, FileSystem, TimeProvider));
         _hookRunResolver = new(() => new HookRunResolver(Resolver, MarkerReader, Git, Git, Git, FileSystem, Ledger));
         _hookAdapter = new(() => new HarnessAdapter(TimeProvider));

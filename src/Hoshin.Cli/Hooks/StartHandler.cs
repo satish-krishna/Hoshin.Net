@@ -118,7 +118,8 @@ internal sealed class StartHandler(
             return earlyResponse;
         }
 
-        var state = _advancer.ReadState(repo, rolesRoot, out var error, sessionRepo);
+        var buildInstructions = ExtractBuildInstructions(invoked, rawArgs);
+        var state = _advancer.ReadState(repo, rolesRoot, out var error, sessionRepo, buildInstructions);
         if (state is null)
         {
             return EmitStartContext(ev, repo, error ?? "There is no change plan in this repository. Tell the engineer, then end your turn.", "no plan");
@@ -131,7 +132,7 @@ internal sealed class StartHandler(
         }
 
         StartRun(repo, ev);
-        return DispatchSkill(ev, repo, state, sessionRepo, invocation, isFixAccept, rolesRoot);
+        return DispatchSkill(ev, repo, state, sessionRepo, invocation, isFixAccept, rolesRoot, buildInstructions);
     }
 
     private static bool RequiresHumanInvocation(string invoked, bool isFixAccept) =>
@@ -141,6 +142,9 @@ internal sealed class StartHandler(
         isFixAccept
             ? $"{HookInstructions.SkillCommand("fix", harness)} --accept"
             : HookInstructions.SkillCommand(invoked is "reject" or "reopen" ? invoked : "accept", harness);
+
+    private static string? ExtractBuildInstructions(string invoked, string rawArgs) =>
+        invoked == "build" && rawArgs.Length > 0 ? rawArgs : null;
 
     private static bool IsFixAcceptCommand(string invoked, string rawArgs) =>
         invoked == "fix" && rawArgs.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
@@ -160,7 +164,8 @@ internal sealed class StartHandler(
         string? sessionRepo,
         SkillInvocation invocation,
         bool isFixAccept,
-        string? rolesRoot)
+        string? rolesRoot,
+        string? buildInstructions)
     {
         var invoked = invocation.Skill;
         var args = (ev.CommandArgs ?? invocation.Args ?? "").Trim();
@@ -182,7 +187,7 @@ internal sealed class StartHandler(
             return postAccept;
         }
 
-        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, isFixAccept ? null : invoked, sessionRepo);
+        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, isFixAccept ? null : invoked, sessionRepo, buildInstructions);
         var suffix = BuildPromptSuffix(invoked, args, step);
         return EmitStartContext(ev, repo, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: prefix, suffix: suffix), $"{invoked}: {step.Kind}");
     }

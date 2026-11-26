@@ -22,30 +22,38 @@ public sealed record WorkflowState(
     Dictionary<string, RepoLedger>? RepoLedgers = null,
     Dictionary<string, string>? RepoPaths = null,
     bool IsLightTrack = false,
-    string? SessionRepo = null)
+    string? SessionRepo = null,
+    string? BuildInstructions = null,
+    List<ReviewFindingSummary>? HighReviewFindings = null)
 {
     public string EffectiveCodeHead => string.IsNullOrWhiteSpace(CodeHead) ? Head : CodeHead;
 
-    public IReadOnlyList<WorkflowVerdict> VerdictsForTask(WorkflowTask task)
+    public IReadOnlyList<WorkflowVerdict> VerdictsForTask(WorkflowTask task) =>
+        VerdictsForTaskId(task.Id, task.Repo);
+
+    public IReadOnlyList<WorkflowVerdict> VerdictsForTaskId(string taskId, string? repoName)
     {
-        if (!string.IsNullOrWhiteSpace(task.Repo)
+        if (!string.IsNullOrWhiteSpace(repoName)
             && RepoLedgers is not null
-            && RepoLedgers.TryGetValue(task.Repo, out var repoLedger))
+            && RepoLedgers.TryGetValue(repoName, out var repoLedger))
         {
-            var repoVerdicts = repoLedger.WorkflowVerdicts.Where(v => v.Task == task.Id).ToList();
+            var repoVerdicts = repoLedger.WorkflowVerdicts.Where(v => v.Task == taskId).ToList();
             if (repoVerdicts.Count > 0)
             {
                 return repoVerdicts;
             }
         }
 
-        return Ledger.WorkflowVerdicts.Where(v => v.Task == task.Id).ToList();
+        return Ledger.WorkflowVerdicts.Where(v => v.Task == taskId).ToList();
     }
 
     public string RepositoryPathFor(WorkflowTask task) =>
-        !string.IsNullOrWhiteSpace(task.Repo)
+        RepositoryPathForRepo(task.Repo);
+
+    public string RepositoryPathForRepo(string? repoName) =>
+        !string.IsNullOrWhiteSpace(repoName)
         && RepoPaths is not null
-        && RepoPaths.TryGetValue(task.Repo, out var path)
+        && RepoPaths.TryGetValue(repoName, out var path)
             ? path
             : RepoRoot;
 

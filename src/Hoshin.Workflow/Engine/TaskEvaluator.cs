@@ -88,7 +88,13 @@ public sealed class TaskEvaluator(
 
     public WorkflowVerdict EvaluateAndCommitTask(WorkflowRepo repo, WorkflowState state, string taskId, int attempt)
     {
-        var task = state.Plan.Tasks.First(t => t.Id == taskId);
+        var task = state.Plan.Tasks.FirstOrDefault(t => t.Id == taskId);
+        if (task is null && PostBuildFixPolicy.IsFixTaskId(taskId))
+        {
+            return EvaluateAndCommitFixTask(repo, state, taskId, attempt);
+        }
+
+        task ??= state.Plan.Tasks.First(t => t.Id == taskId);
         var targetRepo = _taskRepos.Resolve(repo, task);
 
         using var runLock = repo.AcquireRunLock();
@@ -101,8 +107,9 @@ public sealed class TaskEvaluator(
         var startHead = _gitQuery.CommitOf(targetRepo.Root, "HEAD") ?? "";
         ClearActiveSubagent(repo);
         var now = _time.GetUtcNow();
+        var defaultRed = task.Test is { Length: > 0 } ? "not observed: no test commit" : NoTestPolicy.SkippedRedSummary;
 
-        if (ValidatePreConditions(targetRepo, liveLedger, task, attempt, startHead, now, out var changed) is { } earlyFail)
+        if (ValidatePreConditions(targetRepo, liveLedger, task.Id, defaultRed, attempt, startHead, now, out var changed) is { } earlyFail)
         {
             return RecordVerdict(targetRepo, task, earlyFail, appendSyntheticRun: true);
         }
@@ -166,18 +173,47 @@ public sealed class TaskEvaluator(
             : verdict;
     }
 
+    private WorkflowVerdict EvaluateAndCommitFixTask(WorkflowRepo repo, WorkflowState state, string taskId, int attempt)
+    {
+        var targetName = repo.ReadStep()?.TargetRepo ?? state.SessionRepo;
+        var targetRepo = string.IsNullOrWhiteSpace(targetName) ? repo : _taskRepos.ResolveByName(repo, targetName);
+
+        using var runLock = repo.AcquireRunLock();
+        var liveLedger = targetRepo.ReadLedger();
+        if (liveLedger.WorkflowVerdicts.FirstOrDefault(v => v.Task == taskId && v.Attempt == attempt) is { } existing)
+        {
+            return existing;
+        }
+
+        var startHead = _gitQuery.CommitOf(targetRepo.Root, "HEAD") ?? "";
+        ClearActiveSubagent(repo);
+        var now = _time.GetUtcNow();
+
+        if (ValidatePreConditions(targetRepo, liveLedger, taskId, PostBuildFixPolicy.SkippedRedSummary, attempt, startHead, now, out var changed) is { } earlyFail)
+        {
+            return RecordVerdict(targetRepo, null, earlyFail, appendSyntheticRun: false);
+        }
+
+        var verdict = PostBuildFixPolicy.EvaluateAndCommit(targetRepo, state, taskId, attempt, startHead, changed, _gitCommitter, now);
+        return RecordVerdict(targetRepo, null, verdict, appendSyntheticRun: false);
+    }
+
     private void IssueTaskStep(WorkflowRepo repo, WorkflowState state, Step step, string? sessionId)
     {
         var agent = step is Implement i ? i.Agent : ((Retry)step).Agent;
         var task = state.Plan.Tasks.FirstOrDefault(t => t.Id == agent.Task);
-        var targetRepo = task is not null ? _taskRepos.Resolve(repo, task) : repo;
+        var isFix = task is null && PostBuildFixPolicy.IsFixTaskId(agent.Task);
+        var targetRepoName = task?.Repo ?? agent.TargetRepo;
+        var targetRepo = task is not null
+            ? _taskRepos.Resolve(repo, task)
+            : (!string.IsNullOrWhiteSpace(targetRepoName) ? _taskRepos.ResolveByName(repo, targetRepoName) : repo);
         var hasTest = task?.Test is { Length: > 0 };
         var taskTestFiles = hasTest
             ? WorkflowRepo.ExtractTestFilesFromArgv(task!.Test!, targetRepo.Root, state.Plan.EffectiveTestPatterns).ToArray()
             : null;
 
         RecordIssued(targetRepo, agent);
-        WriteIssuedStep(repo, targetRepo, state, step.Kind, agent, sessionId, hasTest, taskTestFiles);
+        WriteIssuedStep(repo, targetRepo, state, step.Kind, agent, sessionId, hasTest, taskTestFiles, targetRepoName, isFix);
     }
 
     private void RecordIssued(WorkflowRepo targetRepo, AgentTask agent)
@@ -215,7 +251,9 @@ public sealed class TaskEvaluator(
         AgentTask agent,
         string? sessionId,
         bool hasTest,
-        string[]? taskTestFiles)
+        string[]? taskTestFiles,
+        string? targetRepoName,
+        bool isFix)
     {
         var start = targetRepo.ReadLedger().WorkflowIssued.First(x => x.Task == agent.Task).StartHead;
         var previous = repo.ReadStep();
@@ -224,6 +262,7 @@ public sealed class TaskEvaluator(
         var nonce = same && !string.IsNullOrEmpty(previous!.DispatchNonce)
             ? previous.DispatchNonce
             : $"<!-- hoshin:{agent.Task}:attempt-{agent.Attempt}:{Guid.NewGuid().ToString("N")[..8]} -->";
+        var fixInstructions = isFix ? (state.BuildInstructions ?? previous?.FixInstructions) : null;
 
         var nextStep = same
             ? previous! with
@@ -234,6 +273,9 @@ public sealed class TaskEvaluator(
                 TaskTestFiles = taskTestFiles,
                 DispatchNonce = nonce,
                 HasTest = hasTest,
+                TargetRepo = targetRepoName,
+                IsFix = isFix,
+                FixInstructions = fixInstructions,
             }
             : new CurrentStep(
                 kind,
@@ -247,7 +289,10 @@ public sealed class TaskEvaluator(
                 TestPatterns: state.Plan.EffectiveTestPatterns,
                 TaskTestFiles: taskTestFiles,
                 DispatchNonce: nonce,
-                HasTest: hasTest);
+                HasTest: hasTest,
+                TargetRepo: targetRepoName,
+                IsFix: isFix,
+                FixInstructions: fixInstructions);
 
         repo.WriteStep(nextStep);
     }
@@ -255,36 +300,36 @@ public sealed class TaskEvaluator(
     private WorkflowVerdict? ValidatePreConditions(
         WorkflowRepo repo,
         RepoLedger liveLedger,
-        WorkflowTask task,
+        string taskId,
+        string defaultRed,
         int attempt,
         string startHead,
         DateTimeOffset now,
         out List<WorkingTreeChange> changed)
     {
         changed = [];
-        if (WorkflowHeadGuard.HasUnexpectedHeadMove(liveLedger, task.Id, startHead))
+        if (WorkflowHeadGuard.HasUnexpectedHeadMove(liveLedger, taskId, startHead))
         {
-            return new WorkflowVerdict(task.Id, attempt, startHead, false, "not observed: HEAD moved outside the workflow", [WorkflowHeadGuard.UnexpectedHeadMoveReason], now);
+            return new WorkflowVerdict(taskId, attempt, startHead, false, "not observed: HEAD moved outside the workflow", [WorkflowHeadGuard.UnexpectedHeadMoveReason], now);
         }
 
-        var issued = liveLedger.WorkflowIssued.FirstOrDefault(x => x.Task == task.Id && x.Attempt == attempt);
+        var issued = liveLedger.WorkflowIssued.FirstOrDefault(x => x.Task == taskId && x.Attempt == attempt);
         if (issued?.IndexHadStagedChanges == true)
         {
-            return new WorkflowVerdict(task.Id, attempt, startHead, false, "not observed: index had staged changes", [WorkingTreeSnapshot.StagedIndexRefusalReason], now);
+            return new WorkflowVerdict(taskId, attempt, startHead, false, "not observed: index had staged changes", [WorkingTreeSnapshot.StagedIndexRefusalReason], now);
         }
 
         changed = WorkingTreeSnapshot.FilterTaskChanges(repo, WorkingTreeSnapshot.GetChanges(repo, _gitStatus), issued?.PreIssuePaths);
-        var defaultRed = task.Test is { Length: > 0 } ? "not observed: no test commit" : NoTestPolicy.SkippedRedSummary;
 
         if (changed.Count == 0)
         {
-            return new WorkflowVerdict(task.Id, attempt, startHead, false, defaultRed, [$"work: no working-tree changes were made for {task.Id}"], now);
+            return new WorkflowVerdict(taskId, attempt, startHead, false, defaultRed, [$"work: no working-tree changes were made for {taskId}"], now);
         }
 
         var protectedHits = changed.Where(c => ProtectedPaths.IsProtectedDuringBuild(c.Path, repo.Root, repo.ChangeFolder)).Select(c => c.Path).ToList();
         if (protectedHits.Count > 0)
         {
-            return new WorkflowVerdict(task.Id, attempt, startHead, false, defaultRed, [$"protected: modified protected workflow files: {string.Join(", ", protectedHits)}"], now);
+            return new WorkflowVerdict(taskId, attempt, startHead, false, defaultRed, [$"protected: modified protected workflow files: {string.Join(", ", protectedHits)}"], now);
         }
 
         return null;
@@ -300,63 +345,6 @@ public sealed class TaskEvaluator(
         _ => null,
     };
 
-    private static WorkflowVerdict RecordVerdict(WorkflowRepo repo, WorkflowTask task, WorkflowVerdict verdict, bool appendSyntheticRun)
-    {
-        repo.UpdateLedger(ledger =>
-        {
-            if (ledger.WorkflowVerdicts.Any(v => v.Task == verdict.Task && v.Attempt == verdict.Attempt))
-            {
-                return ledger;
-            }
-
-            var verdicts = new List<WorkflowVerdict>(ledger.WorkflowVerdicts) { verdict };
-            var reds = ledger.Reds;
-            if (task.Test is { Length: > 0 } && verdict.Passed && !string.IsNullOrEmpty(verdict.TestCommit))
-            {
-                reds = new List<RedRecord>(reds ?? [])
-                {
-                    new(
-                        task.Id,
-                        verdict.TestCommit,
-                        task.Compile,
-                        task.Test,
-                        "failed",
-                        1,
-                        verdict.Red,
-                        verdict.At.ToString("O")),
-                };
-            }
-
-            var updated = ledger with { Verdicts = verdicts, Reds = reds };
-            if (!appendSyntheticRun)
-            {
-                return updated;
-            }
-
-            var details = new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                ["attempt"] = verdict.Attempt,
-                ["red"] = verdict.Red,
-            };
-            if (!string.IsNullOrEmpty(verdict.TestCommit))
-            {
-                details["testCommit"] = verdict.TestCommit;
-            }
-
-            var run = new EventRecord(
-                Event: "task.done",
-                Repo: ledger.Repo,
-                Key: verdict.Head,
-                Subject: verdict.Task,
-                Outcome: verdict.Passed ? "passed" : "failed",
-                At: verdict.At.ToString("O"),
-                Hooks: [],
-                Problems: verdict.Reasons.ToList(),
-                Failed: null,
-                Details: details);
-
-            return LedgerStore.AppendRun(updated, run);
-        });
-        return verdict;
-    }
+    private static WorkflowVerdict RecordVerdict(WorkflowRepo repo, WorkflowTask? task, WorkflowVerdict verdict, bool appendSyntheticRun) =>
+        TaskVerdictRecorder.Record(repo, task, verdict, appendSyntheticRun);
 }

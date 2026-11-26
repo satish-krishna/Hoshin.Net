@@ -164,7 +164,7 @@ public static class WorkflowEngine
 
         if (!check.Passed)
         {
-            return new Done(false, $"checks failed at {Short(codeHead)}");
+            return PostBuildFixEngine.NextForCheckFailure(state, check);
         }
 
         var review = state.Ledger.WorkflowReviews.LastOrDefault(r => r.Head == codeHead);
@@ -177,7 +177,7 @@ public static class WorkflowEngine
 
         if (review.HighCount > 0)
         {
-            return new Done(false, $"review {review.ReviewNumber} has {review.HighCount} high findings");
+            return PostBuildFixEngine.NextForReviewFindings(state, review);
         }
 
         var approval = state.Ledger.WorkflowApprovalRecords.LastOrDefault(a => a.Head == codeHead);
@@ -353,5 +353,5 @@ public static class WorkflowEngine
         _ => step.Kind.ToString(),
     };
 
-    public static string Short(string sha) => sha.Length > 7 ? sha[..7] : sha;
+    public static string Short(string sha) => WorkflowCodeHead.Short(sha);
 }

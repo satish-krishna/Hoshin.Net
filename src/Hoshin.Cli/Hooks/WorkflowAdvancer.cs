@@ -23,12 +23,17 @@ internal sealed class WorkflowAdvancer(
 
     public WorkflowStateReader StateReader => _stateReader;
 
-    public WorkflowState? ReadState(WorkflowRepo repo, string? rolesRoot, out string? error, string? sessionRepo = null)
+    public WorkflowState? ReadState(
+        WorkflowRepo repo,
+        string? rolesRoot,
+        out string? error,
+        string? sessionRepo = null,
+        string? buildInstructions = null)
     {
         error = null;
         try
         {
-            return _stateReader.Read(repo, rolesRoot, sessionRepo);
+            return _stateReader.Read(repo, rolesRoot, sessionRepo, buildInstructions);
         }
         catch (CouldNotRunException e)
         {
@@ -44,18 +49,24 @@ internal sealed class WorkflowAdvancer(
         string? sessionId,
         string? sessionRepo = null)
     {
-        var state = ReadState(repo, rolesRoot, out var error, sessionRepo)
+        var state = ReadState(repo, rolesRoot, out var error, sessionRepo, current.FixInstructions)
             ?? throw new InvalidOperationException(error ?? $"Could not read workflow state for {repo.Root} ({repo.ChangeFolder}).");
         var verdict = _tasks.EvaluateAndCommitTask(repo, state, current.Task!, current.Attempt);
         StopCounterStore.ResetAll(repo);
-        return (verdict, Advance(repo, rolesRoot, sessionId, sessionRepo: sessionRepo));
+        return (verdict, Advance(repo, rolesRoot, sessionId, sessionRepo: sessionRepo, buildInstructions: verdict.Passed ? null : current.FixInstructions));
     }
 
-    public Step Advance(WorkflowRepo repo, string? rolesRoot, string? sessionId, string? invokedSkill = null, string? sessionRepo = null)
+    public Step Advance(
+        WorkflowRepo repo,
+        string? rolesRoot,
+        string? sessionId,
+        string? invokedSkill = null,
+        string? sessionRepo = null,
+        string? buildInstructions = null)
     {
         while (true)
         {
-            var state = ReadState(repo, rolesRoot, out var error, sessionRepo);
+            var state = ReadState(repo, rolesRoot, out var error, sessionRepo, buildInstructions);
             if (state is null)
             {
                 return new Done(false, error ?? "no plan");
@@ -80,16 +91,7 @@ internal sealed class WorkflowAdvancer(
                     continue;
 
                 case Implement impl when _events.IsWorkspaceRepo(repo):
-                    var task = state.Plan.Tasks.FirstOrDefault(t => t.Id == impl.Agent.Task);
-                    var targetRepoName = !string.IsNullOrWhiteSpace(task?.Repo) ? task.Repo : repo.RepoKey;
-                    var hasBaseline = state.RepoLedgers is not null && state.RepoLedgers.TryGetValue(targetRepoName, out var repoLedger)
-                        ? repoLedger.WorkflowBaselines.Count > 0
-                        : state.Ledger.WorkflowBaselines.Count > 0;
-                    if (!hasBaseline)
-                    {
-                        _checks.RunBaseline(repo, state, targetRepoName);
-                    }
-
+                    EnsureWorkspaceBaseline(repo, state, impl.Agent);
                     _tasks.Issue(repo, state, step, sessionId);
                     return step;
 
@@ -97,6 +99,21 @@ internal sealed class WorkflowAdvancer(
                     _tasks.Issue(repo, state, step, sessionId);
                     return step;
             }
+        }
+    }
+
+    private void EnsureWorkspaceBaseline(WorkflowRepo repo, WorkflowState state, AgentTask agent)
+    {
+        var task = state.Plan.Tasks.FirstOrDefault(t => t.Id == agent.Task);
+        var targetRepoName = !string.IsNullOrWhiteSpace(task?.Repo)
+            ? task.Repo
+            : (!string.IsNullOrWhiteSpace(agent.TargetRepo) ? agent.TargetRepo : repo.RepoKey);
+        var hasBaseline = state.RepoLedgers is not null && state.RepoLedgers.TryGetValue(targetRepoName, out var repoLedger)
+            ? repoLedger.WorkflowBaselines.Count > 0
+            : state.Ledger.WorkflowBaselines.Count > 0;
+        if (!hasBaseline)
+        {
+            _checks.RunBaseline(repo, state, targetRepoName);
         }
     }
 

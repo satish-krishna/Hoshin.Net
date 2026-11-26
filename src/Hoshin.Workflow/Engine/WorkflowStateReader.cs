@@ -11,18 +11,20 @@ namespace Hoshin.Workflow.Engine;
 /// </summary>
 public sealed class WorkflowStateReader(
     PlanReader planReader,
+    ReviewReader reviewReader,
     ChangeStateService changeState,
     ITaskRepoResolver taskRepoResolver,
     IWorkspaceLocator workspaceLocator,
     IFileSystem fileSystem)
 {
     private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
+    private readonly ReviewReader _reviewReader = reviewReader ?? throw new ArgumentNullException(nameof(reviewReader));
     private readonly ChangeStateService _changeState = changeState ?? throw new ArgumentNullException(nameof(changeState));
     private readonly ITaskRepoResolver _taskRepos = taskRepoResolver ?? throw new ArgumentNullException(nameof(taskRepoResolver));
     private readonly IWorkspaceLocator _workspaceLocator = workspaceLocator ?? throw new ArgumentNullException(nameof(workspaceLocator));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
-    public WorkflowState? Read(WorkflowRepo repo, string? skillsRoot = null, string? sessionRepo = null)
+    public WorkflowState? Read(WorkflowRepo repo, string? skillsRoot = null, string? sessionRepo = null, string? buildInstructions = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
 
@@ -39,6 +41,8 @@ public sealed class WorkflowStateReader(
 
         var repoLedgers = _taskRepos.ReadRepoLedgers(repo, plan);
         var repoPaths = _taskRepos.ResolveRepoPaths(repo, plan);
+        var codeHead = WorkflowCodeHead.Compute(repo, repoPaths);
+        var highFindings = ReadLatestHighReviewFindings(repo);
         var isLightTrack = string.Equals(changeItem?.Track, "fix", StringComparison.Ordinal)
             || string.Equals(plan.WorkType, "fix", StringComparison.OrdinalIgnoreCase)
             || repo.ReadStep()?.Kind is StepKind.Fix or StepKind.AwaitAcceptFix;
@@ -53,12 +57,43 @@ public sealed class WorkflowStateReader(
             intent,
             spec,
             planDoc,
-            repo.CodeHead(),
+            codeHead,
             changeItem,
             repoLedgers,
             repoPaths,
             isLightTrack,
-            sessionRepo);
+            sessionRepo,
+            buildInstructions,
+            highFindings);
+    }
+
+    private List<ReviewFindingSummary>? ReadLatestHighReviewFindings(WorkflowRepo repo)
+    {
+        var reviewPath = Path.Combine(repo.ChangeFolder, "build", "review.md");
+        if (!_fs.FileExists(reviewPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var read = _reviewReader.Read(_fs.ReadAllText(reviewPath), reviewPath);
+            var latest = read.Document.Reviews.LastOrDefault();
+            if (latest is null)
+            {
+                return null;
+            }
+
+            return latest.Findings
+                .Where(f => string.Equals(f.Severity, "high", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(f.Severity, "critical", StringComparison.OrdinalIgnoreCase))
+                .Select(f => new ReviewFindingSummary(f.Id, f.Repo, f.File, f.Line, f.Text))
+                .ToList();
+        }
+        catch (CouldNotRunException)
+        {
+            return null;
+        }
     }
 
     private ChangeStateItem? TryComputeChangeState(WorkflowRepo repo)

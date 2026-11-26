@@ -115,7 +115,7 @@ internal sealed class StopHandler(
             return StopWhileFixing(ev, repo, rolesRoot);
         }
 
-        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, sessionRepo: sessionRepo);
+        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, sessionRepo: sessionRepo, buildInstructions: current?.FixInstructions);
         return step is WriteDocument write
             ? StopWhileWriting(ev, repo, rolesRoot, write)
             : HandleAdvancedStepStop(ev, repo, step, verdictReport, hasReport);

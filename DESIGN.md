@@ -105,10 +105,12 @@ stateDiagram-v2
     Retry --> RunChecks : "All tasks passed"
 
     RunChecks --> Review : "EventRunner build.finish checks green"
-    RunChecks --> DoneFail : "Checks failed"
+    RunChecks --> Implement : "onFailure: fix & retries <= gateRetries (FIX-CHECK-*)"
+    RunChecks --> DoneFail : "Checks failed (onFailure: stop or gateRetries exhausted)"
 
     Review --> NeedsApproval : "Stop: clean build/review.md committed + review.finish"
-    Review --> DoneFail : "Review has high findings"
+    Review --> Implement : "/hoshin:build <instructions> after high findings (FIX-R*)"
+    Review --> DoneFail : "Review has high findings (no fix instructions yet)"
 
     NeedsApproval --> Publish : "Engineer invokes /accept or /done"
     NeedsApproval --> DoneFail : "Engineer rejects"
@@ -125,8 +127,8 @@ stateDiagram-v2
 - `WriteFix(ChangeFolder, Brief)` — Light-track drafting of `intent.md`, `spec.md`, and `plan.md` together (enforcing 1 repository and ≤ 3 tasks; `FixState` row 3).
 - `AwaitAcceptFix(ChangeFolder, Head, NextDocument)` — Committed light-track fix documents awaiting human `accept` or `fix --accept` (`FixState` rows 4–7), accepting all remaining docs in order with `source_intent_commit` and `source_spec_commit` pins to reach row 8.
 - `Implement(AgentTask)` / `Retry(AgentTask, Handoff)` — Agent work requests carrying the embedded/loaded role procedure and attempt brief, scheduled across repositories via `ScheduleCalculator` and executed in each task's repository checkout (`ITaskRepoResolver`).
-- `RunChecks(Head)` — Executes `EventRunner` `build.finish` hooks per repository (read strictly from the base branch via `HookConfigService`, writing `checks.jsonl`) in Hoshin workspaces, with `BaseBranchChecksReader` fallback in standalone `.hoshin/` repos.
-- `ReviewDocument(Path, Head, Brief)` — Required review gate after `RunChecks` passes, keyed by **code head** (latest commit touching paths outside `<change>/build/review.md`), written and committed to `build/review.md` and firing `review.finish`. High findings stop with `Done(false)`; zero high findings advance to `NeedsApproval`.
+- `RunChecks(Head)` — Executes `EventRunner` `build.finish` hooks per repository (read strictly from the base branch via `HookConfigService`, writing `checks.jsonl`) in Hoshin workspaces, with `BaseBranchChecksReader` fallback in standalone `.hoshin/` repos. When a `build.finish` hook fails with `onFailure: "fix"`, `PostBuildFixEngine` dispatches a bounded fix step (`FIX-CHECK-*`, up to `gateRetries`) targeting the failing repository before re-running checks; once `gateRetries` is exhausted, the step ends in `Done(false)`.
+- `ReviewDocument(Path, Head, Brief)` — Required review gate after `RunChecks` passes, keyed by **composite code head** (`WorkflowCodeHead`: sorted `<repo>=<HEAD>` across all touched product repositories in multi-repo workspaces, or the single-repo `CodeHead` excluding `build/review.md`), written and committed to `build/review.md` and firing `review.finish`. High findings stop with `Done(false)` until the engineer invokes `/hoshin:build <instructions>` from the target repository, which dispatches a fix subagent (`FIX-R<n>`) carrying the findings and instructions, commits the fix (`test(...)` / `fix(...)`), moves that repository's head in the composite code head, re-runs `build.finish` checks, and advances to the next review; zero high findings advance to `NeedsApproval`.
 - `NeedsApproval(Head, Reason)` — Built, checked, and cleanly reviewed change waiting for human approval at the current code head.
 - `Publish(Head, Ref)` — Fires `EventRunner` `change.done` (`ChangeDoneStep`) in Hoshin workspaces (pushing every repository on `change/<change>` and opening/reusing PRs via `IPullRequestClient`), with direct push + PR fallback in standalone `.hoshin/` repos.
 - `Done(Success, Outcome)` — Terminal state.
