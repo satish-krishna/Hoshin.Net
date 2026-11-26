@@ -65,7 +65,100 @@ public static class WorkflowBriefs
             b.AppendLine("Nothing was committed from the previous attempt. Your working-tree edits remain; fix the issues above and leave the tests passing.");
         }
 
-        return new AgentTask("implement", task.Id, attempt, LoadRoleProcedure(state.SkillsRoot, "implement"), b.ToString());
+        return new AgentTask("implement", task.Id, attempt, LoadRoleProcedure(state.SkillsRoot, "implement"), b.ToString(), task.Repo);
+    }
+
+    public static AgentTask FixCheckFailure(
+        WorkflowState state,
+        WorkflowCheckRun check,
+        string taskId,
+        int attempt,
+        string? targetRepo,
+        int retryNumber,
+        IReadOnlyList<string> handoff)
+    {
+        var hookName = string.IsNullOrWhiteSpace(check.FailedHookId) ? "build.finish" : check.FailedHookId;
+        var b = new StringBuilder();
+        b.AppendLine(CultureInfo.InvariantCulture, $"# Task {taskId}: Fix failing check `{hookName}` (retry {retryNumber} of {check.GateRetries})");
+        b.AppendLine();
+        b.AppendLine(CultureInfo.InvariantCulture, $"The `build.finish` check `{hookName}` failed at `{WorkflowEngine.Short(check.Head)}`. Fix the fault it reports so all checks pass.");
+        b.AppendLine();
+        b.AppendLine(CultureInfo.InvariantCulture, $"Repository: {state.RepositoryPathForRepo(targetRepo)}");
+        b.AppendLine();
+        b.AppendLine("## Check output");
+        b.AppendLine();
+        b.AppendLine(string.IsNullOrWhiteSpace(check.Output) ? "(no output)" : check.Output.Trim());
+        AppendFixHandback(b, attempt, handoff);
+        return new AgentTask("implement", taskId, attempt, LoadRoleProcedure(state.SkillsRoot, "implement"), b.ToString(), targetRepo);
+    }
+
+    public static AgentTask FixReviewFindings(
+        WorkflowState state,
+        WorkflowReviewRun review,
+        string taskId,
+        int attempt,
+        string? targetRepo,
+        string instructions,
+        IReadOnlyList<string> handoff)
+    {
+        var b = new StringBuilder();
+        b.AppendLine(CultureInfo.InvariantCulture, $"# Task {taskId}: Fix review {review.ReviewNumber} findings");
+        b.AppendLine();
+        b.AppendLine(CultureInfo.InvariantCulture, $"Engineer's fix instructions: {instructions}");
+        b.AppendLine();
+        b.AppendLine(CultureInfo.InvariantCulture, $"Repository: {state.RepositoryPathForRepo(targetRepo)}");
+
+        var findings = FilterFindingsForRepo(state.HighReviewFindings, targetRepo);
+        if (findings.Count > 0)
+        {
+            b.AppendLine();
+            b.AppendLine("## High-severity findings from review " + review.ReviewNumber);
+            b.AppendLine();
+            foreach (var f in findings)
+            {
+                var loc = string.IsNullOrWhiteSpace(f.Repo) ? $"{f.File}:{f.Line}" : $"{f.Repo}, {f.File}:{f.Line}";
+                b.AppendLine(CultureInfo.InvariantCulture, $"- **{f.Id}** ({loc}): {f.Text}");
+            }
+        }
+
+        AppendFixHandback(b, attempt, handoff);
+        return new AgentTask("implement", taskId, attempt, LoadRoleProcedure(state.SkillsRoot, "implement"), b.ToString(), targetRepo);
+    }
+
+    private static List<ReviewFindingSummary> FilterFindingsForRepo(List<ReviewFindingSummary>? findings, string? targetRepo)
+    {
+        if (findings is null || findings.Count == 0)
+        {
+            return [];
+        }
+
+        if (string.IsNullOrWhiteSpace(targetRepo))
+        {
+            return [.. findings];
+        }
+
+        var matching = findings.Where(f => string.IsNullOrWhiteSpace(f.Repo) || string.Equals(f.Repo, targetRepo, StringComparison.Ordinal)).ToList();
+        return matching.Count > 0 ? matching : [.. findings];
+    }
+
+    private static void AppendFixHandback(StringBuilder b, int attempt, IReadOnlyList<string> handoff)
+    {
+        b.AppendLine();
+        b.AppendLine("## What to hand back");
+        b.AppendLine();
+        b.AppendLine("1. Add or update a regression test where behavior changed, fix the fault, and verify tests pass.");
+        b.AppendLine("2. Edit only the working tree. Do not commit, stage, or push, and do not edit `.hoshin/`, `.git/`, or `.agents/`.");
+        b.AppendLine("3. Reply with two or three sentences summarizing the fix.");
+        if (handoff.Count > 0)
+        {
+            b.AppendLine();
+            b.AppendLine(CultureInfo.InvariantCulture, $"## Attempt {attempt}: the previous fix attempt was not accepted");
+            b.AppendLine();
+            foreach (var reason in handoff)
+            {
+                b.AppendLine(CultureInfo.InvariantCulture, $"- {reason}");
+            }
+        }
     }
 
     public static string Intent(WorkflowState state)

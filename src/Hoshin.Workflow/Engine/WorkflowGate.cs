@@ -184,10 +184,11 @@ internal static class WorkflowGate
             return null;
         }
 
-        var allPassedInLedger = state.Plan.Tasks.Count > 0
-            && state.Plan.Tasks.All(t => state.VerdictsForTask(t).Any(v => v.Passed));
+        var completed = WorkflowProgress.CompletedTaskIds(state);
+        var allCompleted = state.Plan.Tasks.Count > 0
+            && state.Plan.Tasks.All(t => completed.Contains(t.Id));
         var isOnlyUnloggedTasks = ready.Review.Stop.StartsWith("These tasks have no build log entry yet:", StringComparison.Ordinal);
-        return allPassedInLedger && isOnlyUnloggedTasks ? null : ready.Review.Stop;
+        return allCompleted && isOnlyUnloggedTasks ? null : ready.Review.Stop;
     }
 
     private static bool IsReadyCandidate(ReadinessMap ready, string skill) => skill switch

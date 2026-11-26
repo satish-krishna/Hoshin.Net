@@ -1,13 +1,18 @@
+using System.Text.RegularExpressions;
+
 namespace Hoshin.Cli.Hooks;
 
 /// <summary>Single owner for Claude Code and Antigravity tool-name lists shared by <see cref="HarnessAdapter"/>, <see cref="Commands.GuardCommand"/>, and hook manifests.</summary>
-public static class HarnessTools
+public static partial class HarnessTools
 {
-    public static readonly string[] ClaudeShellTools = ["Bash"];
+    public static readonly string[] ClaudeShellTools = ["Bash", "PowerShell"];
 
     public static readonly string[] ClaudeFileWriteTools = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 
     public static readonly string[] ClaudeGuardTools = [.. ClaudeShellTools, .. ClaudeFileWriteTools];
+
+    public const string ClaudeMcpWritePushMatcher =
+        @"^mcp__.*(?:write|edit|create|delete|remove|update|push|commit|merge|put|patch|replace|append|move|rename)";
 
     public static readonly string[] ClaudeSkillTools = ["Skill"];
 
@@ -54,4 +59,10 @@ public static class HarnessTools
     public static bool IsSubagentLaunchTool(string? toolName) => toolName is not null && AllSubagentLaunchTools.Contains(toolName);
 
     public static bool IsTaskManageTool(string? toolName) => toolName is not null && AllTaskManageTools.Contains(toolName);
+
+    public static bool IsMcpWriteOrPushTool(string? toolName) =>
+        !string.IsNullOrEmpty(toolName) && McpWritePushRegex().IsMatch(toolName);
+
+    [GeneratedRegex(ClaudeMcpWritePushMatcher, RegexOptions.IgnoreCase)]
+    private static partial Regex McpWritePushRegex();
 }

@@ -33,7 +33,15 @@ All three follow [Conventional Commits](https://www.conventionalcommits.org/).
 2. Open a pull request.
 3. Merge only when CI is green on both Linux and Windows, by squash merge.
 
-`main` should be protected for everyone, administrators included: no direct pushes, no force pushes, and the CI and conventional-names checks required on a branch that is up to date with `main`.
+`main` is protected: changes arrive by pull request, with no force pushes, linear history, and the `ci gate` and `conventional names` checks required on a branch that is up to date with `main`.
+
+### 2.1 Bypass and the acceptance gate
+
+The repository has one owner, and the changes are made by AI agents (Claude Code, Antigravity) working with the owner's credentials. GitHub can't tell the owner and the agents apart, so the protection stops accidents, not people, and administrators can merge past a failing check. These rules are the owner's commitment:
+
+- **Docs emergencies are the only bypass.** That means a pull request that changes only documentation (Markdown outside `src/`, `tests/`, `skills/`, `packaging/` and `.github/`), when a required check can't run or fails for a reason unrelated to the change, such as a GitHub outage. Its description says what happened.
+- **Code never gets the bypass.** That covers source, tests, skills, packaging and CI workflows. A red check on code is fixed, not bypassed, however urgent the change is.
+- **The acceptance gate (`tests/Hoshin.Tests/Acceptance/`) is changed only by the reviewer.** Before merging any pull request, run `git diff origin/main...HEAD -- tests/Hoshin.Tests/Acceptance/`. It must be empty, or show only changes the reviewer made.
 
 ## 3. Design rules (SOLID)
 

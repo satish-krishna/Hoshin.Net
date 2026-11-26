@@ -9,6 +9,8 @@ public interface IWorkflowEventBridge
 {
     bool IsWorkspaceRepo(WorkflowRepo repo);
 
+    int GetGateRetries(WorkflowRepo repo);
+
     EventOutcome? TryFire(
         WorkflowRepo repo,
         string eventName,
@@ -21,6 +23,8 @@ public sealed class NullWorkflowEventBridge : IWorkflowEventBridge
 {
     public bool IsWorkspaceRepo(WorkflowRepo repo) => false;
 
+    public int GetGateRetries(WorkflowRepo repo) => 3;
+
     public EventOutcome? TryFire(
         WorkflowRepo repo,
         string eventName,
@@ -32,16 +36,33 @@ public sealed class NullWorkflowEventBridge : IWorkflowEventBridge
 public sealed class WorkflowEventBridge(
     EventContextFactory contextFactory,
     EventRunner eventRunner,
+    HookConfigService hookConfig,
+    IWorkspaceLocator workspaceLocator,
     IFileSystem fileSystem) : IWorkflowEventBridge
 {
     private readonly EventContextFactory _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
     private readonly EventRunner _eventRunner = eventRunner ?? throw new ArgumentNullException(nameof(eventRunner));
+    private readonly HookConfigService _hookConfig = hookConfig ?? throw new ArgumentNullException(nameof(hookConfig));
+    private readonly IWorkspaceLocator _workspaceLocator = workspaceLocator ?? throw new ArgumentNullException(nameof(workspaceLocator));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+
+    public int GetGateRetries(WorkflowRepo repo)
+    {
+        ArgumentNullException.ThrowIfNull(repo);
+        if (!IsWorkspaceRepo(repo))
+        {
+            return 0;
+        }
+
+        var resolution = _workspaceLocator.TryResolve(repo.Root);
+        var master = resolution?.Master ?? repo.Root;
+        return _hookConfig.ReadFromBaseBranch(master, repo.SystemKey).GateRetries;
+    }
 
     public bool IsWorkspaceRepo(WorkflowRepo repo)
     {
         ArgumentNullException.ThrowIfNull(repo);
-        if (!HasWorkspaceMarker(repo) || !IsIntentLayout(repo))
+        if (!_workspaceLocator.HasWorkspaceMarker(repo.Root) || !IsIntentLayout(repo))
         {
             return false;
         }
@@ -106,21 +127,6 @@ public sealed class WorkflowEventBridge(
         return string.Join("\n", parts);
     }
 
-    private bool HasWorkspaceMarker(WorkflowRepo repo)
-    {
-        if (_fs.FileExists(Path.Combine(repo.Root, MarkerConstants.FileName)))
-        {
-            return true;
-        }
-
-        var parent = Directory.GetParent(repo.Root)?.FullName;
-        return parent is not null && _fs.FileExists(Path.Combine(parent, "master", MarkerConstants.FileName));
-    }
-
-    private static bool IsIntentLayout(WorkflowRepo repo)
-    {
-        var relative = Path.GetRelativePath(repo.Root, repo.ChangeFolder).Replace('\\', '/').Trim('/');
-        var parts = relative.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 3 && parts[0].Equals("intent", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsIntentLayout(WorkflowRepo repo) =>
+        ChangeLedgerPaths.TryExtractIntentSystemAndChange(repo.ChangeFolder, out _, out _);
 }

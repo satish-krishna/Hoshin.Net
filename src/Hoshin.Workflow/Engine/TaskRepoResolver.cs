@@ -31,15 +31,15 @@ public sealed class IdentityTaskRepoResolver : ITaskRepoResolver
         new(StringComparer.Ordinal);
 }
 
-/// <summary>Resolves multi-repo product checkouts and single-repo app ledgers through <see cref="IWorkspaceResolver"/> and <see cref="AppService"/>.</summary>
+/// <summary>Resolves multi-repo product checkouts and single-repo app ledgers through <see cref="IWorkspaceLocator"/> and <see cref="AppService"/>.</summary>
 public sealed class TaskRepoResolver(
-    IWorkspaceResolver resolver,
+    IWorkspaceLocator workspaceLocator,
     AppService apps,
     IGitWorktrees gitWorktrees,
     IFileSystem fileSystem,
     LedgerStore ledgerStore) : ITaskRepoResolver
 {
-    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly IWorkspaceLocator _workspaceLocator = workspaceLocator ?? throw new ArgumentNullException(nameof(workspaceLocator));
     private readonly AppService _apps = apps ?? throw new ArgumentNullException(nameof(apps));
     private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
@@ -62,13 +62,8 @@ public sealed class TaskRepoResolver(
             return masterRepo;
         }
 
-        if (!HasWorkspaceMarker(masterRepo))
-        {
-            return masterRepo;
-        }
-
-        var resolution = _resolver.Resolve(masterRepo.Root, new ResolveOptions(null, null));
-        if (resolution.Master is null || resolution.Workspace is null)
+        var resolution = _workspaceLocator.TryResolve(masterRepo.Root);
+        if (resolution?.Master is null || resolution.Workspace is null)
         {
             return masterRepo;
         }
@@ -126,17 +121,6 @@ public sealed class TaskRepoResolver(
         }
 
         return ledgers;
-    }
-
-    private bool HasWorkspaceMarker(WorkflowRepo repo)
-    {
-        if (_fs.FileExists(Path.Combine(repo.Root, MarkerConstants.FileName)))
-        {
-            return true;
-        }
-
-        var parent = Directory.GetParent(repo.Root)?.FullName;
-        return parent is not null && _fs.FileExists(Path.Combine(parent, "master", MarkerConstants.FileName));
     }
 
     private static IEnumerable<string> DistinctTaskRepos(WorkflowPlan plan) =>

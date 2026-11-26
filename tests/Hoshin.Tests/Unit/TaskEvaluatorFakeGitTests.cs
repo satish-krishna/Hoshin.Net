@@ -99,7 +99,7 @@ public sealed class TaskEvaluatorFakeGitTests
         public int? CountCommits(string dir, string from, string to, IReadOnlyList<string> paths) => 0;
         public List<TrailerCommit> CommitsWithTrailer(string dir, string from, string to, string key, IReadOnlyList<string>? paths = null) => [];
         public string? LastCommitTouching(string dir, string range, IReadOnlyList<string> pathspec) => null;
-        public string? CodeHead(string dir, string excludeRelativePath) => HeadSha;
+        public string? CodeHead(string dir, IReadOnlyList<string> excludeRelativePaths) => HeadSha;
         public string? LastCommitForPath(string dir, string relativePath) => HeadSha;
         public string? RemoteUrl(string dir, string remote) => null;
 

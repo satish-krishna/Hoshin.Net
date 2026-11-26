@@ -162,26 +162,46 @@ public static class ChangeLedgerPaths
         };
     }
 
+    public static bool TryExtractIntentSystemAndChange(string changeFolder, out string system, out string change)
+    {
+        system = "";
+        change = "";
+        if (string.IsNullOrWhiteSpace(changeFolder))
+        {
+            return false;
+        }
+
+        var parts = changeFolder.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = parts.Length - 3; i >= 0; i--)
+        {
+            if (parts[i].Equals("intent", StringComparison.OrdinalIgnoreCase)
+                && !parts[i + 1].Equals("hooks", StringComparison.OrdinalIgnoreCase)
+                && !parts[i + 2].Equals("context", StringComparison.OrdinalIgnoreCase)
+                && !parts[i + 2].Equals("hooks", StringComparison.OrdinalIgnoreCase))
+            {
+                system = parts[i + 1];
+                change = parts[i + 2];
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static (string System, string Change) ResolveSystemAndChange(string root, string changeFolder, IFileSystem fs)
     {
+        if (TryExtractIntentSystemAndChange(changeFolder, out var system, out var change))
+        {
+            return (system, change);
+        }
+
         var relative = Path.GetRelativePath(root, changeFolder).Replace('\\', '/').Trim('/');
-        var parts = relative.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 3 && parts[0].Equals("intent", StringComparison.OrdinalIgnoreCase))
+        if (TryExtractIntentSystemAndChange(relative, out system, out change))
         {
-            return (parts[1], parts[2]);
+            return (system, change);
         }
 
-        var change = ResolveChangeKey(changeFolder, fs);
-        var changePath = Path.Combine(changeFolder, "change.jsonc");
-        if (fs.FileExists(changePath)
-            && Jsonc.TryParse(fs.ReadAllText(changePath), out var parsed, out _)
-            && parsed is { ValueKind: JsonValueKind.Object } obj
-            && Jsonc.String(obj, "scope") is { Length: > 0 } scope)
-        {
-            return (scope, change);
-        }
-
-        return ("default", change);
+        return ("default", ResolveChangeKey(changeFolder, fs));
     }
 
     private static string ResolveRepoName(string root, string system, IFileSystem fs)

@@ -126,7 +126,9 @@ public sealed class RedGreenPolicy : ITaskVerdictPolicy
             testChanges,
             prodPathsForRed,
             taskEnv,
-            taskTimeout);
+            taskTimeout,
+            task.Compile,
+            plan.LinkDirs);
         if (!redCheck.IsValidRed)
         {
             return Failed(context, redCheck.Summary, [$"red: {redCheck.Summary}"]);

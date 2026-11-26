@@ -1,7 +1,5 @@
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
-using Hoshin.Workflow.Events;
-using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Hooks;
 
@@ -17,41 +15,35 @@ public sealed class HookOrchestrator
 
     public HookOrchestrator(
         IHookAdapter adapter,
+        IHookRunResolver runResolver,
         ITaskEvaluator taskEvaluator,
         ICheckRunner checkRunner,
         IApprovalRecorder approvals,
         IPublisher publisher,
         IDocumentCommitter documentCommitter,
-        IGitWorktrees gitWorktrees,
-        IGitQuery gitQuery,
-        IGitStatus gitStatus,
         IFileSystem fileSystem,
-        LedgerStore ledgerStore,
         WorkflowStateReader stateReader,
         IWorkflowEventBridge eventBridge,
         IChangeStarter changeStarter,
         TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(adapter);
+        ArgumentNullException.ThrowIfNull(runResolver);
         ArgumentNullException.ThrowIfNull(taskEvaluator);
         ArgumentNullException.ThrowIfNull(checkRunner);
         ArgumentNullException.ThrowIfNull(approvals);
         ArgumentNullException.ThrowIfNull(publisher);
         ArgumentNullException.ThrowIfNull(documentCommitter);
-        ArgumentNullException.ThrowIfNull(gitWorktrees);
-        ArgumentNullException.ThrowIfNull(gitQuery);
-        ArgumentNullException.ThrowIfNull(gitStatus);
         ArgumentNullException.ThrowIfNull(fileSystem);
-        ArgumentNullException.ThrowIfNull(ledgerStore);
         ArgumentNullException.ThrowIfNull(stateReader);
         ArgumentNullException.ThrowIfNull(eventBridge);
         ArgumentNullException.ThrowIfNull(changeStarter);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
-        var advancer = new WorkflowAdvancer(taskEvaluator, checkRunner, publisher, gitWorktrees, gitQuery, gitStatus, fileSystem, ledgerStore, stateReader, eventBridge);
-        _start = new StartHandler(adapter, approvals, documentCommitter, changeStarter, advancer, fileSystem, timeProvider);
-        _result = new ResultHandler(adapter, taskEvaluator, advancer, fileSystem, timeProvider);
-        _stop = new StopHandler(adapter, documentCommitter, advancer, fileSystem, timeProvider);
+        var advancer = new WorkflowAdvancer(taskEvaluator, checkRunner, publisher, fileSystem, stateReader, eventBridge);
+        _start = new StartHandler(adapter, runResolver, approvals, documentCommitter, changeStarter, advancer, fileSystem, timeProvider);
+        _result = new ResultHandler(adapter, runResolver, taskEvaluator, advancer, fileSystem, timeProvider);
+        _stop = new StopHandler(adapter, runResolver, documentCommitter, advancer, fileSystem, timeProvider);
     }
 
     public (string? Output, string Decision) HandleStart(NormalizedHookEvent ev, string? rolesRoot) =>

@@ -68,11 +68,24 @@ public sealed class CheckRunner(
 
             var allPassed = true;
             var parts = new List<string>();
+            string? failedHookId = null;
+            string? onFailure = null;
+            string? failedRepo = null;
             foreach (var r in reposToCheck)
             {
                 if (_events.TryFire(repo, "build.finish", repoOverride: r) is { } outcome)
                 {
-                    allPassed &= outcome.Outcome == "passed";
+                    if (outcome.Outcome != "passed")
+                    {
+                        allPassed = false;
+                        if (failedRepo is null)
+                        {
+                            failedRepo = r;
+                            failedHookId = outcome.Failed?.Id;
+                            onFailure = outcome.Failed?.OnFailure;
+                        }
+                    }
+
                     var formatted = WorkflowEventBridge.FormatOutcome(outcome);
                     if (!string.IsNullOrWhiteSpace(formatted))
                     {
@@ -81,7 +94,16 @@ public sealed class CheckRunner(
                 }
             }
 
-            var eventCheck = new WorkflowCheckRun(codeHead, allPassed, string.Join("\n", parts), _time.GetUtcNow());
+            var gateRetries = !allPassed ? _events.GetGateRetries(repo) : 0;
+            var eventCheck = new WorkflowCheckRun(
+                codeHead,
+                allPassed,
+                string.Join("\n", parts),
+                _time.GetUtcNow(),
+                failedHookId,
+                onFailure,
+                failedRepo,
+                gateRetries);
             repo.UpdateLedger(l => l with { Checks = new List<WorkflowCheckRun>(l.WorkflowChecks) { eventCheck } });
             return eventCheck;
         }

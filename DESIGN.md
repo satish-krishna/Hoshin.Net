@@ -73,7 +73,7 @@ flowchart TB
 
 ## 3. Workflow State Machine (`WorkflowEngine.Next`)
 
-`WorkflowState` is constructed by `WorkflowStateReader` from `ChangeStateService` (carrying documents with upstream `source_*_commit` pins, `ReadinessMap`, `FixStateService`'s 8-row light-track state, schedule, and progress — with a fallback for standalone `.hoshin/` repos without `.hoshin.json`), git, and the unified per-change/per-repo `RepoLedger` at `.git/hoshin/<system>/<change>/<repo>.json` (managed atomically under `FileLock` by `LedgerStore`, mirroring task verdicts to `reds` and `runs` for `hoshin red show` and `hoshin status`). Both `WorkflowEngine.Next` / `NextForSkill` and `WorkflowGate` stay pure — receiving the computed `ChangeStateItem`, `ReadinessMap`, and `FixStateResult` as values — and gating comes from `ChangeState` (`ReadinessMap`'s `SkillReadiness.Stop` reasons for stale pins, superseded plans, the light-track stop, uncommitted acceptance, and rejection/reopen guards, plus `FixStateService` rows 1–8 for `fix` and `fix --accept`) before falling back to step-owner gating:
+`WorkflowState` is constructed by `WorkflowStateReader` from `ChangeStateService` (carrying documents with upstream `source_*_commit` pins, `ReadinessMap`, `FixStateService`'s 8-row light-track state, schedule, and committed build-log progress — with a fallback for standalone `.hoshin/` repos without `.hoshin.json`), git, and the unified per-change/per-repo `RepoLedger` at `.git/hoshin/<system>/<change>/<repo>.json` (managed atomically under `FileLock` by `LedgerStore`, mirroring task verdicts to `reds` and `runs` for `hoshin red show` and `hoshin status`). In Hoshin workspaces, committed `build/<repo>.md` entries are the source of truth for task completion (`WorkflowProgress.CompletedTaskIds`), while the local ledger acts as a cache of attempts and verdict details; if the ledger and committed build logs ever disagree, the logs win and the disagreement is reported once. Both `WorkflowEngine.Next` / `NextForSkill` and `WorkflowGate` stay pure — receiving the computed `ChangeStateItem`, `ReadinessMap`, and `FixStateResult` as values — and gating comes from `ChangeState` (`ReadinessMap`'s `SkillReadiness.Stop` reasons for stale pins, superseded plans, the light-track stop, uncommitted acceptance, and rejection/reopen guards, plus `FixStateService` rows 1–8 for `fix` and `fix --accept`) before falling back to step-owner gating:
 
 ```mermaid
 stateDiagram-v2
@@ -105,10 +105,12 @@ stateDiagram-v2
     Retry --> RunChecks : "All tasks passed"
 
     RunChecks --> Review : "EventRunner build.finish checks green"
-    RunChecks --> DoneFail : "Checks failed"
+    RunChecks --> Implement : "onFailure: fix & retries <= gateRetries (FIX-CHECK-*)"
+    RunChecks --> DoneFail : "Checks failed (onFailure: stop or gateRetries exhausted)"
 
     Review --> NeedsApproval : "Stop: clean build/review.md committed + review.finish"
-    Review --> DoneFail : "Review has high findings"
+    Review --> Implement : "/hoshin:build <instructions> after high findings (FIX-R*)"
+    Review --> DoneFail : "Review has high findings (no fix instructions yet)"
 
     NeedsApproval --> Publish : "Engineer invokes /accept or /done"
     NeedsApproval --> DoneFail : "Engineer rejects"
@@ -125,9 +127,9 @@ stateDiagram-v2
 - `WriteFix(ChangeFolder, Brief)` — Light-track drafting of `intent.md`, `spec.md`, and `plan.md` together (enforcing 1 repository and ≤ 3 tasks; `FixState` row 3).
 - `AwaitAcceptFix(ChangeFolder, Head, NextDocument)` — Committed light-track fix documents awaiting human `accept` or `fix --accept` (`FixState` rows 4–7), accepting all remaining docs in order with `source_intent_commit` and `source_spec_commit` pins to reach row 8.
 - `Implement(AgentTask)` / `Retry(AgentTask, Handoff)` — Agent work requests carrying the embedded/loaded role procedure and attempt brief, scheduled across repositories via `ScheduleCalculator` and executed in each task's repository checkout (`ITaskRepoResolver`).
-- `RunChecks(Head)` — Executes `EventRunner` `build.finish` hooks per repository (read strictly from the base branch via `HookConfigService`, writing `checks.jsonl`) in Hoshin workspaces, with `BaseBranchChecksReader` fallback in standalone `.hoshin/` repos.
-- `ReviewDocument(Path, Head, Brief)` — Required review gate after `RunChecks` passes, keyed by **code head** (latest commit touching paths outside `<change>/build/review.md`), written and committed to `build/review.md` and firing `review.finish`. High findings stop with `Done(false)`; zero high findings advance to `NeedsApproval`.
-- `NeedsApproval(Head, Reason)` — Built, checked, and cleanly reviewed change waiting for human approval at the current code head.
+- `RunChecks(Head)` — Executes `EventRunner` `build.finish` hooks per repository (read strictly from the base branch via `HookConfigService`, writing `checks.jsonl`) in Hoshin workspaces, with `BaseBranchChecksReader` fallback in standalone `.hoshin/` repos. When a `build.finish` hook fails with `onFailure: "fix"`, `PostBuildFixEngine` dispatches a bounded fix step (`FIX-CHECK-*`, up to `gateRetries`) targeting the failing repository before re-running checks; once `gateRetries` is exhausted, the step ends in `Done(false)`.
+- `ReviewDocument(Path, Head, Brief)` — Required review gate after `RunChecks` passes, keyed by **composite code head** (`WorkflowCodeHead`: sorted `<repo>=<HEAD>` across all touched product repositories in multi-repo workspaces, or the single-repo `CodeHead` excluding `build/review.md` and `change.jsonc` so neither review commits nor `change.done`'s `change.jsonc` PR-record commit invalidate checks, reviews, or published state), written and committed to `build/review.md` and firing `review.finish`. High findings stop with `Done(false)` until the engineer invokes `/hoshin:build <instructions>` from the target repository, which dispatches a fix subagent (`FIX-R<n>`) carrying the findings and instructions, commits the fix (`test(...)` / `fix(...)`), moves that repository's head in the composite code head, re-runs `build.finish` checks, and advances to the next review; zero high findings advance to `NeedsApproval`.
+- `NeedsApproval(Head, Reason)` — Built, checked, and cleanly reviewed change waiting for human approval at the current code head. Once approved and published (`Done(true)`), `StartHandler` clears `run.json` and turn files so every subsequent hook across all workspace sessions remains quiet and `/hoshin:build` dispatches nothing.
 - `Publish(Head, Ref)` — Fires `EventRunner` `change.done` (`ChangeDoneStep`) in Hoshin workspaces (pushing every repository on `change/<change>` and opening/reusing PRs via `IPullRequestClient`), with direct push + PR fallback in standalone `.hoshin/` repos.
 - `Done(Success, Outcome)` — Terminal state.
 
@@ -162,9 +164,10 @@ sequenceDiagram
         Runner->>Git: Record failed verdict (0 commits, working tree kept)
         Runner-->>Agent: Retry with diagnostic handoff
     else Green passes
-        Runner->>WT: Checkout startHead + overlay ONLY testFiles
-        Runner->>WT: Run task.Test (isolated Red check)
+        Runner->>WT: Checkout startHead + link gitignored deps + overlay ONLY testFiles
+        Runner->>WT: Run task.Compile (if set) then task.Test (isolated Red check)
         Runner->>Runner: RedClassifier.Classify(output)
+        Runner->>WT: Unlink gitignored deps + clean worktree
         alt Valid Red (assertion failure or missing symbol CS0246/CS0103/CS1061/TS2304/ESM)
             Runner->>Git: Commit testFiles -> test(scope): title + Plan-Task + Generated-By
             Runner->>Git: Commit prodFiles -> feat/fix(scope): title + Plan-Task + Generated-By
@@ -179,6 +182,8 @@ sequenceDiagram
 ```
 
 ### Strongly-Typed Red Classification (`RedClassifier`)
+
+Before running the task's `test` command in the detached Red worktree (`.git/hoshin/worktrees/red-check`), `RedWorktree` temporarily links gitignored dependency directories (`node_modules`, `.venv`, `venv`, plus any relative folders listed in `.hoshin.json` `build.linkDirs`) from the main checkout into the worktree without copying files (symbolic links on Unix/Windows, falling back to NTFS directory junctions on Windows when symlink creation is unprivileged) and unlinks them before cleaning the worktree so nothing from them is ever modified or committed. If the task defines a `compile` command, `RedWorktree` runs `compile` in the worktree first; a compile failure counts as valid Red only when `RedClassifier` classifies it as `RedKind.MissingSymbol` (any other compile failure is rejected as invalid Red).
 
 - **Valid Red:**
   - Test assertion / runtime failure (`RedKind.AssertionFailure`).
@@ -206,10 +211,10 @@ Plan tasks may omit `test` or set `"test": null` for non-testable work (configur
 | Lifecycle Boundary | Claude Code Hook | Antigravity Hook | Command | Behavior |
 | :--- | :--- | :--- | :--- | :--- |
 | **Skill / Step Start** | `UserPromptExpansion`, `PostToolUse` (`Skill`) | `PreInvocation`, `PostToolUse` (`read_file` / `view_file` on `SKILL.md`) | `hoshin hook start` | Gates the invoked skill via `WorkflowEngine.Gate`, writes `run.json` + `step.json`, runs non-agent steps, and injects the active step brief (`< 10,000` chars). `accept` and `done` are strictly human-only (`disable-model-invocation: true` and user-sourced events only). |
-| **Pre-Tool Guard** | `PreToolUse` (`Bash`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`) | `PreToolUse` (`run_command`, `write_file`, `edit_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`) | `hoshin guard` | Scoped strictly to repositories with an active, non-stale `.git/hoshin/run.json` matching the calling session (or its active subagent); enforces static protections and fast-path step rules from `step.json` without recomputing `WorkflowState`, staying silent outside active runs. |
+| **Pre-Tool Guard** | `PreToolUse` (`Bash`, `PowerShell`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, plus `mcp__*` write/push tools) | `PreToolUse` (`run_command`, `write_file`, `edit_file`, `write_to_file`, `replace_file_content`, `multi_replace_file_content`) | `hoshin guard` | Scoped strictly to repositories with an active, non-stale `.git/hoshin/run.json` matching the calling session (or its active subagent); enforces static protections and fast-path step rules from `step.json` without recomputing `WorkflowState` (denying `mcp__*` write/push tools during builds and authoring), staying silent outside active runs. |
 | **Subagent Result** | `PostToolUse` (`Agent`, `Task`) | `PostToolUse` (`invoke_subagent`, `manage_task`, `manage_subagents`) | `hoshin hook result` | Foreground: judges attempt immediately and injects next step. Async: records `ActiveSubagent` in ledger, refuses conflicting concurrent launches, instructs orchestrator to wait. |
 | **Async Subagent Stop** | `SubagentStop` | Handled on parent `Stop` (`fullyIdle: true`) | `hoshin hook subagent-stop` | Judges completed background subagent by matching `agentId`. |
-| **Turn End / Gate** | `Stop` | `Stop` | `hoshin hook stop` | Yields while background subagent runs (`background_tasks` running or `fullyIdle: false`); stays silent during open authoring interviews; validates, auto-wraps, pins, and commits clean drafts; blocks (`block` / `continue`) with diagnostics or next build step up to 3 consecutive stops; allows clean exit at `NeedsApproval` or `Done`. |
+| **Turn End / Gate** | `Stop` | `Stop` | `hoshin hook stop` | Yields while background subagent runs (`background_tasks` running or `fullyIdle: false`); stays silent during open authoring interviews; validates, auto-wraps, pins, and commits clean drafts; blocks (`block` / `continue`) with diagnostics or next build step up to 3 consecutive stops before marking `run.json` as `parked: true` (so the guard turns off, unrelated sessions are never trapped, and any new session can resume with `/hoshin:build`); missing-`run.json` tampering checks apply only to the run's owning session when `stop_hook_active` is false; allows clean exit at `NeedsApproval` or `Done`. |
 
 ### Async Subagent Orchestration Across Both Harnesses
 
@@ -251,7 +256,7 @@ sequenceDiagram
 
 ### Session-Aware Guard Isolation
 
-`GuardCommand` scopes every rule — static protections (`git push`, `gh pr`, protected hook configs, `baseline approve/retake`) and step-specific rules (no manual `git commit`, Red-phase test-first, single-document lock) — strictly to repositories with an active, non-stale `.git/hoshin/run.json` (24-hour window) whose owning `session_id`/`conversationId` matches the incoming event or its registered active subagent. Outside an active run (including any plain git repository or unrelated session), `hoshin guard` and `hoshin hook` stay silent, create no `.git/hoshin/` directory, and write no `hooks.jsonl` trace. Static denials inside an active run are traced to `hooks.jsonl`. The shell regex guard is a fast-path speed bump; real workflow integrity is enforced in `Hoshin.Workflow` (`WorkflowHeadGuard` rejects any attempt where `HEAD` moved outside library-owned commits, and `EvaluateAndCommitTask` verifies Red/Green and protected paths before committing).
+`GuardCommand` and every `hoshin hook` subcommand resolve the active run through a single injected `IHookRunResolver` (`HookRunResolver`), and all workspace marker detection goes through one `IWorkspaceLocator` (`WorkspaceLocator` over `WorkspaceResolver`) regardless of the master folder's name. Ledger coordinates are always extracted from `intent/<system>/<change>` rather than `scope`. When `/hoshin:build` runs in a session started inside a product repository, `WorkflowEngine` dispatches only that repository's tasks and tells the engineer which repository (or `review`) comes next once that repository's tasks finish. In a Hoshin workspace, `run.json`, `step.json`, `hooks.jsonl`, and per-repo ledgers live in one canonical location — `<master-git-common-dir>/hoshin/` — which the master checkout, every change copy worktree (`.hoshin/copies/<change>`), and every declared product repository all resolve to; `WorkflowRepo.Root` always points to the checkout that actually holds the active change folder (the copy when one exists). `GuardCommand` scopes every rule — static protections (`git push`, `gh pr`, protected hook configs, `baseline approve/retake`) and step-specific rules (no manual `git commit`, Red-phase test-first, single-document lock) — strictly to repositories with an active, non-stale `run.json` (24-hour window) whose owning `session_id`/`conversationId` matches the incoming event or its registered active subagent. Outside an active run (including any plain git repository or unrelated session), `hoshin guard` and `hoshin hook` stay silent, create no `.git/hoshin/` directory, and write no `hooks.jsonl` trace. Static denials inside an active run are traced to `hooks.jsonl`. If `hoshin hook` hits an internal error in `start`, `result`, or `stop`, it still exits `0` and writes to `stderr`, but also emits a visible harness message (non-blocking on `stop` so a crash never traps the session) and records the exception in `hooks.jsonl`. The shell regex guard is a fast-path speed bump; real workflow integrity is enforced in `Hoshin.Workflow` (`WorkflowHeadGuard` rejects any attempt where `HEAD` moved outside library-owned commits, and `EvaluateAndCommitTask` verifies Red/Green and protected paths before committing).
 
 ## 6. Document Formats, Validation & Migration
 

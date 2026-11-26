@@ -45,7 +45,15 @@ public sealed class HarnessPayloadFixtureTests
             {
                 if (entry.TryGetProperty("matcher", out var matcherProp) && matcherProp.ValueKind == JsonValueKind.String)
                 {
-                    foreach (var tool in matcherProp.GetString()!.Split('|', StringSplitOptions.RemoveEmptyEntries))
+                    var matcher = matcherProp.GetString()!;
+                    if (string.Equals(matcher, HarnessTools.ClaudeMcpWritePushMatcher, StringComparison.Ordinal))
+                    {
+                        var mcpPath = HookFixtureLoader.FixturePath("claude-code", $"{eventName}-mcp-write");
+                        Assert.True(File.Exists(mcpPath), $"Missing Claude Code fixture for {eventName} (mcp write/push): {mcpPath}");
+                        continue;
+                    }
+
+                    foreach (var tool in matcher.Split('|', StringSplitOptions.RemoveEmptyEntries))
                     {
                         var path = HookFixtureLoader.FixturePath("claude-code", $"{eventName}-{tool}");
                         Assert.True(File.Exists(path), $"Missing Claude Code fixture for {eventName} ({tool}): {path}");
@@ -99,6 +107,8 @@ public sealed class HarnessPayloadFixtureTests
     [
         new("claude-code", "UserPromptExpansion", HookHarness.ClaudeCode, "UserPromptExpansion", null),
         new("claude-code", "PreToolUse-Bash", HookHarness.ClaudeCode, "PreToolUse", "Bash", IsShell: true),
+        new("claude-code", "PreToolUse-PowerShell", HookHarness.ClaudeCode, "PreToolUse", "PowerShell", IsShell: true),
+        new("claude-code", "PreToolUse-mcp-write", HookHarness.ClaudeCode, "PreToolUse", "mcp__github__push_files"),
         new("claude-code", "PreToolUse-Edit", HookHarness.ClaudeCode, "PreToolUse", "Edit", IsFileWrite: true),
         new("claude-code", "PreToolUse-Write", HookHarness.ClaudeCode, "PreToolUse", "Write", IsFileWrite: true),
         new("claude-code", "PreToolUse-MultiEdit", HookHarness.ClaudeCode, "PreToolUse", "MultiEdit", IsFileWrite: true),

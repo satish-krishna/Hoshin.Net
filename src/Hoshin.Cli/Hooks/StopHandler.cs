@@ -6,6 +6,7 @@ namespace Hoshin.Cli.Hooks;
 /// <summary>Handles <c>hoshin hook stop</c> (tampering checks, async verdict reporting, document/review/fix commit loops, and step advancement).</summary>
 internal sealed class StopHandler(
     IHookAdapter adapter,
+    IHookRunResolver runResolver,
     IDocumentCommitter documents,
     WorkflowAdvancer advancer,
     IFileSystem fileSystem,
@@ -14,6 +15,7 @@ internal sealed class StopHandler(
     private const int MaxStopBlocks = 3;
 
     private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+    private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
     private readonly IDocumentCommitter _documents = documents ?? throw new ArgumentNullException(nameof(documents));
     private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
@@ -21,15 +23,16 @@ internal sealed class StopHandler(
 
     public (string? Output, string Decision) Handle(NormalizedHookEvent ev, string? rolesRoot)
     {
-        var repo = _advancer.ResolveRepo(ev);
-        if (repo is null)
+        var resolved = _runResolver.Resolve(ev);
+        if (resolved is null)
         {
             return (_adapter.EmptyOutput(ev.Harness), "no run");
         }
 
+        var repo = resolved.WorkflowRepo;
         if (!_fs.FileExists(repo.RunMarkerPath))
         {
-            var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, _advancer.StateReader, rolesRoot);
+            var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, ev, _advancer.StateReader, rolesRoot);
             return tamper is not null
                 ? (_adapter.BlockStopOutput(ev.Harness, tamper), "block: run.json tampering detected")
                 : (_adapter.EmptyOutput(ev.Harness), "no run");
@@ -48,8 +51,9 @@ internal sealed class StopHandler(
             return wait;
         }
 
-        var verdictReport = CollectVerdictReport(ev, repo, rolesRoot, current, trackedAgentId);
-        return DispatchActiveStepStop(ev, repo, rolesRoot, current, verdictReport);
+        var sessionRepo = resolved.ProductRepoName;
+        var verdictReport = CollectVerdictReport(ev, repo, rolesRoot, current, trackedAgentId, sessionRepo);
+        return DispatchActiveStepStop(ev, repo, rolesRoot, current, verdictReport, sessionRepo);
     }
 
     private (string? Output, string Decision)? WaitForRunningBackgroundSubagent(NormalizedHookEvent ev, string? trackedAgentId)
@@ -72,14 +76,15 @@ internal sealed class StopHandler(
         WorkflowRepo repo,
         string? rolesRoot,
         CurrentStep? current,
-        string? trackedAgentId)
+        string? trackedAgentId,
+        string? sessionRepo)
     {
         var report = TurnState.DrainPendingReport(repo, _fs);
         if (current is { Task: not null }
             && trackedAgentId is not null
             && !repo.ReadLedger().WorkflowVerdicts.Any(v => v.Task == current.Task && v.Attempt == current.Attempt))
         {
-            var (verdict, _) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId);
+            var (verdict, _) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId, sessionRepo);
             report += WorkflowAdvancer.ReportVerdict(current, verdict);
         }
 
@@ -91,12 +96,13 @@ internal sealed class StopHandler(
         WorkflowRepo repo,
         string? rolesRoot,
         CurrentStep? current,
-        string verdictReport)
+        string verdictReport,
+        string? sessionRepo)
     {
         var hasReport = verdictReport.Length > 0;
         if (current?.Kind == StepKind.Review)
         {
-            if (hasReport && _advancer.ReadState(repo, rolesRoot, out _) is { } rs && WorkflowEngine.Next(rs) is ReviewDocument rv)
+            if (hasReport && _advancer.ReadState(repo, rolesRoot, out _, sessionRepo) is { } rs && WorkflowEngine.Next(rs) is ReviewDocument rv)
             {
                 return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(rv, ev.Harness, prefix: verdictReport)), "continue: report Review");
             }
@@ -109,7 +115,7 @@ internal sealed class StopHandler(
             return StopWhileFixing(ev, repo, rolesRoot);
         }
 
-        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
+        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, sessionRepo: sessionRepo, buildInstructions: current?.FixInstructions);
         return step is WriteDocument write
             ? StopWhileWriting(ev, repo, rolesRoot, write)
             : HandleAdvancedStepStop(ev, repo, step, verdictReport, hasReport);
@@ -129,7 +135,11 @@ internal sealed class StopHandler(
                 if (blocks > MaxStopBlocks)
                 {
                     TurnState.ClearTurnFiles(repo, _fs);
-                    TurnState.TryDelete(repo.RunMarkerPath, _fs);
+                    var existing = repo.ReadRunMarker();
+                    var parked = existing is not null
+                        ? existing with { Parked = true }
+                        : new RunMarker(_time.GetUtcNow(), ev.SessionId, ev.HarnessName, repo.ChangeFolder, repo.ChangeKey, Parked: true);
+                    repo.WriteRunMarker(parked);
                     return (_adapter.SystemMessageOutput(ev.Harness, $"hoshin: parked after {MaxStopBlocks} stops without taking the step ({step.Kind})."), $"parked after {blocks - 1} blocks");
                 }
 
@@ -159,7 +169,8 @@ internal sealed class StopHandler(
 
     private (string? Output, string Decision) StopWhileWriting(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot, WriteDocument write)
     {
-        var state = _advancer.ReadState(repo, rolesRoot, out _)!;
+        var state = _advancer.ReadState(repo, rolesRoot, out var error)
+            ?? throw new InvalidOperationException(error ?? $"Could not read workflow state for {repo.Root} ({repo.ChangeFolder}).");
         var docName = write.Document.ToWireName();
         var doc = state.Document(write.Document);
         var shown = Path.GetRelativePath(repo.Root, write.Path).Replace('\\', '/');

@@ -97,7 +97,8 @@ public static class WorkflowPlanLoader
             EnvAllow: settings.EnvAllow,
             TestTimeoutSeconds: settings.TestTimeoutSeconds,
             CheckTimeoutSeconds: settings.CheckTimeoutSeconds,
-            MaxAttempts: settings.MaxAttempts);
+            MaxAttempts: settings.MaxAttempts,
+            LinkDirs: settings.LinkDirs);
     }
 
     private static WorkflowPlan? LoadMetadataOnly(
@@ -128,7 +129,8 @@ public static class WorkflowPlanLoader
             EnvAllow: settings.EnvAllow,
             TestTimeoutSeconds: settings.TestTimeoutSeconds,
             CheckTimeoutSeconds: settings.CheckTimeoutSeconds,
-            MaxAttempts: settings.MaxAttempts);
+            MaxAttempts: settings.MaxAttempts,
+            LinkDirs: settings.LinkDirs);
     }
 
     private static WorkflowTask ToWorkflowTask(ParsedTask t) =>

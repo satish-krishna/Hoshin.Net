@@ -19,7 +19,7 @@ public interface IGitQuery
     int? CountCommits(string dir, string from, string to, IReadOnlyList<string> paths);
     List<TrailerCommit> CommitsWithTrailer(string dir, string from, string to, string key, IReadOnlyList<string>? paths = null);
     string? LastCommitTouching(string dir, string range, IReadOnlyList<string> pathspec);
-    string? CodeHead(string dir, string excludeRelativePath);
+    string? CodeHead(string dir, IReadOnlyList<string> excludeRelativePaths);
     string? LastCommitForPath(string dir, string relativePath);
     string? RemoteUrl(string dir, string remote);
 }

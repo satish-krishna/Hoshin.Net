@@ -29,8 +29,8 @@ public static class Program
             ("change", () => new ChangeCommand(services.Resolver, services.Git, services.Git, services.Git, services.MarkerReader, services.ChangeLocator, services.EventRunner, services.ScopeRules, services.ChangeRename, services.ChangeRemove, services.ChangeRecords, services.PullRequests, services.Apps)),
             ("commit", () => new CommitCommand(services.Committer)),
             ("gate", () => new GateCommand(services.Git, services.Git, services.Git, services.BuildStartStep, services.ChangeRecords, services.Progress, services.Apps, services.Ledger, services.HookConfig)),
-            ("guard", () => new GuardCommand(services.HookAdapter, services.Git, services.Git, services.Git, services.FileSystem, services.Ledger, services.TimeProvider)),
-            ("hook", () => new HookCommand(services.HookAdapter, services.HookOrchestrator, services.Git, services.Git, services.Git, services.FileSystem, services.Ledger)),
+            ("guard", () => new GuardCommand(services.HookAdapter, services.HookRunResolver, services.FileSystem, services.TimeProvider)),
+            ("hook", () => new HookCommand(services.HookAdapter, services.HookOrchestrator, services.HookRunResolver)),
             ("baseline", () => new BaselineCommand(services.EventContext, services.BaselineTaker, services.HookConfig, services.BaselineApprovals)),
             ("red", () => new RedCommand(services.EventContext, services.BaselineTaker, services.RedVerdict, services.RedRecorder)),
         ];

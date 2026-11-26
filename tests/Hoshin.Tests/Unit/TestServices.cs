@@ -83,19 +83,18 @@ internal static class TestServices
     {
         var r = runner ?? WorkflowRunner;
         var g = git ?? Git;
-        var ledger = git is null ? Ledger : new LedgerStore(g, FileSystem);
+        var runResolver = git is null
+            ? Default.HookRunResolver
+            : new HookRunResolver(Resolver, MarkerReader, g, g, g, FileSystem, new LedgerStore(g, FileSystem));
         return new(
             adapter ?? HookAdapter,
+            runResolver,
             r,
             r,
             r,
             r,
             r,
-            g,
-            g,
-            g,
             FileSystem,
-            ledger,
             WorkflowStateReader,
             Default.WorkflowEventBridge,
             Default.ChangeStarter,
@@ -108,7 +107,9 @@ internal static class TestServices
         TimeProvider? timeProvider = null)
     {
         var g = git ?? Git;
-        var ledger = git is null ? Ledger : new LedgerStore(g, FileSystem);
-        return GuardCommand.Evaluate(ev, g, g, g, FileSystem, ledger, timeProvider ?? Time);
+        var runResolver = git is null
+            ? Default.HookRunResolver
+            : new HookRunResolver(Resolver, MarkerReader, g, g, g, FileSystem, new LedgerStore(g, FileSystem));
+        return GuardCommand.Evaluate(ev, runResolver, FileSystem, timeProvider ?? Time);
     }
 }

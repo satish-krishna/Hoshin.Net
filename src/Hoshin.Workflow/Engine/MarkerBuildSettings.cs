@@ -10,7 +10,8 @@ internal sealed record MarkerBuildSettings(
     string[]? EnvAllow,
     int TestTimeoutSeconds,
     int CheckTimeoutSeconds,
-    int MaxAttempts)
+    int MaxAttempts,
+    string[]? LinkDirs = null)
 {
     public const int DefaultTestTimeoutSeconds = 300;
     public const int DefaultCheckTimeoutSeconds = 600;
@@ -20,7 +21,8 @@ internal sealed record MarkerBuildSettings(
         null,
         DefaultTestTimeoutSeconds,
         DefaultCheckTimeoutSeconds,
-        WorkflowEngine.MaxAttempts);
+        WorkflowEngine.MaxAttempts,
+        null);
 
     public static MarkerBuildSettings Read(string repoRoot, IFileSystem fs)
     {
@@ -46,11 +48,17 @@ internal sealed record MarkerBuildSettings(
         var testTimeout = DefaultTestTimeoutSeconds;
         var checkTimeout = DefaultCheckTimeoutSeconds;
         var maxAttempts = WorkflowEngine.MaxAttempts;
+        string[]? linkDirs = null;
         if (obj.TryGetProperty("build", out var buildProp) && buildProp.ValueKind == JsonValueKind.Object)
         {
             testTimeout = PositiveInt(buildProp, "testTimeoutSeconds", testTimeout);
             checkTimeout = PositiveInt(buildProp, "checkTimeoutSeconds", checkTimeout);
             maxAttempts = PositiveInt(buildProp, "maxAttempts", maxAttempts);
+            var configuredLinks = Jsonc.Strings(buildProp, "linkDirs").Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+            if (configuredLinks.Length > 0)
+            {
+                linkDirs = configuredLinks;
+            }
         }
 
         return new MarkerBuildSettings(
@@ -58,7 +66,8 @@ internal sealed record MarkerBuildSettings(
             envAllow,
             testTimeout,
             checkTimeout,
-            maxAttempts);
+            maxAttempts,
+            linkDirs);
     }
 
     private static int PositiveInt(JsonElement obj, string name, int fallback) =>

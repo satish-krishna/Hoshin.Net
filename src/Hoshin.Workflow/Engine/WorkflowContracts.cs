@@ -28,7 +28,8 @@ public sealed record WorkflowPlan(
     string[]? EnvAllow = null,
     int TestTimeoutSeconds = 300,
     int CheckTimeoutSeconds = 600,
-    int MaxAttempts = WorkflowEngine.MaxAttempts)
+    int MaxAttempts = WorkflowEngine.MaxAttempts,
+    string[]? LinkDirs = null)
 {
     public string EffectiveBranch => string.IsNullOrWhiteSpace(Branch) ? $"change/{Change}" : Branch;
 
@@ -58,7 +59,7 @@ public sealed record WorkflowDocState(
     string? Pin = null);
 
 /// <summary>Work handed to an agent: the role's procedure text and the attempt brief.</summary>
-public sealed record AgentTask(string Role, string Task, int Attempt, string Instructions, string Brief)
+public sealed record AgentTask(string Role, string Task, int Attempt, string Instructions, string Brief, string? TargetRepo = null)
 {
     public string Prompt => $"{Instructions.Trim()}\n\n---\n\n{Brief.Trim()}\n";
 }
@@ -186,7 +187,18 @@ public sealed record WorkflowVerdict(
     DateTimeOffset At,
     string? TestCommit = null);
 
-public sealed record WorkflowCheckRun(string Head, bool Passed, string Output, DateTimeOffset At);
+public sealed record WorkflowCheckRun(
+    string Head,
+    bool Passed,
+    string Output,
+    DateTimeOffset At,
+    string? FailedHookId = null,
+    string? OnFailure = null,
+    string? FailedRepo = null,
+    int GateRetries = 0);
+
+/// <summary>Pure summary of a high/critical review finding extracted from <c>build/review.md</c> for fix-step briefs.</summary>
+public sealed record ReviewFindingSummary(string Id, string? Repo, string File, int Line, string Text);
 
 public sealed record WorkflowBaselineRun(string BaseHead, bool Passed, string Output, DateTimeOffset At);
 
@@ -221,15 +233,19 @@ public sealed record CurrentStep(
     string[]? TaskTestFiles = null,
     string? Change = null,
     string? DispatchNonce = null,
-    bool HasTest = true);
+    bool HasTest = true,
+    string? TargetRepo = null,
+    bool IsFix = false,
+    string? FixInstructions = null);
 
-/// <summary>Active run marker stored in <c>.git/hoshin/run.json</c> identifying the owning session and harness.</summary>
+/// <summary>Active run marker stored in <c>.git/hoshin/run.json</c> identifying the owning session, harness, and parked state.</summary>
 public sealed record RunMarker(
     DateTimeOffset Started,
     string? SessionId = null,
     string? Harness = null,
     string? ChangeFolder = null,
-    string? Change = null);
+    string? Change = null,
+    bool Parked = false);
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(CurrentStep))]
