@@ -9,7 +9,7 @@ This file turns [ANALYSIS.md](ANALYSIS.md) into discrete work items that a codin
 
 The IDs in brackets (S1, E2, L4, …) point back to the matching section of ANALYSIS.md, which has the full reasoning.
 
-**Round 1** (the tasks below, `T01`–`T43`, `A1`–`A8`) is done; it landed as PR #5. **Round 2** (`R00`–`R20`) is at the end of this file, under "Round 2 — close the lifecycle". It has its own rules: read them before starting any round-2 task.
+**Round 1** (the tasks below, `T01`–`T43`, `A1`–`A8`) is done; it landed as PR #5. **Round 2** (`R00`–`R09`) is under "Round 2 — close the lifecycle"; it is PR #6. **Round 3** (`R10`–`R40` and `B01`–`B15`) is at the end of this file, under "Round 3 — ready to replace hoshin". It takes in round 2's later tiers and EPIC-B. Each round has its own rules: read them before starting a task in that round.
 
 ---
 
@@ -176,7 +176,7 @@ The order is the order of work. **G** tasks make CONTRIBUTING.md enforceable, so
 | T21 | P2 | Small reader and validator fixes (batch) | L11, L12 | — | done |
 | T37 | P2 | Fix false and stale doc claims | §7 | — | done |
 | T38 | P2 | Recorded harness payload fixtures | §5.2, §9 | — | done |
-| EPIC-B | P1 | Restore the dropped skill guidance, templates and evals | §6 | — | open (needs a human reviewer) |
+| EPIC-B | P1 | Restore the dropped skill guidance, templates and evals | §6 | — | moved to round 3 (B01–B15) |
 
 ---
 
@@ -1038,7 +1038,7 @@ Goal: System B's engine and harness adapter, driven by System A's domain service
 
 ### EPIC-B · Restore the dropped skill guidance, templates and evals
 
-ANALYSIS §6 lists what was dropped. This needs a human reviewer for each skill. The judgment rules have to be rewritten harness-neutrally to satisfy AGENTS.md invariant 5. Port `hoshin/references/templates/*` and the `hoshin/evals` cases, and add an eval runner. Make this its own plan, with one PR per skill.
+Moved to round 3, at the end of this file, as tasks B01–B15. Its evals are a reviewer-owned gate there (B02, B03), so a person still reviews every skill: through the cases they wrote, not by reading the procedure.
 
 ---
 
@@ -1068,7 +1068,7 @@ Every rule of round 1's "How to work through this file" still applies, with thes
 ### Delivery
 
 - **Branch:** `fix/round-2`. It exists, and its first commits are the gate (`617291d`), the review docs and this part of TASKS.md. Don't rebase those away.
-- **Scope of the branch:** R01–R09 (tier R1) only. They are what the gate needs. R10–R20 go in later branches, one pull request per tier, after this branch merges.
+- **Scope of the branch:** R01–R09 (tier R1) only. They are what the gate needs. R10–R20 moved to round 3, which the engineer chose to deliver as one pull request after this branch merges.
 - **Pull request:** a draft, opened by the engineer, titled `fix(workflow)!: close the workflow lifecycle`. Its description keeps a Tasks table (task, commit subject, status, where the gate fails after it) and the "Gate disputes" section.
 - **Commits:** one per task, in index order, with round 1's trailers plus one:
   ```
@@ -1084,7 +1084,7 @@ Every rule of round 1's "How to work through this file" still applies, with thes
 
 ### D6 — How does the engineer decline at approval?
 
-Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reason>` at `NeedsApproval` records a declined approval with the reason, and the change goes back to the fix loop of R06, like a review finding; (b) declining means "don't approve", and the engineer then runs a fix build with instructions. **Recommendation:** (a). It keeps a record of why, and it reuses R06's loop. **Answer:** _(open)_
+Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reason>` at `NeedsApproval` records a declined approval with the reason, and the change goes back to the fix loop of R06, like a review finding; (b) declining means "don't approve", and the engineer then runs a fix build with instructions. **Recommendation:** (a). It keeps a record of why, and it reuses R06's loop. **Answer: (a), with its own command.** Decided by the engineer, 2026-11-26: a typed `/hoshin:decline <reason>`, not `reject`. Round 3's B15 makes `/hoshin:reject` close a change for good, and one command that means "fix this" or "close this" depending on the change's state is how a change gets closed by mistake. See R22.
 ## Round 2 index
 
 | ID | Tier | Title | Fixes | Needs | Gate stage | Status |
@@ -1095,23 +1095,13 @@ Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reas
 | R03 | R1 | One workspace locator; sessions anywhere; a session builds only its repository | W4, W5, W13 | R02 | 2, 3 | done |
 | R04 | R1 | Red runs `compile`, and sees the repository's gitignored tools | E14, E15 | — | 2, 3 | done |
 | R05 | R1 | Progress comes from the committed build logs | W6 | R02 | — (own test) | done |
-| R06 | R1 | A fix loop after checks, review and approval | W3 | R02, D6 for the approval part | 4, 5, 6 | checks & review done (approval awaits D6) |
+| R06 | R1 | A fix loop after checks, review and approval | W3 | R02, D6 for the approval part | 4, 5, 6 | done for checks & review; the approval part moved to round 3 as R22 |
 | R07 | R1 | Publishing reaches `Done` and stays there | W1 | R02 | 8, 9 | done |
 | R08 | R1 | A parked build traps no session and can be resumed | W2 | R02 | companion 2 | done |
 | R09 | R1 | The guard sees every shell and write tool | S11 | — | companion 3 | done |
-| R10 | R2 | `migrate` keeps in-flight changes valid | L13, L14, L15, L16 | — | — | open |
-| R11 | R2 | One stray commit doesn't burn every attempt | W7 | — | — | open |
-| R12 | R2 | Honor event refusals; fail loudly on an unresolved repository | W8, W9 | R03 | — | open |
-| R13 | R2 | Pin the base ref; authenticate approvals | S12, S13 | — | — | open |
-| R14 | R2 | Event hooks and `red record` get the allow-listed environment | S9 | — | — | open |
-| R15 | R2 | Retry atomic replace on Windows sharing violations | L17 | — | — | open |
-| R16 | R2 | Narrow the guard's shell matching to stop false denials | S18 | R09 | — | open |
-| R17 | R3 | Make the architecture baseline shrink-only and close the scanner holes | C1, C2, C3 | — | — | open |
-| R18 | R3 | Run the `yaml.mjs` differential in CI; record real harness payloads | §8, §10.4 | — | — | open |
-| R19 | R3 | Restore `start`/triage; package `reject` and `reopen` | §9, H13 | D6 | — | open |
-| R20 | R3 | Publish a marketplace entry, tag a release, fix the doc claims | §11 | — | — | open |
+| R10–R20 | R2, R3 | Integrity, data, enforcement and parity | — | — | — | moved to round 3 |
 
-Findings without a task here (W10, S14–S17, E16–E21, L18, C4) stay in ANALYSIS.md for a later round. "Gate stage" names the numbered comment in `WholeChange_…` that the task should get the gate past, or the companion test it should turn green.
+The findings this round left without a task (W10, S14–S17, E16–E21, L18, C4) now have round-3 tasks, apart from the ones round 3 lists under "Accepted differences". "Gate stage" names the numbered comment in `WholeChange_…` that the task should get the gate past, or the companion test it should turn green. "Gate stage" names the numbered comment in `WholeChange_…` that the task should get the gate past, or the companion test it should turn green.
 
 ## R1 — make the normal path work
 
@@ -1214,21 +1204,551 @@ Findings without a task here (W10, S14–S17, E16–E21, L18, C4) stay in ANALYS
 - **Test first:** `guard` with `tool_name: PowerShell` and `git push origin HEAD:refs/heads/main` during an active build is denied; the shipped `hooks.json` matcher contains `PowerShell`.
 - **Done when:** the test passes, and the gate's `ActiveBuild_…` test passes.
 
-## R2 — integrity and data (later branch)
+## R2 and R3 — moved to round 3
 
-These get full task write-ups before their branch starts. ANALYSIS.md §§5–8 has the failures and file references.
+R10–R20 are no longer delivered in later round-2 branches. The engineer moved them into round 3 (below), with full write-ups, to be delivered in one pull request.
 
-- **R10 · `migrate` keeps in-flight changes valid** (L13–L16): re-pin accepted documents to the migrated upstream commit; read back and compare the output before deleting the source, and write atomically; keep null and booleans typed; refuse numbers that overflow, before anything is written.
-- **R11 · One stray commit doesn't burn every attempt** (W7): reset to the start HEAD after a "HEAD moved" verdict, and make the two-commit pair recoverable after a hook is killed between them.
-- **R12 · Honor event refusals; fail loudly** (W8, W9): a refused `build.start` stops the task instead of issuing it; a failed `task.done` is reported; a task whose repository can't be resolved fails with a message instead of running in the master.
-- **R13 · Pin the base ref; authenticate approvals** (S12, S13): read checks from the remote-tracking branch or a SHA pinned in `change.jsonc`; write approvals only from a user-typed hook event, and check them at publish time against `hooks.jsonl` or a commit trailer.
-- **R14 · Allow-listed environment everywhere** (S9): event hooks (`HookProcess`) and `red record` get the same scrubbed environment as tests.
-- **R15 · Windows atomic replace** (L17): retry on sharing violations with a short bounded backoff, and read the ledger, `run.json` and `step.json` through the same retrying path.
-- **R16 · Narrow the guard** (S18): stop denying ordinary redirects and the word "hoshin" in paths; accept that shell matching is a speed bump, and move the real checks into the library (ANALYSIS §6, "The lesson").
+---
 
-## R3 — enforcement and parity (later branch)
 
-- **R17 · Baseline and scanners** (C1–C3): compare `baseline.json` against `origin/main` and fail when it grows; count `.editorconfig` severities, `NoWarn`, `GlobalSuppressions.cs` and every `SuppressMessage` form; close the scanner holes ANALYSIS §10.1 lists, starting with `catch (…) when (…)`.
-- **R18 · Differential and payloads** (§8, §10.4): check out `hoshin` in CI so the `yaml.mjs` differential runs, compare refusals as well as values, and replace the hand-written hook fixtures with payloads recorded from real Claude Code and Antigravity sessions.
-- **R19 · Start and reject** (§9, H13): restore the `start` triage skill; package `reject` and `reopen` so Claude Code users can type them.
-- **R20 · Release** (§11): a `marketplace.json` under a plugin name that doesn't collide with the original, a tagged release, and the doc claims ANALYSIS §11.2 lists.
+
+# Round 3 — ready to replace hoshin
+
+Round 2 closed the normal path: the R0 gate passes on Linux and Windows (PR #6). Round 3 is everything else between Hoshin.Net and replacing hoshin:
+- integrity and data: R10–R16, plus the deferred findings a real user hits (R22–R30);
+- enforcement: R17, R18;
+- parity, which is mostly the judgment layer: EPIC-B, now tasks B01–B15;
+- release: R20, then a real change run by the engineer (R40).
+
+The engineer chose to deliver all of it in one round, on one branch. The IDs in brackets (L13, E18, …) point to ANALYSIS.md.
+
+**Round 3 differs from rounds 1 and 2 in what "done" means.** Round 1 ended when every task's own test passed, and a change still couldn't finish (ANALYSIS §12.1). Round 2 ended when a gate written by the reviewer passed. Round 3 ends when Hoshin.Net meets the replacement bar below, and the implementer wrote no part of that bar.
+
+## The replacement bar
+
+Hoshin.Net is ready to replace hoshin when all five hold:
+
+1. **Acceptance:** every test under `tests/Hoshin.Tests/Acceptance/` passes on Linux and Windows in CI, including the ones R21 adds.
+2. **Evals:** every case under `evals/` passes against the built Claude Code bundle in at least 2 of 3 runs, in one recorded run under `evals/results/` (B02, B03).
+3. **Parity:** every row of ANALYSIS §9 reads "None" or "Low", or names a difference listed under "Accepted differences" below.
+4. **Dogfood:** one real change, not a fixture, has gone from intent to merged pull requests through the release candidate, in a real workspace with a master and at least one product repository (R40).
+5. **Release:** a tagged release and a marketplace entry exist (D8), and the docs make none of the claims ANALYSIS §11 lists as false (R20).
+
+The engineer runs item 4, not an agent, and it goes last. A defect it finds gets a gate test before it gets a fix (R3-rule 6).
+
+### Accepted differences
+
+These stay as they are. They are not on the bar, and a task must not spend effort on them. The engineer can move any of them into the round by adding a task.
+
+| Item | Why it is off the bar |
+| :--- | :--- |
+| Documents are JSONC layout 2, not YAML | By design (AGENTS.md invariant 4). R10 makes the move safe for in-flight work. |
+| Antigravity support, the NuGet library, `test: null` tasks, configurable caps | Hoshin.Net does more than the original here (ANALYSIS §9, last list). |
+| H9, H10 (Antigravity queued context and manifest) | The original has no Antigravity support, so these aren't parity. They stay open in ANALYSIS. |
+| S3, S4, S5, S7 remaining regex escapes, S14, S15 | The guard is a speed bump (ANALYSIS §6, "The lesson"); the original's guard is narrower still. R13 moves the checks that matter into the library, and R16 narrows the guard. |
+| L10, L18, and the §10.2/§10.3 practice notes (async, file sizes, `File.*` calls) | Code health, not behavior a user sees. R17 stops them from growing. |
+| Advance acceptance ("I accept the fix in advance") | Acceptance is typed-only by design (S1, round 1). The original's eval cases that accept in advance are graded up to the typed step, and B03's parity tests cover the rest with typed payloads. |
+| No `--master` option on `build` | The master is found by its marker (R03). B11 keeps the safety half: a second clone of the master is never taken as the master. |
+
+## R3-rules — how to work through round 3 (instructions for the agent)
+
+Every R-rule of round 2 still applies, with these changes.
+
+1. **Gates first, written by someone else.** R21 (new acceptance tests), B02 (the eval runner) and B03 (the eval cases) are written before any task they gate, and not by the session that implements those tasks. A separate session counts only if it has not seen the implementation. They land in their own commits at the start of the branch, the way `617291d` did in round 2. **Who, decided by the engineer, 2026-11-26:** the reviewer's session that wrote round 3 writes the gates. A different session implements every other task, and it never writes under `tests/Hoshin.Tests/Acceptance/` or `evals/`.
+2. **The gates belong to the reviewer.** Don't edit, skip, filter, rename or re-trait anything under `tests/Hoshin.Tests/Acceptance/` or `evals/` (except new run records under `evals/results/`), and don't change CI or the eval runner so that it stops running them. When you think a gate is wrong, add it under "Gate disputes" in the pull request, as in round 2.
+3. **Skills are judged by evals, not by line count.** A skill task (B05–B15) is done when its eval cases pass and every judgment rule its task lists is covered. Its length doesn't matter. Much of the original's skill text drives `hoshin.ts`. In Hoshin.Net the engine does that work, so porting that text would be wrong, and the strict skill lint (AGENTS.md invariant 5) refuses it anyway.
+4. **The commit gate.** Every commit builds with 0 warnings and passes the fast suite and the acceptance folder. The exception is acceptance tests R21 added for tasks not yet done. The `Gate:` trailer names the first failing acceptance test, and it never moves backward. Evals cost too much to run on every commit, so each skill task runs its own cases and records the result in an `Evals:` trailer, for example `Evals: intent-keeps-scope-as-typed 3/3, intent-rejects-a-change 2/3`.
+5. **Order.** Work through the tiers in order: R3-0 gates, R3-1 lifecycle and integrity, R3-2 enforcement, R3-3 parity, R3-4 release, then R40. Skills come after the engine tasks because the evals drive the real hooks. An eval that fails because of an engine defect says nothing about the skill.
+6. **A defect found late gets a gate first.** If R40 or an eval exposes an engine defect, the reviewer adds a failing acceptance test for it, and then it is fixed as `R-new-<n>`, added at the end of the index.
+
+### Delivery
+
+- **Branch:** `fix/round-3`, from `main` after PR #6 merges. Its first commits are R21, B02 and B03.
+- **Pull request:** a draft, opened by the engineer, titled `feat(workflow)!: ready to replace hoshin`. Its description keeps the Tasks table (task, commit subject, status, gate, evals), a "Gate disputes" section and a "Replacement bar" checklist with the five items above.
+- **Commits:** one per task, in index order, with round 2's trailers plus `Evals:` on skill tasks:
+  ```
+  Task: B05
+  Test-first: <test or eval case> failed before the change: <one-line failure>
+  Docs: <owner documents updated, or "none">
+  Gate: <the first failing acceptance test after this commit, or "passes">
+  Evals: <case n/3, …>
+  ```
+- **Trailer check:** the conventional workflow checks `Task:` trailers only on `fix/review-findings`, and only for `T`/`A`/`EPIC` IDs. Before the first task commit, the engineer extends it to `fix/round-3` with `R` and `B` IDs, and makes it require `Gate:`, plus `Evals:` on B05–B15.
+- **Release candidate:** when bar items 1–3 and 5 hold, R20 tags a release candidate from the branch, and the engineer runs R40 with it.
+- **Ready for review:** when all five bar items hold and every task is `done` or `invalid`. It merges by squash, as usual, and R20 then tags the final release from `main`.
+- **No bypass:** CONTRIBUTING §2.1 gives code no bypass. It merges when the checks are green.
+
+## Decisions needed for round 3
+
+D6 (decline at approval) is answered above: `/hoshin:decline <reason>`. R22 builds it.
+
+### D8 — Under what name does Hoshin.Net ship?
+
+(D7 was recorded and then withdrawn in round 2, so this one is D8.)
+
+R20 was written to publish under a name that doesn't collide with the original, so both can be installed side by side. **Options:** (a) ship as `hoshin`, the next major version, from the original's marketplace, replacing it: the commands stay `/hoshin:*`, workspace instructions stay valid, and users upgrade, then run `hoshin migrate` (R10); (b) ship under a new name, in its own marketplace, next to the original. **Recommendation:** (a). With both plugins enabled, both sets of hooks fire on every event: two guards, two Stop gates and two engines committing to the same repository. So side by side isn't safe anyway, and once R10 makes `migrate` keep in-flight changes valid, the reason for it goes away. **Answer: (a).** Decided by the engineer, 2026-11-26: Hoshin.Net ships as `hoshin`, the next major version, from the original's marketplace, and replaces it. See R20.
+
+### D9 — How do setup and context reach their mechanism?
+
+Today `hook start` returns nothing for setup and context (H2 kept them from taking over a run), and the strict skill lint forbids a procedure from calling the CLI. So in the plugin, neither skill can read `source_commit`, compute what changed, or commit what it wrote. **Options:** (a) give each one a hook-issued step like the other skills: the engine gathers the data into the brief, and at Stop the library checks and commits what the skill wrote, never touching another change's run; (b) exempt setup and context from AGENTS.md invariant 5, and let their procedures call `hoshin` commands. **Recommendation:** (a). Every other skill already works this way, so the guard, the commit rules and the trace stay uniform, and invariant 5 keeps no exception. (b) is less work, but these would become the only skills that commit for themselves. B08 and B09 need this. **Answer: (a).** Decided by the engineer, 2026-11-26: setup and context get hook-issued steps, and invariant 5 keeps no exception.
+
+## Round 3 index
+
+"Gate" names the R21 acceptance test (by its number in R21) or the eval cases the task must turn green. Every task also has its own test, written first.
+
+| ID | Tier | Title | Fixes | Needs | Gate | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| R21 | R3-0 | Extend the acceptance gate (reviewer) | §12.2 | — | — | open |
+| B02 | R3-0 | An eval runner for the Claude Code bundle (reviewer) | EPIC-B | — | — | open |
+| B03 | R3-0 | Port the eval suite (reviewer) | EPIC-B | B02 | — | open |
+| R23 | R3-1 | One session's hand-off doesn't end another session's run | S16, R03 × R07 | — | R21 (10) | open |
+| R22 | R3-1 | The engineer can decline at approval | W3 | D6 | R21 (2) | open |
+| R10 | R3-1 | `migrate` keeps in-flight changes valid | L13–L16, L1 | — | R21 (3) | open |
+| R11 | R3-1 | One stray commit doesn't burn every attempt | W7, H11, S17 | — | R21 (8) | open |
+| R12 | R3-1 | Honor event refusals; fail loudly on an unresolved repository | W8, W9 | — | R21 (7) | open |
+| R13 | R3-1 | Pin the base ref; authenticate approvals | S12, S13, S1, S6 | — | own test | open |
+| R14 | R3-1 | Event hooks and `red record` get the allow-listed environment | S9 | — | own test | open |
+| R15 | R3-1 | Retry atomic replace on Windows sharing violations | L17 | — | own test | open |
+| R16 | R3-1 | Narrow the guard; cover MCP tools that run commands | S18, R09's gap | — | own test | open |
+| R24 | R3-1 | Commit only what the task changed; check Green on a clean HEAD | E16, E17, E21, E12 | — | own test | open |
+| R25 | R3-1 | Find co-located tests by default | E18 | — | R21 (9) | open |
+| R26 | R3-1 | The Red classifier stops misfiring | E19, E4 | — | own test | open |
+| R27 | R3-1 | Keep the engineer's git identity and signing | E20, E7 | — | own test | open |
+| R28 | R3-1 | One judge per turn; refuse conflicting launches | W10, H4 | — | own test | open |
+| R29 | R3-1 | Fail closed on bad input | S10, C3's two catches | — | own test | open |
+| R30 | R3-1 | Readers agree with the migrator | L8, L12, L9 | — | own test | open |
+| R17 | R3-2 | Make the baseline shrink-only, count every suppression, close the scanner holes | C1–C4 | R29 | own test | open |
+| R18 | R3-2 | Run the `yaml.mjs` differential in CI; record real harness payloads | §8, §10.4, §9 black-box | — | own test | open |
+| B01 | R3-3 | Templates and shared references | §9 "Templates" | — | `ignores-system-plan-template` | open |
+| B04 | R3-3 | Skill descriptions that trigger | §9 "Skills" | — | every `skill-fired` grader | open |
+| B05 | R3-3 | Start and triage | §9 "Start / triage" | B01 | R21 (4); `start-*` | open |
+| B06 | R3-3 | Intent | §9 "Skills" | B01 | `intent-*` | open |
+| B07 | R3-3 | Spec | §9 "Skills", "Lifecycle events" | B01 | `spec-*` | open |
+| B08 | R3-3 | Context | §9 "Skills" | B01, D9 | context cases | open |
+| B09 | R3-3 | Setup | §9 "Skills" | B01, D9 | `setup-*` | open |
+| B10 | R3-3 | Plan | §9 "Skills" | B01 | `plan-*` | open |
+| B11 | R3-3 | Build and implement | §9 "Build logs", "Multi-repo" | B01 | `build-*` | open |
+| B12 | R3-3 | Review | §9 "Review-fix loop" | B01, B11 | `review-*` | open |
+| B13 | R3-3 | Done | §9 "done / change.done" | — | R21 (11); `done-*`, `single-repo-done-*` | open |
+| B14 | R3-3 | Fix (the light track) | §9 "Reject / reopen / … / `fix --accept`" | B01, B05 | R21 (6); `fix-*` | open |
+| B15 | R3-3 | Reject, reopen and abandon | H13, R19 | — | R21 (5); reject and reopen cases | open |
+| R19 | R3-4 | Restore `start`/triage; package `reject` and `reopen` | §9, H13 | — | — | moved: B05, B15 |
+| R20 | R3-4 | Publish a marketplace entry, tag a release, fix the doc claims | §11 | D8 | bar item 5 | open |
+| R40 | R3-4 | A real change, run by the engineer | §12 switching criterion | all of the above | bar item 4 | open |
+
+After this round, the findings in ANALYSIS.md that have no task are exactly the ones under "Accepted differences".
+
+## R3-0 — the gates (first, by the reviewer)
+
+### R21 · Extend the acceptance gate
+
+- **Owner:** the reviewer (R3-rule 1). The implementer doesn't write or edit these tests.
+- **Where:** new tests in `tests/Hoshin.Tests/Acceptance/`, beside `WorkspaceLifecycleAcceptanceTests.cs`, driving the shipped `hoshin.dll` with Claude Code hook payloads, as the R0 gate does.
+- **Why:** the R0 gate covers one happy change. Each test below is a path a real user takes that no test drives end to end today. Each one names the task that should turn it green.
+- **Write:**
+  1. **Resume on another machine** (R05's promised test, W6): T1 built in clone A and pushed; in clone B, with an empty `.git/hoshin`, `/hoshin:build` issues T2 and the change finishes.
+  2. **Decline at approval** (R22, D6): at `NeedsApproval`, the engineer declines with a reason; the change goes back to a fix step, then review, then approval, then `Done(true)`.
+  3. **Migrate an in-flight change** (R10): a workspace in the original's layout, mid-build with T1 logged, runs `hoshin migrate`. Hoshin.Net's hooks then finish the change to `Done(true)` without anything being re-accepted.
+  4. **Start routes the change** (B05): `/hoshin:start` with a one-repository bug routes to the light track, and with a feature routes to intent.
+  5. **Reject and reopen** (B15): a typed reject closes a change; a typed reopen of the spec reopens it, and re-acceptance builds on.
+  6. **The light track, end to end** (B14): `/hoshin:fix`, accept, build, review, done in a single-repository workspace opens one pull request.
+  7. **Multi-repository failures** (R12): a task whose repository isn't checked out fails with a message naming it, and commits nothing in the master; a `build.start` refused on a dirty repository issues no task.
+  8. **A stray commit** (R11): the engineer commits by hand during attempt 1; attempt 2 starts from the task's start and can pass.
+  9. **Co-located tests** (R25): one task each with `src/x.spec.mjs`, `__tests__/x.test.mjs`, `app/test_x.py` and `greet/greet_test.go` and no `testPatterns`, each accepted on its first attempt. Skip a language only when its toolchain is missing from the runner, and fail in CI if it is missing there.
+  10. **Two sessions** (R23): while the master session writes the review, `/hoshin:build` in a product repository that has no tasks left leaves the master's run alone, and the review is recorded.
+  11. **Every pull request is reported** (B13): `done` on a two-repository change reports both pull request URLs.
+- **Done when:** the tests are committed, each fails at the point its task names, and the PR's Tasks table lists where each one fails.
+
+B02 and B03, the eval gates, are written up in R3-3 with the other EPIC-B tasks, but they land here, before R3-1.
+
+## R3-1 — lifecycle and integrity
+
+### R10 · `migrate` keeps in-flight changes valid
+
+- **Fixes:** L13, L14, L15, L16, the rest of L1
+- **Where:** `Hoshin.Migration` (`DocumentMigrator`, `YamlScalarFormatter`, `YamlJsoncEmitter`), `MigrateCommand`, `WorkspaceMigrator`, and the pin checks in `ChangeState`.
+- **Problem:** `migrate` rewrites documents but keeps their `source_intent_commit` and `source_spec_commit` pins, so every accepted spec and plan reads as broken afterward and has to be regenerated and re-accepted (L13). It deletes `change.yml` without reading `change.jsonc` back (L14). It writes `null` and booleans as strings in keys it always quotes (L15). It crashes partway through a run on a number that overflows, leaving some changes migrated and some not (L16).
+- **Do:**
+  1. Check every input first. Any refusal, including an overflowing number, stops the run before anything is written, and the report names the file and the value.
+  2. Write each output atomically, read it back, parse it, and compare it with the parsed source. Delete the source only when they match. A mismatch keeps the source and is reported.
+  3. Keep `null` and booleans typed in the keys that are otherwise written as strings, recursively. A pin that was `null` stays `null`.
+  4. Commit the migrated documents of each change in one commit. Then re-pin every pin that held before the migration to that commit. A pin that was broken before stays broken; the migration doesn't launder it.
+  5. Say in README and KATA_MIGRATION how an in-flight change moves over: finish or migrate, then continue with Hoshin.Net.
+- **Test first:** an original-layout workspace with an accepted intent, spec and plan and T1 logged: after `hoshin migrate`, `hoshin state` shows every pin holding and T2 as the next task. Changes `a`, `b` and `c` where `b` holds `0xFFFFFFFFFFFFFFFFFF`: exit non-zero, no file changed in any of them, and the report names `b`. `source_intent_commit: null` stays `null`.
+- **Done when:** the tests pass, and R21's migrate test (3) passes.
+
+### R11 · One stray commit doesn't burn every attempt
+
+- **Fixes:** W7, H11, S17
+- **Where:** `TaskEvaluator.ValidatePreConditions`, `WorkflowHeadGuard`, and the test-commit/production-commit pair in `TaskVerdictPolicy` and `TaskVerdictRecorder`.
+- **Problem:** the task's start HEAD stays the first attempt's. After a commit the workflow didn't make, every remaining attempt fails "HEAD moved outside the workflow", because the guard denies the agent `git reset`. When the harness kills a hook between the library's own two commits, the library's half-commit is blamed on the agent the same way. And the check compares only HEAD's commit, so after `git switch -c other` the verdict commits land on the wrong branch (S17).
+- **Do:**
+  1. After a "HEAD moved" verdict, the library moves the branch back to the task's start HEAD, keeping the working tree. It names the commits it moved past in the verdict and the ledger, so nothing is lost. The next attempt starts from there.
+  2. Before the first of the two commits, record a pending-commit entry in the ledger (start HEAD, task, attempt). On the next hook, if the entry exists and HEAD is its test commit, finish the pair, or undo it, instead of judging the agent. Remove the entry once the pair is complete.
+  3. Record the branch name with the start HEAD, and refuse to judge when the branch changed. This is the library-side check ANALYSIS §6 asks for, so the guard's missing `switch`, `branch -f` and `update-ref` rules stop mattering.
+- **Test first:** a manual `git commit` during attempt 1: attempt 1 fails with "HEAD moved" naming that commit, and attempt 2 starts at the start HEAD and passes. With a committer that fails between the two commits: the next hook completes the pair, the verdict passes, and the attempt count doesn't grow. After `git switch -c other` during `Implement`: the verdict refuses and nothing is committed on `other`.
+- **Done when:** both pass, and R21's stray-commit test (8) passes.
+
+### R12 · Honor event refusals; fail loudly on an unresolved repository
+
+- **Fixes:** W8, W9
+- **Where:** `WorkflowAdvancer` (where `build.start` fires), `TaskEvaluator` (where `task.done` fires), `TaskRepoResolver`.
+- **Problem:** a refused `build.start` (dirty repository, wrong branch, branch checked out elsewhere) is recorded as a failed baseline, and the task is issued anyway, so it can commit on whatever branch is checked out, `main` included. A failed `task.done` is dropped. A task whose repository isn't checked out runs in the master, and a single-repository app's task runs at the repository root instead of in the app folder.
+- **Do:**
+  1. A refused `build.start` issues no task. The step tells the engineer what was refused and what to fix, and the next `/hoshin:build` tries again.
+  2. A failed `task.done` is reported in the verdict and to the session. Whether it fails the task follows the event's `onFailure`.
+  3. `TaskRepoResolver` returns a failure when the repository isn't checked out or the app folder doesn't exist. It never falls back to the master or the repository root.
+- **Test first:** a dirty product repository: `/hoshin:build` explains the refusal, issues nothing, and `main` gains no commit. A task for `web` with no `web` checkout: the message names `web` and the path where it was expected. A single-repository app's task runs in its app folder.
+- **Done when:** the tests pass, and R21's multi-repository test (7) passes.
+
+### R13 · Pin the base ref; authenticate approvals
+
+- **Fixes:** S12, S13, and the rest of S1 and S6
+- **Where:** `BaseBranchChecksReader`, `WorkflowPlanLoader`, the `change.jsonc` writer in `ChangeStarter`, the approval path in `StartHandler` and `IApprovalRecorder`, `Publisher` and `ChangeDoneStep`.
+- **Problem:** checks and hook config are read from the local base branch, which the agent may move during `Implement` (`git branch -f main HEAD~5`) without moving HEAD (S13). Approvals, reviews and verdicts sit in an agent-writable JSON file; one forged `workflowApprovals` entry leads to `Publish` on the next Stop (S12).
+- **Do:**
+  1. `change start` records the base commit's SHA in `change.jsonc`. Checks and hook config are read from that SHA, never from a branch name.
+  2. An approval is written only from a typed user prompt event, as a commit in the master with `Approved-Head: <code head>` and the git user's identity in trailers, as well as the ledger record. `Publish` requires that commit for the current code head. A ledger approval without it is ignored and reported in the trace.
+  3. Say in DESIGN.md what this does and doesn't protect against. It raises the bar from editing one JSON file to forging a commit through a guard escape, which is the original's level or better. That is the goal, not tamper-proofing.
+- **Test first:** `git branch -f main HEAD~1` during `Implement`: checks still come from the pinned SHA. A forged `workflowApprovals` entry: `Next` stays at `NeedsApproval`, and the trace reports the ignored record. A typed accept: an approval commit with the trailers, then `Publish`.
+- **Done when:** the tests pass, and the whole-change gate still passes.
+
+### R14 · Event hooks and `red record` get the allow-listed environment
+
+- **Fixes:** S9
+- **Where:** `HookProcessRunner` (`Events/HookProcess.cs`), `RedCommand` and `RedRecorder`, and the allow-list the test runner uses. Find its owner and reuse it (CONTRIBUTING R1).
+- **Problem:** tests and git run with secrets stripped, but event hooks and `red record` get the full environment, so the "secret-free execution" claim is false.
+- **Do:** run both with the same allow-listed environment as tests, plus the push and pull-request variables the publish path already keeps. A team hook that needs more names the variables in its hook config (`passEnv`); add the field to GRAMMAR.md. The original passes hooks its whole environment, so without `passEnv` a team's existing hook that reads a token would break on upgrade.
+- **Test first:** with `AWS_SECRET_ACCESS_KEY` set in the hoshin process, an event hook that prints its environment doesn't see it, and neither does `red record`. A hook with `passEnv: ["JIRA_TOKEN"]` sees that variable and no other secret.
+- **Done when:** the tests pass, and ANALYSIS §11.1's "secret-free execution" row is true.
+
+### R15 · Retry atomic replace on Windows sharing violations
+
+- **Fixes:** L17
+- **Where:** `Common/FileSystem.cs` (`WriteAllTextAtomic` and the reads), `LedgerStore`, `WorkflowRepo.ReadRunMarker` and `ReadStep`, `TurnState`.
+- **Problem:** on Windows, replacing a file fails while anything reads it without the lock. With 2 unlocked readers and 2 writers, about 99% of writes failed. Hooks read the ledger, `run.json` and `step.json` without the lock on every tool call, and parallel tool calls fire hooks concurrently.
+- **Do:** one helper that every reader and writer of those files uses. Writes retry the replace on a sharing violation or access denial with a short bounded backoff (for example, up to 2 seconds in total). Reads open with `FileShare.ReadWrite | FileShare.Delete` and retry on the same errors. Past the bound, the error surfaces through R01's reporting.
+- **Test first:** 2 readers and 2 writers on one file for 2,000 iterations: no write fails and every read parses. It runs on both operating systems; on Linux it guards against regressions.
+- **Done when:** the test passes in CI on Windows.
+
+### R16 · Narrow the guard; cover MCP tools that run commands
+
+- **Fixes:** S18, and the gap R09 left
+- **Where:** `ShellWriteTargets`, `GuardTamperingProtection`, `GuardCommand`, `HarnessTools.ClaudeMcpWritePushMatcher`.
+- **Problem:** the guard denies ordinary work: redirects to logs and scratch files, quoted `>` characters, any path containing "hoshin", and `git commit -m "fix -n"` (S18). Meanwhile R09's MCP matcher lists write and push verbs but not the verbs of MCP tools that run commands (`execute_command`, `start_process`, `run_terminal`), so a shell reached through an MCP server can `git push` unseen, which is S11 again through another tool.
+- **Do:**
+  1. Parse redirects with quoting in mind. Allow redirects to files outside the repository and to ordinary files in it. Match protected paths by their resolved path, never by the substring "hoshin".
+  2. Add the command-running verbs (`exec`, `execute`, `run`, `process`, `shell`, `terminal`, `command`) to the MCP matcher, from the same single definition R09 made.
+  3. Don't chase the remaining escapes of S3, S4, S5 and S7: they are off the bar ("Accepted differences"), and R13 moves the checks that matter into the library.
+- **Test first:** a theory where every S18 example in ANALYSIS §6 must be allowed, and another where every S11 example plus `mcp__desktop__execute_command` and `mcp__shell__run` carrying `git push` must be denied during a build.
+- **Done when:** both theories pass, and the shipped `hooks.json` matcher still comes from `HarnessTools`.
+
+### R22 · The engineer can decline at approval
+
+- **Fixes:** W3 (the approval part R06 left), DESIGN.md:114 (ANALYSIS §11.2)
+- **Needs:** D6 (answered: `/hoshin:decline <reason>`)
+- **Where:** `StartHandler` (the approval path), `SkillInvocationDetector`, `skillMeta` in `packaging/package.ps1`, `IApprovalRecorder`, `WorkflowEngine.NextPostBuild`, `PostBuildFixEngine`.
+- **Do:** package `decline` as a typed-only skill (`disable-model-invocation`). A typed `/hoshin:decline <reason>` at `NeedsApproval` records a declined approval with the reason at the current code head. `Next` then returns the same fix step as a review finding (R06), carrying the reason. A decline without a reason is refused with a message asking for one. A decline anywhere but `NeedsApproval` changes nothing and says so. A model-sourced decline is refused, as accept already is.
+- **Test first:** at `NeedsApproval`, a typed decline with a reason: the next step is a fix step that carries the reason, then checks, review and `NeedsApproval` again. A decline with no reason, a decline at `Review`, and a model-sourced decline each change nothing.
+- **Done when:** the test passes, R21's decline test (2) passes, and DESIGN.md's state diagram matches.
+
+### R23 · One session's hand-off doesn't end another session's run
+
+- **Fixes:** S16, and a defect R03 and R07 added together
+- **Where:** `StartHandler.Handle` (the `if (step is Done)` branch that deletes `run.json`) and `HandleReject`, `WorkflowEngine.SelectNextTaskId` and `NextPostBuild` (the per-session `Done(true)` messages), `StartHandler.IsBlockedByOtherActiveBuild`.
+- **Problem:** R03 made a product-repository session end with `Done(true)` when its own tasks are finished ("next step: run `build` in …" or "run `review` from the master"). R07 made `StartHandler` delete the workspace's shared `run.json` on any `Done`. `IsBlockedByOtherActiveBuild` blocks other sessions only during `Implement`, `Retry` and `NeedsApproval`. So while the master session writes the review, `/hoshin:build` typed in a product repository with nothing left deletes the run. The master's Stop then finds no run, stays silent, and the review is never recorded.
+- **Do:**
+  1. Give "this session's part is finished" its own step kind (for example `Handoff`), distinct from `Done`, so only a change-level `Done` clears the run.
+  2. Clear `run.json` only from the session that owns the run, or when the change itself is done.
+  3. Extend `IsBlockedByOtherActiveBuild` to every step that has an owner, so another session can't take over a document, review or fix step (S16). The blocked session is told who owns the run; it doesn't get silence.
+- **Test first:** the master session at the review step, then `/hoshin:build` in a product repository with no tasks left: `run.json` still exists, the product session is told the review is next, and the master's review is committed and recorded.
+- **Done when:** the test passes, and R21's two-session test (10) passes.
+
+### R24 · Commit only what the task changed, and check Green on a clean HEAD
+
+- **Fixes:** E16, E17, E21, E12 (deleted tests)
+- **Where:** `TaskVerdictPolicy` (Green), `WorkingTreeSnapshot`, `TaskEvaluator` (`PreIssuePaths`), `DocumentCommitter.CommitReview`, the Red worktree from R04.
+- **Problem:** Green runs in the dirty working tree, so a task can pass by importing a file it didn't commit (E16). A file the engineer had dirty before the task, which the task then also edits, is committed whole, the engineer's changes included (E17). `PreIssuePaths` is frozen at attempt 1, so files created between attempts are committed. A standalone `CommitReview` doesn't check that a new review was appended, so touching `review.md` re-records the old review at the new code head. A deleted test file counts as a written test. The engine's `reds` ledger entries are made up (exit code 1, the summary as the output), and `red show` reports them as real. A task that only adds a protecting test, one that passes before the change and guards existing behavior, can't pass, although the original allows it (its `fix-accepts-a-task-with-a-protecting-test` case).
+- **Do:**
+  1. Run Green a second time in the detached worktree at the new HEAD (R04's worktree and links). A task passes only when it passes there.
+  2. Refuse to issue a task while tracked files are dirty, in a standalone repository too, as `build.start` does in a workspace. Tell the engineer to commit or stash. Don't try to split hunks.
+  3. Take `PreIssuePaths` again at each attempt's issue.
+  4. `CommitReview` requires a new `## Review <n>` section.
+  5. A deleted test file doesn't count as a written test.
+  6. `reds` entries record the Red run's real exit code and the tail of its output.
+  7. A task whose test passes before the change is accepted as a protecting test when the plan marks it as one, following the original's plan rules. Anywhere else it is still invalid Red.
+- **Test first:** the cases from ANALYSIS §7 and §10.4 (6): an import of an untracked helper fails Green; a dirty tracked file makes the task refuse to issue; a file created between attempts isn't committed; a touched `review.md` without a new section records nothing. Also: `red show` prints the real Red output, and a marked protecting-test task passes while an unmarked one doesn't.
+- **Done when:** the tests pass.
+
+### R25 · Find co-located tests by default
+
+- **Fixes:** E18
+- **Where:** `WorkflowContracts` (`DefaultTestPatterns`), the test-file extraction from test commands, GRAMMAR.md.
+- **Problem:** the default test patterns miss `greet/greet_test.go`, `app/test_greet.py`, `src/x.spec.ts` and `__tests__/`. `go test ./greet -run X` and pytest node IDs extract no test file. Those tasks fail "no test file" every time unless `testPatterns` is set.
+- **Do:** add the common co-located forms to the defaults: `*_test.go`, `test_*.py`, `*_test.py`, `*.spec.*`, `*.test.*`, `__tests__/**`. Extract test files from `go test <pkg> -run` and from pytest node IDs. Keep `testPatterns` as the override, and document the defaults in GRAMMAR.md.
+- **Test first:** a theory over those paths classifying each as a test; a task for each form with no `testPatterns`, accepted on its first attempt.
+- **Done when:** the tests pass, and R21's co-located test (9) passes.
+
+### R26 · The Red classifier stops misfiring
+
+- **Fixes:** E19, the rest of E4
+- **Where:** `RedClassifier`.
+- **Problem:** `\berror:\s*expected\b` rejects an ordinary JavaScript assertion (`Error: expected 3 got 2`) as a syntax error. Rust's `E0432`, the usual error for a new integration test, counts as a syntax error. Exits 137 and 139 and an access violation count as valid Red. A missing pytest dependency counts as valid Red.
+- **Do:** fix each misfire with a case in the classifier's table of examples. Crashes and kills (137, 139, access violation) are not valid Red. Rust's unresolved import counts as a missing symbol. A missing dependency is `CouldNotRun`.
+- **Test first:** a theory with each ANALYSIS §7 E19 example and its expected kind.
+- **Done when:** the theory passes, and no existing classifier case changes kind.
+
+### R27 · Keep the engineer's git identity and signing
+
+- **Fixes:** E20, the rest of E7
+- **Where:** the git environment builder in `GitClient` (`ProcessGitClient`).
+- **Problem:** the git environment drops `XDG_CONFIG_HOME`, and drops `SSH_AUTH_SOCK` on every command except push. An engineer whose identity or signing config lives in XDG config, or who signs commits through an SSH agent, gets every library commit refused.
+- **Do:** keep `XDG_CONFIG_HOME`, `GIT_CONFIG_GLOBAL`, `SSH_AUTH_SOCK`, `GPG_TTY` and `GNUPGHOME` for every git command. They locate config and signing, not secrets.
+- **Test first:** with `user.signingkey`, `gpg.format=ssh` and `commit.gpgsign=true` in an XDG config, and an SSH agent holding the key, a task commit is signed. Skip only where `ssh-agent` is missing, and fail in CI if it is missing there.
+- **Done when:** the test passes on Linux and Windows.
+
+### R28 · One judge per turn; refuse conflicting launches
+
+- **Fixes:** W10, H4
+- **Where:** `WorkflowAdvancer`, `TurnState`, `run.lock`, `StartChangeResolver`, the Claude Code `PreToolUse` manifest (an `Agent` matcher), DESIGN.md:210.
+- **Problem:** a Stop and a SubagentStop that arrive together both run `Advance`, so `build.finish` can run twice. `run.lock` can be held for about 20 minutes and blocks the turn-state writes of hooks that time out after 120 seconds. A named new change (`/hoshin:intent <new>`) is ignored while another run is pinned. Nothing refuses a second subagent launched while one is running, although DESIGN.md says the hook does.
+- **Do:**
+  1. Judge each dispatch once: the first hook to take the dispatch nonce judges, and the others see it taken and stay quiet.
+  2. Hold `run.lock` only around state reads and writes, never across a test run.
+  3. A named new change while another run is pinned is refused with a message, not ignored.
+  4. Add an `Agent` matcher to `PreToolUse` that denies a second launch during an `Implement` or fix step, from the `HarnessTools` definition.
+- **Test first:** a Stop and a SubagentStop fired together for one dispatch: `build.finish` runs once. A second `Agent` launch during `Implement` is denied.
+- **Done when:** the tests pass, and DESIGN.md:210 is true.
+
+### R29 · Fail closed on bad input
+
+- **Fixes:** S10, and the two catches C3 found hiding defects
+- **Where:** `GuardCommand`, `HookCommand` (payload parsing), `ChangeFolderResolver` (the catch that swallows a corrupt `run.json`), `DocumentCommitter` (the catch that skips the spec/plan cross-check on an unreadable spec).
+- **Problem:** a malformed payload, a numeric `tool_response.status` or a corrupt `run.json` makes the guard throw and allow the call. The corrupt `run.json` is also swallowed when resolving the change folder, and an unreadable spec silently skips the spec/plan cross-check.
+- **Do:** during an active run, the guard denies on input it can't read, with a message that names the problem. Outside a run it stays silent (D2). A corrupt `run.json` is reported through R01's path. An unreadable spec fails the cross-check instead of skipping it. Remove both catches; don't reshape them.
+- **Test first:** each of the three bad inputs during a run gives a deny; the corrupt `run.json` produces R01's message; an unreadable spec fails the plan's acceptance.
+- **Done when:** the tests pass, and R17's catch scanner finds neither catch.
+
+### R30 · Readers agree with the migrator
+
+- **Fixes:** L8, the rest of L12, L9
+- **Where:** `SpecReader`, the `change.jsonc` reader, and the hook-script export (`ls-tree` and its encoding).
+- **Problem:** `SpecReader` takes the first `gherkin` fence anywhere, not the first top-level one, so an example in a list item or a blockquote becomes the spec, and its early-close scan cuts a block at an indented backtick docstring, so the reader and the migrator disagree again (L8). A schema-invalid but parseable `change.jsonc` silently falls back to `change/<folder>` (L12). The hook-script export turns Latin-1 bytes into U+FFFD, writes symlinks as text, and runs `ls-tree` without `-z` (L9).
+- **Do:** take the first top-level fence and close it the way the migrator does. Refuse a schema-invalid `change.jsonc` with a message naming the field. Export hook scripts byte for byte, keep symlinks as symlinks, and use `ls-tree -z`.
+- **Test first:** a spec with an example fence in a list item before the real one; a fence holding an indented backtick docstring; `change.jsonc` with `"branch": 3`; a hook script with Latin-1 bytes and a symlinked script.
+- **Done when:** the tests pass.
+
+## R3-2 — enforcement
+
+### R17 · Make the baseline shrink-only, count every suppression, close the scanner holes
+
+- **Fixes:** C1, C2, C3, C4
+- **Where:** `tests/Hoshin.Tests/Architecture/ArchitectureTests.cs` (`CompareBaseline` and the rule scanners), `baseline.json`, `.editorconfig`, `Directory.Build.props`, `.github/workflows/ci.yml`.
+- **Problem:** see ANALYSIS §10.1. In short: a PR can add a violation with its baseline entry; `.editorconfig` severities, `<NoWarn>`, `GlobalSuppressions.cs` and most `SuppressMessage` forms go uncounted; and the scanners miss `catch (…) when (…)`, clock reads inside interpolated strings, `?? new`, inherited interface members and mutable `static readonly` arrays, and never scan `Hoshin.Migration`.
+- **Do:**
+  1. A CI step compares `baseline.json` with `origin/main`'s and fails when any entry was added. There is no override label. A switch that turns a rule off will get used, and a rule that has been switched off can't report it. A rule that keeps needing exceptions should be removed.
+  2. Count every suppression channel: `.editorconfig` severities for `CA*` and `IDE*`, `<NoWarn>`, `GlobalSuppressions.cs`, every `SuppressMessage` form, and `#pragma warning disable`. Each one needs a baseline entry, or the test fails.
+  3. Close each scanner hole ANALYSIS §10.1 lists, and scan `Hoshin.Migration`.
+  4. Fix what the new scans find rather than baselining it. The two catches that evaded the old scanner are R29's.
+  5. Guard the guards: each scanner fails when it scanned zero files or types, and the CI gate fails when the architecture tests report fewer cases than `main` does.
+  6. C4: add a per-file floor to the changed-line coverage gate, run `dotnet format --verify-no-changes`, and keep the coverage variables in the black-box suites that run with `bareEnv`.
+- **Test first:** for each new scan, a seeded violation (a source fixture) that the scan must report, and an empty input it must refuse.
+- **Done when:** the tests pass, CI fails a PR that grows the baseline, and CONTRIBUTING's "CI-checked" claims are true.
+
+### R18 · Run the `yaml.mjs` differential in CI; record real harness payloads
+
+- **Fixes:** ANALYSIS §8 (the differential), §10.4 (8), T38's leftover
+- **Where:** `YamlDifferentialTests`, `.github/workflows/ci.yml`, `tests/Hoshin.Tests/Fixtures/hooks/`, `HarnessPayloadFixtureTests`.
+- **Problem:** CI never checks out `hoshin`, so the comparison with `yaml.mjs` is skipped silently, and it never compares refusals. The hook fixtures are hand-written (`/workspace/repo`, a `deadbeef` nonce), so the payload shapes the async flow relies on are unverified.
+- **Do:**
+  1. CI checks out `hoshin` at a pinned commit beside this repository, with Node, so the differential runs. When `CI` is set and the sibling is missing, the test fails instead of skipping.
+  2. Compare refusals: both parsers refuse, or the test fails. A refusal is the migrator's own error type; any other exception fails.
+  3. Add a recorder (a hook command that writes its stdin, anonymized, to a fixture folder). The engineer records one real Claude Code session on Windows and one on Linux that touch every event and matcher in `hooks.json`, `PowerShell` and an MCP tool included, and one Antigravity session. Replace the hand-written fixtures with the recordings.
+  4. Close the black-box gap (ANALYSIS §9, "Black-box tests"): the original has 52 suites and Hoshin.Net has 44. For each missing one (`apps`, `check-events`, `check-read`, `coverage-ignore`, `diff-coverage`, `events-single-repo`, `single-repo-marker`, `system-read`), port it, or name the C# test that covers the same cases, in a table in the black-box README.
+- **Test first:** the differential fails in CI with the sibling missing; `HarnessPayloadFixtureTests` fails when an event or matcher in either manifest has no recorded fixture.
+- **Done when:** the differential runs in CI and compares refusals, every manifest event and matcher has a recorded fixture, and every missing black-box suite is ported or mapped.
+
+## R3-3 — parity: the judgment layer (EPIC-B)
+
+EPIC-B was "open by design" in rounds 1 and 2. These tasks replace it. They come from a line-by-line comparison of the original's skills, references, templates and evals with Hoshin.Net's procedures, briefs and hooks. Cites into the original (`hoshin/…`) are at `hoshin@47f9d7b`.
+
+That comparison changed the shape of the work. About half of what the skills lack is not text: the engine contradicts the original (intent's scope), gives the model no data (the review brief), or has no mechanism at all (setup, context, start). So each skill task has two parts:
+- **Engine:** behavior in the library or hooks, tested in C# first, like any round-3 task.
+- **Judgment:** rules for `procedure.md`, its `references/`, or the brief. They are written harness-neutrally (AGENTS.md invariant 5) and judged by the task's eval cases.
+
+Text that drives `hoshin.ts` in the original is not ported; the engine does that work (R3-rule 3). A task's eval cases are named in B03's table.
+
+### B01 · Templates and shared references
+
+- **Where:** `skills/*/references/`, `src/Hoshin.Workflow/Workspace/Templates/`, `WorkflowBriefs`, `docs/GRAMMAR.md`; the originals are `hoshin/references/templates/*`, `hoshin/references/triage.md` and `hoshin/references/written-rules.md`.
+- **Problem:** Hoshin.Net has no intent, spec, plan, context or policies template. The briefs carry format skeletons only. Rules that several skills share in the original (triage's boundary rules, especially rule 3's definition of a new behavior; how to read and apply a repository's written rules) exist nowhere. The workspace templates still name `start` and are otherwise stale. Per-system template overrides (`hoshin/references/workspace.md:79-85`) have no lookup.
+- **Do:**
+  1. Port the intent, spec, plan, context and policies templates to JSONC layout 2: line-1 ```` ```jsonc ```` front matter, task blocks as ```` ```jsonc ```` objects with the `PlanReader` keys, and Shared decisions as a ```` ```jsonc ```` array. Leave out the fields the engine writes (`source_*_commit`). Each template passes its document's check once its placeholders are filled, and fails it while they aren't.
+  2. Port `triage.md` and `written-rules.md` as shared references, harness-neutral, and package them for every skill that cites them (start, fix, review, plan).
+  3. Give the briefs the template path instead of an inline skeleton, so the rule has one owner (CONTRIBUTING R1).
+  4. Look up a per-system template override in the master before the packaged template, as the original does.
+  5. Update the workspace templates for round 3's behavior, and fix GRAMMAR.md's plan section, which still says `yaml`.
+- **Test first:** each template with placeholders fails its check and, filled from a fixture, passes; a system override is used over the packaged template; the strict skill lint passes over every new references file.
+- **Done when:** the tests pass, and `ignores-system-plan-template` passes.
+
+### B02 · An eval runner for the Claude Code bundle
+
+- **Owner:** the reviewer (R3-rule 1). It lands in R3-0, before R3-1.
+- **Where:** a new `evals/` folder (`README.md`, `run-wsl.sh`, the runner config), `packaging/package.ps1`, CI.
+- **Problem:** Hoshin.Net has no evals. The original runs `claude plugin eval` with a sandbox that needs Linux or WSL, `TMPDIR` outside `/tmp`, and no `Agent` tool (`hoshin/evals/README.md`). Pointing it at Hoshin.Net's bundle has its own traps: every hook calls bare `dotnet`, and without it the hooks fail without blocking, so a case can pass `skill-fired` while nothing runs. `EventRunner` and `HookScripts` create folders at the `$TMPDIR` root, which the sandbox may deny. Typed-only commands (accept, done, reject, reopen, `fix --accept`) are refused when the model invokes them, which is how a plain-text prompt reaches them.
+- **Do:**
+  1. A runner that builds the bundle into a folder `package.ps1` doesn't wipe, points every case's `plugins:` at it, and refuses to start without a .NET 10 runtime inside the sandbox.
+  2. Every case fails if `hooks.jsonl` has no entry for the session, so a silently dead hook can't pass.
+  3. Find out whether a case prompt that starts with a slash command reaches the hooks as typed by the user. Record the answer in `evals/README.md`. If it doesn't, the typed half of each case is covered by B03's C# tests, and the eval grades up to the typed step.
+  4. A CI workflow that runs the suite on a label and on release tags, on Linux, with a cost cap, and writes the run under `evals/results/<timestamp>/`. Not on every push: a full run costs about $0.50 per case per run.
+  5. Find out whether the runner accepts JSON case files. If it doesn't, add `evals/**/case.yaml` to AGENTS.md invariant 4 as its one more exception, with the reason.
+- **Done when:** one trivial case passes through the runner on Linux and in WSL, and a case with the runtime removed fails at startup instead of passing.
+
+### B03 · Port the eval suite
+
+- **Owner:** the reviewer (R3-rule 1). It lands in R3-0, after B02.
+- **Where:** `evals/<case>/` for LLM cases; `tests/Hoshin.Tests/Acceptance/Parity/` for deterministic ones; `hoshin/evals/` (60 cases) as the source.
+- **Problem:** the original has 60 cases plus grader self-tests. Their graders read `hoshin.ts … commit` calls and YAML front matter, so none run as they are. About half of them test mechanism, not judgment, and an LLM run is the most expensive and least reliable way to check a mechanism.
+- **Do:**
+  1. Sort every original case into one of three destinations, in a table in `evals/README.md`: an LLM case (it judges the model's work), a C# parity test (it checks what the engine does), or dropped, with the accepted difference that explains it. Every one of the 60 has a row.
+  2. LLM cases: rewrite the graders for what Hoshin.Net produces. Commit subjects come from the reflog (Hoshin.Net's are `docs(<scope>): draft <doc> <change>`, `docs(<scope>): log T1 <change>`, `docs(<scope>): review <change>`). Documents are read as JSONC front matter. The hook trace comes from `.git/hoshin/hooks.jsonl`. "Committed through the program" becomes "the library made the commit, and the guard denied any manual commit".
+  3. C# parity tests drive hook payloads, the way the acceptance gate does, including typed-user payloads for the human-only steps.
+  4. Port the grader self-tests, in the form the black-box suites use.
+  5. Add cases for what the original's suite never covered but Hoshin.Net's skills now need: the per-repository review dispatch (B12) and the start-to-fix handoff (B05).
+- **Done when:** every one of the 60 has a row; every LLM case and parity test fails today for the reason its row gives; and the grader self-tests pass.
+
+### B04 · Skill descriptions that trigger
+
+- **Where:** `skillMeta` in `packaging/package.ps1`.
+- **Problem:** the generated wrappers' descriptions were shortened and lost the original's trigger phrases, so a request like "refresh the workspace instructions" may never fire setup.
+- **Do:** restore each skill's trigger phrases from the original's front matter, adapted to Hoshin.Net's commands, and keep `disable-model-invocation` on the typed-only skills.
+- **Test first:** a test that each generated `SKILL.md` description contains the phrases its source lists.
+- **Done when:** the test passes, and every LLM case's `skill-fired` grader passes in B02's run.
+
+### B05 · Start and triage
+
+- **Fixes:** ANALYSIS §9 "Start / triage", the start half of R19
+- **Engine:** add `start` to `skillMeta`, `SkillInvocationDetector` and the hook path. A verdict of "light track" or "full pipeline" hands off in the same session to fix or intent, carrying the verdict, without starting a second change.
+- **Judgment** (`hoshin/skills/start/SKILL.md`, `hoshin/references/triage.md`): classify the kind (bug, enhancement, feature) and ask the one question that settles it; boundary rule 2 in full (settling an `intent unknown` rule, removing an oddity that isn't a bug, or narrowing a capability all fail it, and nothing said in the session changes a tag); rule 3's definition of a new behavior; never split one change into several fixes; a missing context file means "can't route yet"; route a plainly large change early from its description; a bug needs its root cause at `file:line` and a reproduction test before it can be routed; the verdict layout and its fixed choice sets.
+- **Test first:** a hook test that `/hoshin:start` followed by a light-track verdict hands off to fix in the same session, with one change.
+- **Done when:** the test passes, R21's start test (4) passes, and the start cases pass.
+
+### B06 · Intent
+
+- **Engine:**
+  1. Scope is kept as the engineer typed it, separate from the system key; `IntentReader` accepts any scope. A `scope:` argument is parsed, not slugged into the name.
+  2. The change is started after the model proposes a name and title, not from the raw arguments before any question, and a workspace with several systems asks which one instead of failing.
+  3. The draft may be written section by section: Stop commits a valid draft without advancing while it still has `undecided:` lines under Open questions, and `IntentReader` refuses a finished intent that still has one.
+  4. The brief carries the `context:` field, and the session is warned when the workspace instructions or a context file it reads is stale. `StaleChecker` exists and is unused.
+  5. Finding an existing change matches by title and content, not only by slug.
+- **Judgment** (`hoshin/skills/intent/SKILL.md`, `references/interview-guide.md`, `existing-change.md`, `scope.md`): the seven-question cap, the legal-exposure exception, and the one batch of "engineer's call" items, in place of "four to six questions"; settle the happy path before any edge case; the two opposite failures the interview exists to prevent; anchor questions in concrete moments and never invent facts; how to treat each context tag (an `intent unknown` rule first, `seen in code` as keep or change, never present an oddity as behavior to keep, skip the bug or obsolete ones, never quote the Note column); the stop rule and its closing line; read the document back, keep it to 1-2 pages, scan it for technology; the interview guide (the solution-to-need table, the 12 edge-case categories, safe defaults, how to break analysis paralysis) as `references/interview-guide.md`; resuming an existing change.
+- **Test first:** hook tests for engine items 1-3: `PROJ-123` kept as typed; two systems give a question, not a failure; a valid draft with an `undecided:` line is committed without advancing.
+- **Done when:** the tests pass and the intent cases pass.
+
+### B07 · Spec
+
+- **Engine:** the spec brief names the context files and the system's `policies.md`, and lists the policy areas from it; nothing in Hoshin.Net reads `policies.md` today. `doc.accept` fires on acceptance (ANALYSIS §9, "Lifecycle events"). The session is warned of stale context, as in B06.
+- **Judgment** (`hoshin/skills/spec/SKILL.md`): the engineer's call is decided in the spec and recorded there, which reverses `procedure.md:13`; invoke each named policy skill, fill `policies_applied` and `policies_not_checked`, say why an area wasn't checked, never infer a policy skill, and treat a missing `policies.md` as every area `none`; the Design section, the constraint-to-requirement table, the decisions table, and Areas of concern with owners, including any `intent unknown` rule the design relies on; Gherkin rules (`Feature:` is the intent's title plus its outcome, `@from:` tags without spaces, IDs stable on regeneration, one Scenario Outline listing every reachable combination once there are three or more conditions); read the code to make the design concrete; stop and commit nothing when the intent is too thin to design from.
+- **Test first:** a hook test that the spec brief lists `policies.md`'s areas, and one that accepting a spec fires `doc.accept`.
+- **Done when:** the tests pass and the spec cases pass.
+
+### B08 · Context
+
+- **Needs:** D9
+- **Engine** (D9, answered (a)): today `hook start` returns empty output for context, writes no run, and the strict lint forbids the procedure from calling git, so `source_commit`, the diff since it, the rule-number history and the `context` commit are all out of reach. So `/hoshin:context` gets a hook-issued step: the brief carries each repository's current commit, its `source_commit` and the paths changed since, and Stop checks and commits the files it wrote, under the `context` commit kind. It still never touches another change's run (H2).
+- **Judgment** (`hoshin/skills/context/SKILL.md`): where each answer lands (a bug or obsolete behavior becomes a Known oddity tagged `confirmed by engineer`; "I know what but not why" becomes `intent unknown`, noting who might know); refreshing (carry unchanged rules forward, retire and renumber a changed rule, a regression becomes an oddity, "can't say" becomes `intent unknown`, and report the counts carried, changed, added and removed); group questions by repository and keep their number in proportion; a repository skipped as current still joins the seam pass; ignore the master's `intent/` and `.hoshin.json`; a single-repository workspace uses the app as its unit; the front matter fields.
+- **Test first:** a hook test that `/hoshin:context` in a workspace gives a brief carrying each repository's `source_commit` and changed paths, and that Stop commits a valid context file under the `context` kind.
+- **Done when:** the test passes and the context cases pass.
+
+### B09 · Setup
+
+- **Needs:** D9
+- **Engine** (D9, answered (a)): the CLI has all of setup's mechanism (instructions, naming, hooks, check, the `setup` and `instructions` commit kinds), but the skill can't reach it on the hook path. So `/hoshin:setup` gets a hook-issued step in each of its modes, and the library writes and commits what the engineer settled.
+- **Judgment** (`hoshin/skills/setup/SKILL.md`, `references/new-master.md`, `hooks.md`, `naming.md`): the instructions-only, naming-only and hooks-only modes; creating a new master, and the single-repository offer; for an existing system, ask only about adding or removing repositories, and keep them when the engineer is away; a repository may belong to several systems; refuse a hook on a deprecated event and name the three events that keep hooks; hooks and naming apply only once committed on the base branch; ask before writing a `CLAUDE.md` in the home folder; never hand-edit the generated instructions; commit only files this run wrote; the report and the next step.
+- **Test first:** hook tests: setup in instructions mode replaces the marked block and keeps the text around it; a hook on `task.done` is refused and nothing is written.
+- **Done when:** the tests pass and the setup cases pass.
+
+### B10 · Plan
+
+- **Engine:** the plan brief lists the `build.finish` hooks on the base branch (`BaseBranchChecksReader`), names every task field (`compile`, `uses`, `files` and `supports` are missing), and carries the engineer's direction from the command's arguments. Today the arguments appear only in the prompt. Declining to write (direction that contradicts the spec, or an outline row the code can't meet) is a clean outcome: Stop lets the session end without a plan and says "reopen the spec".
+- **Judgment** (`hoshin/skills/plan/SKILL.md`, `references/drafting.md`, the shared written-rules reference): `test` and `compile` are argument lists whose first item runs without a shell, so `npm`, `npx` and `.bin` shims are out (`node <script>`, `python -m pytest`), and paths are relative to the repository, with no `cd`; the filter matches exactly one test by its full name; `compile` builds only the test project, and stubs come with the test; decide whole-application checks by scope, name a missing check under `## Checks at build finish`, and tell the engineer to add it as a hook; record direction under `## Engineer direction` as "point → where it landed", or "None given"; one round of outline corrections; the decision-table rules; shared decisions; which task covers a scenario; the ten questions to interrogate the draft with; written rules (take commands from them, carry what they require, never restate a style rule, ask on a conflict).
+- **Test first:** a hook test that the plan brief lists the base branch's `build.finish` hooks and the command's direction text; and one that a plan turn that declines to write ends without being pushed back.
+- **Done when:** the tests pass and the plan cases pass.
+
+### B11 · Build and implement
+
+- **Engine:**
+  1. The implement brief carries the Gherkin of the scenarios the task covers and supports.
+  2. Departures and notes, end to end: the brief asks for them, the result carries them, `BuildLogWriter` writes them, and the review brief (B12) reads them.
+  3. Only text after an explicit marker becomes fix instructions. Today every argument to `build`, a change name or `--repo` included, is stored as instructions.
+  4. The dispatch directive names a model: the default tier for a task, one tier up after a second failed attempt. This belongs in the hook directive, not the procedure (invariant 5).
+  5. Committed task work without a log entry is adopted: a task whose commits carry its `Plan-Task` trailer gets its log entry written, not issued again.
+  6. The schedule message names the waiting repositories and what each waits on, not only the ready ones.
+  7. A second clone of the master in the workspace is never taken as the master.
+- **Judgment** (`hoshin/skills/build/SKILL.md`, `references/brief.md`, `instructions.md`): what counts as a departure and what as a note, and how to tell them apart; changing an existing test is a departure; run only the task's own "done when" commands, never whole-repository checks; review instructions that share a cause get one fix with one owner.
+- **Test first:** hook tests for engine items 1, 3, 5 and 6: the brief holds the scenario text; `/hoshin:build shop` stores no instructions; a task committed with its trailer but not logged gets a log entry and isn't issued again; the schedule names a waiting repository and its blocker.
+- **Done when:** the tests pass and the build cases pass.
+
+### B12 · Review
+
+- **Engine:**
+  1. The review brief says to append, never to start a new file (it says "Start a new file on line 1" today). R24 makes `CommitReview` require a new section.
+  2. The brief carries the data the original's reviewers get: each repository's base and range, the build-log paths, departures, `red:` lines and red outputs, earlier findings, and the commits since the last review.
+  3. Review dispatches one reviewer per touched repository, plus one across repositories, each with that repository's slice of the brief, on the strongest model tier. Their findings are merged into one appended section.
+  4. An uncommitted draft review is offered as is: the session asks whether to commit it or review afresh, and never discards it without a yes.
+- **Judgment** (`hoshin/skills/review/SKILL.md`, `references/review-brief.md`): run the repository's checks in check mode, never with `--fix`, and count a failure only on lines the change touched; red-verdict findings (red not observed, output showing the wrong test, or a missing `red` line is a medium `spec` finding at the log's `red:` line), except Hoshin.Net's `not observed: no testable behavior`, which is correct for a task with no test; the light-track new-behavior count by triage rule 3; drop a `convention` finding whose cited file the reviewer didn't read, and never base a finding on a rule that only states a value; the report items (baseline still failing, approved and fixed; unhooked checks; tasks with no stored red; what comes next).
+- **Test first:** hook tests: a two-repository review dispatches three reviewers, each brief holding its repository's range and log; a second review appends a section and keeps the first.
+- **Done when:** the tests pass and the review cases pass.
+
+### B13 · Done
+
+- **Engine:** report every repository's pull request URL, not only the master's (`Publisher.ExtractPullRequestUrl`), and the apps the change didn't touch.
+- **Judgment** (`hoshin/skills/done/SKILL.md`): what comes next: remove the change once merged; a missing review means run `review`; a check that hasn't passed means run `build` in that repository.
+- **Test first:** a two-repository publish reports both URLs and the untouched app.
+- **Done when:** the test passes, R21's test (11) passes, and the done cases pass.
+
+### B14 · Fix (the light track)
+
+- **Engine:**
+  1. Recheck the light-track boundary at acceptance, not only at the draft commit: a plan that grew past three tasks, or a second repository, is refused at accept.
+  2. The fix brief asks for `track: fix` in the intent, and `FixState` reports a missing one instead of throwing.
+  3. Feedback at `AwaitAcceptFix` redrafts: the engineer's changes go back to the model as a redraft step, and the boundary is checked again.
+  4. The engineer's own edits to the drafts are kept, not rewritten. The row-3 brief stops saying "write all three", and a stopped draft is finished without rewriting what exists.
+  5. A large change refused at the boundary is abandoned cleanly, without leaving a started change behind.
+- **Judgment** (`hoshin/skills/fix/SKILL.md`, `references/documents.md`, `states.md`, the shared triage reference): what rule 3 counts as a new behavior (a protecting test doesn't count; a Scenario Outline counts once); a refusal names the task and its tests, gives the intent command, and offers a split as the second option; a whole-repository check with no `build.finish` hook means the change isn't small; the intent skeleton (Root cause at `file:line`, the Decisions table, Open questions "None."); the spec rules (an Outline for three or more conditions, a neighboring scenario only when it's at risk, no extra requirements); the plan rules (one new failing test per task, no Shared decisions, a `test` on every task).
+- **Test first:** hook tests for engine items 1-5.
+- **Done when:** the tests pass, R21's light-track test (6) passes, and the fix cases pass.
+
+### B15 · Reject, reopen and abandon
+
+- **Fixes:** H13, the rest of R19, ANALYSIS §11.2 (README:52, DESIGN:124)
+- **Engine:** package `reject` and `reopen` as typed-only skills. Parse `intent --reject` and `fix --reject`. A rejection supersedes the plan and removes the change's copy, as the original's `change remove --abandon` does. Reopening an accepted document keeps the tasks already built and logged, instead of refusing because build work exists. Reopening on a broken pin stops and waits instead of regenerating.
+- **Judgment** (`hoshin/references/rejecting-a-change.md`, `hoshin/skills/intent/references/existing-change.md`): when to reject, when to reopen, and when to decline at approval instead (R22); what to tell the engineer after each.
+- **Test first:** hook tests: a typed reject closes the change, its commit is the branch tip, and the copy is gone; a reopened spec with T1 built keeps T1; a reopen on a broken pin waits.
+- **Done when:** the tests pass, R21's test (5) passes, and the reject and reopen cases pass.
+
+## R3-4 — release
+
+### R19 · Restore `start`/triage; package `reject` and `reopen`
+
+Moved: `start` is B05, and `reject` and `reopen` are B14, so each is judged by its own evals.
+
+### R20 · Publish a marketplace entry, tag a release, fix the doc claims
+
+- **Fixes:** ANALYSIS §11
+- **Needs:** D8
+- **Where:** `packaging/package.ps1`, the plugin's `plugin.json`, the marketplace (per D8), `CHANGELOG.md`, `CLIENTS.md`, `README.md`, `DESIGN.md`, `GRAMMAR.md`, `KATA_MIGRATION.md`, `CONTRIBUTING.md`, `WorkspaceMigrator`, `WorktreeDependencyLinks`, the workspace templates, CI.
+- **Do:**
+  1. Per D8: rename nothing. The plugin stays `hoshin`. Its entry in the original's marketplace (`hoshin/.claude-plugin/marketplace.json`, a change in that repository) points at Hoshin.Net's release bundle and names its version, which follows `VersionPrefix`. Upgrading is the migration path: README and KATA_MIGRATION say to upgrade, then run `hoshin migrate` (R10).
+  2. Pick the version by CLIENTS.md's rule (a breaking change means a major version). Fold the untagged `[2.0.0]` and `[Unreleased]` into that release in CHANGELOG.
+  3. A CI job builds the bundles with `package.ps1` on a tag and attaches them to a GitHub release. Tag a release candidate (`-rc.1`) for R40 first, and the final release from `main` after the merge.
+  4. Make every row of ANALYSIS §11.1 marked false or partly, and every row of §11.2, true, or remove the claim. GRAMMAR.md's body is rewritten for JSONC layout 2 and the hook engine; no `change.yml`, `node hoshin.ts` or YAML front matter remains. `migrate` names the right plugin. The `WorktreeDependencyLinks` comment stops saying the main checkout's dependency folders are "never mutated": they are live links, so a tool writing into `node_modules/.cache` writes into the main checkout. README's Known Limitations lists the accepted differences above.
+- **Test first:** a test that `plugin.json`, the marketplace entry and `VersionPrefix` agree; a doc test that GRAMMAR.md mentions none of `change.yml`, `node hoshin.ts` or `---` front matter.
+- **Done when:** the release candidate is installable from the marketplace on a clean machine, and bar item 5 holds.
+
+### R40 · A real change, run by the engineer
+
+- **Owner:** the engineer. An agent doesn't run this task.
+- **Needs:** every other round-3 task `done` or `invalid`, and the release candidate from R20.
+- **Do:** install the release candidate from the marketplace in a real workspace that has a master and at least one product repository. The engineer's own `ai-sdlc` workspace qualifies. Take one real change, not a fixture, from intent to merged pull requests, using only the plugin's commands. Write `docs/review/DOGFOOD.md`: the change, every point where the engineer had to step outside the workflow, and every defect. Each defect gets a gate test and an `R-new-<n>` task (R3-rule 6).
+- **Done when:** the change's pull requests are merged, and no defect from the run is open.
