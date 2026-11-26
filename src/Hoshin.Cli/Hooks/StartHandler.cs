@@ -175,7 +175,8 @@ internal sealed class StartHandler(
             return HandleReopen(ev, repo, state, args, rolesRoot);
         }
 
-        var prefix = ApplyHumanAcceptanceIfNeeded(ev, repo, state, invoked, isFixAccept);
+        var disagreement = TurnState.FormatNewProgressDisagreement(repo, state, _fs);
+        var prefix = disagreement + ApplyHumanAcceptanceIfNeeded(ev, repo, state, invoked, isFixAccept);
         if ((invoked == "accept" || isFixAccept) && TryFormatPostAcceptMessage(ev, repo, rolesRoot, prefix) is { } postAccept)
         {
             return postAccept;

@@ -258,7 +258,7 @@ public static class WorkflowEngine
             return null;
         }
 
-        var completed = CompletedTaskIds(state);
+        var completed = WorkflowProgress.CompletedTaskIds(state);
         var scheduleInputs = state.Plan.Tasks
             .Select(t => new ScheduledTaskInput(
                 t.Id,
@@ -284,29 +284,16 @@ public static class WorkflowEngine
 
         var nextTask = state.Plan.Tasks.First(t => t.Id == nextId);
         var verdicts = state.VerdictsForTask(nextTask);
-        if (verdicts.Count >= state.Plan.EffectiveMaxAttempts)
+        var failedVerdicts = verdicts.Where(v => !v.Passed).ToList();
+        if (failedVerdicts.Count >= state.Plan.EffectiveMaxAttempts)
         {
-            return new Done(false, $"{nextTask.Id} failed {verdicts.Count} attempts: {string.Join("; ", verdicts[^1].Reasons)}");
+            return new Done(false, $"{nextTask.Id} failed {failedVerdicts.Count} attempts: {string.Join("; ", failedVerdicts[^1].Reasons)}");
         }
 
         var attempt = verdicts.Count + 1;
-        return verdicts.Count == 0
+        return failedVerdicts.Count == 0
             ? new Implement(WorkflowBriefs.Implement(state, nextTask, attempt, []))
-            : new Retry(WorkflowBriefs.Implement(state, nextTask, attempt, verdicts[^1].Reasons), verdicts[^1].Reasons);
-    }
-
-    private static HashSet<string> CompletedTaskIds(WorkflowState state)
-    {
-        var completed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var task in state.Plan.Tasks)
-        {
-            if (state.VerdictsForTask(task).Any(v => v.Passed))
-            {
-                completed.Add(task.Id);
-            }
-        }
-
-        return completed;
+            : new Retry(WorkflowBriefs.Implement(state, nextTask, attempt, failedVerdicts[^1].Reasons), failedVerdicts[^1].Reasons);
     }
 
     private static string? SelectNextTaskId(WorkflowState state, ChangeSchedule schedule, out Step? sessionHandoff)

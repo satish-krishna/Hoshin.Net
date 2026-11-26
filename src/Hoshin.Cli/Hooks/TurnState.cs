@@ -13,6 +13,28 @@ internal static class TurnState
 
     public static string PendingReportPath(WorkflowRepo repo) => Path.Combine(repo.HoshinDir, "pending-report.txt");
 
+    public static string ProgressDisagreementPath(WorkflowRepo repo) => Path.Combine(repo.HoshinDir, "progress-disagreement.txt");
+
+    public static string FormatNewProgressDisagreement(WorkflowRepo repo, WorkflowState state, IFileSystem fs)
+    {
+        var notes = WorkflowProgress.DescribeDisagreements(state);
+        if (notes.Count == 0)
+        {
+            return "";
+        }
+
+        var signature = string.Join("\n", notes);
+        var path = ProgressDisagreementPath(repo);
+        if (fs.FileExists(path) && string.Equals(fs.ReadAllText(path), signature, StringComparison.Ordinal))
+        {
+            return "";
+        }
+
+        fs.CreateDirectory(repo.HoshinDir);
+        fs.WriteAllTextAtomic(path, signature);
+        return "Note: local ledger and committed build logs disagree:\n- " + string.Join("\n- ", notes) + "\n\n";
+    }
+
     public static bool IsDuplicateAntigravityStart(WorkflowRepo repo, string turnKey, IFileSystem fs)
     {
         var path = LastStartPath(repo);
