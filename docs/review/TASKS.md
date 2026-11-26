@@ -1462,6 +1462,7 @@ B02 and B03, the eval gates, are written up in R3-3 with the other EPIC-B tasks,
   2. Clear `run.json` only from the session that owns the run, or when the change itself is done.
   3. Extend `IsBlockedByOtherActiveBuild` to every step that has an owner, so another session can't take over a document, review or fix step (S16). The blocked session is told who owns the run; it doesn't get silence.
 - **Test first:** the master session at the review step, then `/hoshin:build` in a product repository with no tasks left: `run.json` still exists, the product session is told the review is next, and the master's review is committed and recorded.
+- **Reviewer correction (2026-11-26, while writing R21):** the path in **Problem** does not happen as written. A typed `/hoshin:build` in a product repository with nothing left is refused by `WorkflowEngine.Gate` ("`build` cannot run on this change now") before `StartHandler` can delete `run.json`. The defect R23 fixes is still real through item 3 (S16): a second session that types the owned step, here a second master session typing `/hoshin:review` while the first writes the review, gets the same brief and takes the run over. R21 (10) drives that path, and keeps the product-session build as its first half. Items 1 and 2 still stand: nothing may clear another session's run.
 - **Done when:** the test passes, and R21's two-session test (10) passes.
 
 ### R24 · Commit only what the task changed, and check Green on a clean HEAD
@@ -1607,15 +1608,15 @@ Text that drives `hoshin.ts` in the original is not ported; the engine does that
 ### B03 · Port the eval suite
 
 - **Owner:** the reviewer (R3-rule 1). It lands in R3-0, after B02.
-- **Where:** `evals/<case>/` for LLM cases; `tests/Hoshin.Tests/Acceptance/Parity/` for deterministic ones; `hoshin/evals/` (60 cases) as the source.
-- **Problem:** the original has 60 cases plus grader self-tests. Their graders read `hoshin.ts … commit` calls and YAML front matter, so none run as they are. About half of them test mechanism, not judgment, and an LLM run is the most expensive and least reliable way to check a mechanism.
+- **Where:** `evals/<case>/` for LLM cases; `tests/Hoshin.Tests/Acceptance/Parity/` for deterministic ones; `hoshin/evals/` (56 cases; an earlier count said 60) as the source.
+- **Problem:** the original has 56 cases plus grader self-tests. Their graders read `hoshin.ts … commit` calls and YAML front matter, so none run as they are. About half of them test mechanism, not judgment, and an LLM run is the most expensive and least reliable way to check a mechanism.
 - **Do:**
-  1. Sort every original case into one of three destinations, in a table in `evals/README.md`: an LLM case (it judges the model's work), a C# parity test (it checks what the engine does), or dropped, with the accepted difference that explains it. Every one of the 60 has a row.
+  1. Sort every original case into one of three destinations, in a table in `evals/README.md`: an LLM case (it judges the model's work), a C# parity test (it checks what the engine does), or dropped, with the accepted difference that explains it. Every one of the 56 has a row.
   2. LLM cases: rewrite the graders for what Hoshin.Net produces. Commit subjects come from the reflog (Hoshin.Net's are `docs(<scope>): draft <doc> <change>`, `docs(<scope>): log T1 <change>`, `docs(<scope>): review <change>`). Documents are read as JSONC front matter. The hook trace comes from `.git/hoshin/hooks.jsonl`. "Committed through the program" becomes "the library made the commit, and the guard denied any manual commit".
   3. C# parity tests drive hook payloads, the way the acceptance gate does, including typed-user payloads for the human-only steps.
   4. Port the grader self-tests, in the form the black-box suites use.
   5. Add cases for what the original's suite never covered but Hoshin.Net's skills now need: the per-repository review dispatch (B12) and the start-to-fix handoff (B05).
-- **Done when:** every one of the 60 has a row; every LLM case and parity test fails today for the reason its row gives; and the grader self-tests pass.
+- **Done when:** every one of the 56 has a row; every LLM case and parity test fails today for the reason its row gives; and the grader self-tests pass.
 
 ### B04 · Skill descriptions that trigger
 
