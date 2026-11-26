@@ -351,18 +351,21 @@ public sealed class BranchCoverageTests
         // References repo.HoshinDir directly
         Assert.Contains(repo.HoshinDir, GuardTamperingProtection.CheckShellCommand($"rm -rf \"{repo.HoshinDir}\"", writes, repo)!);
 
-        // Missing run.json with corrupt ledger -> tampering detected
+        // Missing run.json with corrupt ledger -> tampering detected for owning session
+        var stopEv = TestServices.HookAdapter.Parse("""{"hook_event_name":"Stop","session_id":"s1","stop_hook_active":false}""");
+        Directory.CreateDirectory(repo.HoshinDir);
+        repo.WriteStep(new CurrentStep(StepKind.Implement, "T1", 1, repo.Head(), DateTimeOffset.UtcNow, SessionId: "s1", ChangeFolder: repo.ChangeFolder));
         Directory.CreateDirectory(repo.LedgerFolder);
         File.WriteAllText(repo.LedgerPath, "{ not valid json");
-        Assert.Contains("could not be read", GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, TestServices.WorkflowStateReader, null)!);
+        Assert.Contains("could not be read", GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, stopEv, TestServices.WorkflowStateReader, null)!);
 
         // Empty ledger (no records) -> no tampering
         repo.WriteLedger(LedgerStore.Empty());
-        Assert.Null(GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, TestServices.WorkflowStateReader, null));
+        Assert.Null(GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, stopEv, TestServices.WorkflowStateReader, null));
 
         // Ledger with records but no plan (state == null) -> returns null
         repo.WriteLedger(LedgerStore.Empty() with { Verdicts = [new WorkflowVerdict("T1", 1, "abc", true, "ok", [], DateTimeOffset.UtcNow)] });
-        Assert.Null(GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, TestServices.WorkflowStateReader, null));
+        Assert.Null(GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, stopEv, TestServices.WorkflowStateReader, null));
     }
 
     // -------------------------------------------------------------------------

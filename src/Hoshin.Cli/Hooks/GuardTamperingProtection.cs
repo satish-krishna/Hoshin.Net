@@ -80,9 +80,18 @@ public static partial class GuardTamperingProtection
         return null;
     }
 
-    public static string? DetectMissingRunMarkerTampering(WorkflowRepo repo, WorkflowStateReader stateReader, string? rolesRoot)
+    public static string? DetectMissingRunMarkerTampering(
+        WorkflowRepo repo,
+        NormalizedHookEvent ev,
+        WorkflowStateReader stateReader,
+        string? rolesRoot)
     {
-        if (File.Exists(repo.RunMarkerPath) || !File.Exists(repo.LedgerPath))
+        if (ev.ContinuationActive || File.Exists(repo.RunMarkerPath) || !File.Exists(repo.LedgerPath))
+        {
+            return null;
+        }
+
+        if (!IsMissingRunOwnedByEventSession(repo, ev))
         {
             return null;
         }
@@ -128,6 +137,18 @@ public static partial class GuardTamperingProtection
         {
             return null;
         }
+    }
+
+    private static bool IsMissingRunOwnedByEventSession(WorkflowRepo repo, NormalizedHookEvent ev)
+    {
+        if (string.IsNullOrEmpty(ev.SessionId))
+        {
+            return false;
+        }
+
+        var stepSession = repo.ReadStep()?.SessionId;
+        return !string.IsNullOrEmpty(stepSession)
+            && string.Equals(stepSession, ev.SessionId, StringComparison.Ordinal);
     }
 
     private static bool IsInsideDirectory(string candidatePath, string repoRoot, string protectedDir)

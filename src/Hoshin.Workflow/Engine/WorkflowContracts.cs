@@ -238,13 +238,14 @@ public sealed record CurrentStep(
     bool IsFix = false,
     string? FixInstructions = null);
 
-/// <summary>Active run marker stored in <c>.git/hoshin/run.json</c> identifying the owning session and harness.</summary>
+/// <summary>Active run marker stored in <c>.git/hoshin/run.json</c> identifying the owning session, harness, and parked state.</summary>
 public sealed record RunMarker(
     DateTimeOffset Started,
     string? SessionId = null,
     string? Harness = null,
     string? ChangeFolder = null,
-    string? Change = null);
+    string? Change = null,
+    bool Parked = false);
 
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(CurrentStep))]

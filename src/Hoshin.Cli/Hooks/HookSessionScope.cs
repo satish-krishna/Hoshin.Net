@@ -12,7 +12,7 @@ internal static class HookSessionScope
 
     public static bool IsActiveNonStale(RunMarker? marker, CurrentStep? step, DateTimeOffset now)
     {
-        if (marker is null)
+        if (marker is null || marker.Parked)
         {
             return false;
         }

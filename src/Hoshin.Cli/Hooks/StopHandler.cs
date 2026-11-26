@@ -32,7 +32,7 @@ internal sealed class StopHandler(
         var repo = resolved.WorkflowRepo;
         if (!_fs.FileExists(repo.RunMarkerPath))
         {
-            var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, _advancer.StateReader, rolesRoot);
+            var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, ev, _advancer.StateReader, rolesRoot);
             return tamper is not null
                 ? (_adapter.BlockStopOutput(ev.Harness, tamper), "block: run.json tampering detected")
                 : (_adapter.EmptyOutput(ev.Harness), "no run");
@@ -135,7 +135,11 @@ internal sealed class StopHandler(
                 if (blocks > MaxStopBlocks)
                 {
                     TurnState.ClearTurnFiles(repo, _fs);
-                    TurnState.TryDelete(repo.RunMarkerPath, _fs);
+                    var existing = repo.ReadRunMarker();
+                    var parked = existing is not null
+                        ? existing with { Parked = true }
+                        : new RunMarker(_time.GetUtcNow(), ev.SessionId, ev.HarnessName, repo.ChangeFolder, repo.ChangeKey, Parked: true);
+                    repo.WriteRunMarker(parked);
                     return (_adapter.SystemMessageOutput(ev.Harness, $"hoshin: parked after {MaxStopBlocks} stops without taking the step ({step.Kind})."), $"parked after {blocks - 1} blocks");
                 }
 
