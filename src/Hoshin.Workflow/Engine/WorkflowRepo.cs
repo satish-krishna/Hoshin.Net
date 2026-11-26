@@ -169,7 +169,8 @@ public sealed class WorkflowRepo
     public string CodeHead()
     {
         var reviewRel = Path.GetRelativePath(Root, Path.Combine(ChangeFolder, "build", "review.md")).Replace('\\', '/');
-        var sha = _gitQuery.CodeHead(Root, reviewRel);
+        var recordRel = Path.GetRelativePath(Root, Path.Combine(ChangeFolder, "change.jsonc")).Replace('\\', '/');
+        var sha = _gitQuery.CodeHead(Root, [reviewRel, recordRel]);
         return !string.IsNullOrWhiteSpace(sha) ? sha : Head();
     }
 

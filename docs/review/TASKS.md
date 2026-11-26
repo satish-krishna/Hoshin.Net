@@ -1096,7 +1096,7 @@ Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reas
 | R04 | R1 | Red runs `compile`, and sees the repository's gitignored tools | E14, E15 | — | 2, 3 | done |
 | R05 | R1 | Progress comes from the committed build logs | W6 | R02 | — (own test) | done |
 | R06 | R1 | A fix loop after checks, review and approval | W3 | R02, D6 for the approval part | 4, 5, 6 | checks & review done (approval awaits D6) |
-| R07 | R1 | Publishing reaches `Done` and stays there | W1 | R02 | 8, 9 | open |
+| R07 | R1 | Publishing reaches `Done` and stays there | W1 | R02 | 8, 9 | done |
 | R08 | R1 | A parked build traps no session and can be resumed | W2 | R02 | companion 2 | open |
 | R09 | R1 | The guard sees every shell and write tool | S11 | — | companion 3 | open |
 | R10 | R2 | `migrate` keeps in-flight changes valid | L13, L14, L15, L16 | — | — | open |

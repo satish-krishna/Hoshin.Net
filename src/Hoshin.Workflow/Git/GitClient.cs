@@ -595,8 +595,19 @@ public sealed class ProcessGitClient(ICommandRunner runner) : IGitClient
         throw new CouldNotRunException($"git diff failed in {top}: {(string.IsNullOrEmpty(r.Stderr) ? r.Stdout : r.Stderr).Trim()}");
     }
 
-    public string? CodeHead(string dir, string excludeRelativePath) =>
-        Out(dir, ["log", "-1", "--format=%H", "--", ".", $":(exclude){excludeRelativePath}"]);
+    public string? CodeHead(string dir, IReadOnlyList<string> excludeRelativePaths)
+    {
+        var args = new List<string> { "log", "-1", "--format=%H", "--", "." };
+        foreach (var path in excludeRelativePaths)
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                args.Add($":(exclude){path}");
+            }
+        }
+
+        return Out(dir, args);
+    }
 
     public string? LastCommitForPath(string dir, string relativePath) =>
         Out(dir, ["log", "-1", "--format=%H", "--", relativePath]);

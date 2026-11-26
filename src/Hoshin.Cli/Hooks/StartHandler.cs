@@ -188,6 +188,12 @@ internal sealed class StartHandler(
         }
 
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, isFixAccept ? null : invoked, sessionRepo, buildInstructions);
+        if (step is Done)
+        {
+            TurnState.ClearTurnFiles(repo, _fs);
+            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+        }
+
         var suffix = BuildPromptSuffix(invoked, args, step);
         return EmitStartContext(ev, repo, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: prefix, suffix: suffix), $"{invoked}: {step.Kind}");
     }
