@@ -1090,7 +1090,7 @@ Today the engineer can only approve (W3). **Options:** (a) `/hoshin:reject <reas
 | ID | Tier | Title | Fixes | Needs | Gate stage | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | R00 | R0 | End-to-end acceptance gate | §12.1 | — | — | done (`617291d`) |
-| R01 | R1 | A hook crash reaches the session | W14 | — | all (diagnosis) | open |
+| R01 | R1 | A hook crash reaches the session | W14 | — | all (diagnosis) | done |
 | R02 | R1 | Every hook finds the run and the change's checkout the same way | W11, W12, W13 | R01 | 1 | open |
 | R03 | R1 | One workspace locator; sessions anywhere; a session builds only its repository | W4, W5, W13 | R02 | 2, 3 | open |
 | R04 | R1 | Red runs `compile`, and sees the repository's gitignored tools | E14, E15 | — | 2, 3 | open |
