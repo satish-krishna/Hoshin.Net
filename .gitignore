@@ -34,3 +34,6 @@ Desktop.ini
 ## Dogfooding safety: never commit local harness hooks in the repo root during development
 /.agents/hooks.json
 /.claude-plugin/
+
+## Eval runner: the bundle evals/run.sh builds
+/evals/.bundle/

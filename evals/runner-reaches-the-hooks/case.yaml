@@ -1,0 +1,25 @@
+schema_version: "1.1"
+name: runner-reaches-the-hooks
+description: The runner's own smoke case (B02). The plugin under test is the built Claude Code bundle, whose hooks run `dotnet lib/hoshin.dll`. A request in plain words fires the intent skill, the hooks start a run, and the run's trace exists. If dotnet is missing or the hooks fail, every hook fails without blocking, so skill-fired alone would pass; hook-trace-has-an-entry is what fails then. Every case in this suite carries that grader for the same reason.
+tags: [runner]
+plugins: ["../.bundle/claude-code"]
+runs: 1
+execution:
+  prompt: |
+    I want to capture an intent for system demo: returning visitors should be able to turn the greeting off. Start the intent, ask me your first interview question, and then stop; I will answer in another session.
+  max_turns: 8
+  timeout_seconds: 300
+  allowed_tools: [Read, Glob, Grep, Skill]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?intent"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl

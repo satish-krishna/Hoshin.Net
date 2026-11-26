@@ -1,0 +1,78 @@
+name: evals
+
+# The LLM eval suite (evals/, B02). It costs about $0.50 per case per run, so it never runs on every push: only on a
+# pull request labeled `run-evals`, on a release tag, or by hand. The cost cap stops the run; unstarted cases make the
+# job exit 2, which fails it.
+on:
+  pull_request:
+    types: [labeled, synchronize]
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: "Case glob (claude plugin eval --case); empty runs every case"
+        required: false
+        default: ""
+      max_cost_usd:
+        description: "Cost cap in US dollars"
+        required: false
+        default: "40"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  evals:
+    name: evals (ubuntu-latest)
+    if: >-
+      github.event_name != 'pull_request'
+      || contains(github.event.pull_request.labels.*.name, 'run-evals')
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install the eval sandbox and Claude Code
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q bubblewrap socat
+          npm install -g @anthropic-ai/claude-code
+          claude --version
+          claude init --bare
+
+      - name: Run the suite
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          HOSHIN_EVAL_MAX_COST: ${{ github.event.inputs.max_cost_usd || '40' }}
+          CASES: ${{ github.event.inputs.cases }}
+        run: |
+          if [ -n "$CASES" ]; then
+            bash evals/run.sh --case "$CASES"
+          else
+            bash evals/run.sh
+          fi
+
+      - name: Keep the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evals-results-${{ github.run_id }}
+          path: evals/results/
+          if-no-files-found: warn
