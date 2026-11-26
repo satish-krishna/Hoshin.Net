@@ -34,7 +34,7 @@ public interface IChangeStarter
 
 /// <summary>Starts new changes through <c>EventRunner</c> (<c>ChangeStartStep</c>) and discovers open changes across main checkout and copies.</summary>
 public sealed partial class ChangeStarter(
-    IWorkspaceResolver resolver,
+    IWorkspaceLocator workspaceLocator,
     MarkerReader markerReader,
     ChangeLocator changeLocator,
     ChangeListService changeList,
@@ -46,7 +46,7 @@ public sealed partial class ChangeStarter(
     IFileSystem fileSystem,
     TimeProvider timeProvider) : IChangeStarter
 {
-    private readonly IWorkspaceResolver _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
+    private readonly IWorkspaceLocator _workspaceLocator = workspaceLocator ?? throw new ArgumentNullException(nameof(workspaceLocator));
     private readonly MarkerReader _markerReader = markerReader ?? throw new ArgumentNullException(nameof(markerReader));
     private readonly ChangeLocator _changeLocator = changeLocator ?? throw new ArgumentNullException(nameof(changeLocator));
     private readonly ChangeListService _changeList = changeList ?? throw new ArgumentNullException(nameof(changeList));
@@ -67,29 +67,18 @@ public sealed partial class ChangeStarter(
     public bool HasWorkspaceMarker(WorkflowRepo repo)
     {
         ArgumentNullException.ThrowIfNull(repo);
-        if (_fs.FileExists(Path.Combine(repo.Root, MarkerConstants.FileName)))
-        {
-            return true;
-        }
-
-        var parent = Directory.GetParent(repo.Root)?.FullName;
-        return parent is not null && _fs.FileExists(Path.Combine(parent, "master", MarkerConstants.FileName));
+        return _workspaceLocator.HasWorkspaceMarker(repo.Root);
     }
 
     public IReadOnlyList<OpenChangeOption> ListOpenChanges(WorkflowRepo repo)
     {
         ArgumentNullException.ThrowIfNull(repo);
-        if (!HasWorkspaceMarker(repo))
+        var resolution = _workspaceLocator.TryResolve(repo.Root);
+        if (resolution?.Master is null)
         {
             return ChangeFolderResolver.ListIntentChanges(repo.Root, _fs)
                 .Select(c => new OpenChangeOption(c.Change, repo.Root, c.Folder))
                 .ToList();
-        }
-
-        var resolution = _resolver.Resolve(repo.Root, new ResolveOptions(null, null));
-        if (resolution.Master is null)
-        {
-            return [];
         }
 
         var mainMaster = _gitWorktrees.MainCheckout(resolution.Master);
@@ -110,10 +99,10 @@ public sealed partial class ChangeStarter(
 
     public ChangeStartHookResult StartFromHook(string cwd, string skill, string? rawArgs)
     {
-        var resolution = _resolver.Resolve(cwd, new ResolveOptions(null, null));
-        if (resolution.Master is null || resolution.Workspace is null)
+        var resolution = _workspaceLocator.TryResolve(cwd);
+        if (resolution?.Master is null || resolution.Workspace is null)
         {
-            return Fail(string.Join("; ", resolution.Problems));
+            return Fail($"No master repository found for `{cwd}`. An engineer needs to run the hoshin setup skill first.");
         }
 
         var mainMaster = _gitWorktrees.MainCheckout(resolution.Master);

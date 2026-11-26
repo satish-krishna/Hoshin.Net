@@ -21,7 +21,8 @@ public sealed record WorkflowState(
     ChangeStateItem? ChangeState = null,
     Dictionary<string, RepoLedger>? RepoLedgers = null,
     Dictionary<string, string>? RepoPaths = null,
-    bool IsLightTrack = false)
+    bool IsLightTrack = false,
+    string? SessionRepo = null)
 {
     public string EffectiveCodeHead => string.IsNullOrWhiteSpace(CodeHead) ? Head : CodeHead;
 

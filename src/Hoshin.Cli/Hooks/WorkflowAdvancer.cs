@@ -23,12 +23,12 @@ internal sealed class WorkflowAdvancer(
 
     public WorkflowStateReader StateReader => _stateReader;
 
-    public WorkflowState? ReadState(WorkflowRepo repo, string? rolesRoot, out string? error)
+    public WorkflowState? ReadState(WorkflowRepo repo, string? rolesRoot, out string? error, string? sessionRepo = null)
     {
         error = null;
         try
         {
-            return _stateReader.Read(repo, rolesRoot);
+            return _stateReader.Read(repo, rolesRoot, sessionRepo);
         }
         catch (CouldNotRunException e)
         {
@@ -37,20 +37,25 @@ internal sealed class WorkflowAdvancer(
         }
     }
 
-    public (WorkflowVerdict Verdict, Step Next) JudgeAndAdvance(WorkflowRepo repo, string? rolesRoot, CurrentStep current, string? sessionId)
+    public (WorkflowVerdict Verdict, Step Next) JudgeAndAdvance(
+        WorkflowRepo repo,
+        string? rolesRoot,
+        CurrentStep current,
+        string? sessionId,
+        string? sessionRepo = null)
     {
-        var state = ReadState(repo, rolesRoot, out var error)
+        var state = ReadState(repo, rolesRoot, out var error, sessionRepo)
             ?? throw new InvalidOperationException(error ?? $"Could not read workflow state for {repo.Root} ({repo.ChangeFolder}).");
         var verdict = _tasks.EvaluateAndCommitTask(repo, state, current.Task!, current.Attempt);
         StopCounterStore.ResetAll(repo);
-        return (verdict, Advance(repo, rolesRoot, sessionId));
+        return (verdict, Advance(repo, rolesRoot, sessionId, sessionRepo: sessionRepo));
     }
 
-    public Step Advance(WorkflowRepo repo, string? rolesRoot, string? sessionId, string? invokedSkill = null)
+    public Step Advance(WorkflowRepo repo, string? rolesRoot, string? sessionId, string? invokedSkill = null, string? sessionRepo = null)
     {
         while (true)
         {
-            var state = ReadState(repo, rolesRoot, out var error);
+            var state = ReadState(repo, rolesRoot, out var error, sessionRepo);
             if (state is null)
             {
                 return new Done(false, error ?? "no plan");

@@ -12,7 +12,13 @@ public sealed record ResolvedHookRun(
     string? SessionRepoRoot,
     string? SessionRepoName,
     string? WorkspaceRoot,
-    string? MasterMainRoot);
+    string? MasterMainRoot)
+{
+    public string? ProductRepoName =>
+        !string.IsNullOrWhiteSpace(SessionRepoName) && !string.Equals(SessionRepoName, "master", StringComparison.Ordinal)
+            ? SessionRepoName
+            : null;
+}
 
 /// <summary>Single owner resolving the active run, change checkout (copy when present), and session repository for all hooks and the guard.</summary>
 public interface IHookRunResolver

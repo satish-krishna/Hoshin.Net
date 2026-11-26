@@ -21,11 +21,12 @@ internal sealed class ResultHandler(
 
     public (string? Output, string Decision) HandleResult(NormalizedHookEvent ev, string? rolesRoot)
     {
-        if (!TryResolveActiveBuildStep(ev, out var repo, out var current, out var skipReason))
+        if (!TryResolveActiveBuildStep(ev, out var resolved, out var current, out var skipReason))
         {
             return (_adapter.EmptyOutput(ev.Harness), skipReason);
         }
 
+        var repo = resolved.WorkflowRepo;
         if (ev.IsAntigravity && ev.IsTaskManageTool)
         {
             return (_adapter.EmptyOutput(ev.Harness), $"observed {ev.ToolName}");
@@ -47,7 +48,7 @@ internal sealed class ResultHandler(
         }
 
         // Foreground subagent completed: judge attempt immediately and hand out next step.
-        var (verdict, step) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId);
+        var (verdict, step) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId, resolved.ProductRepoName);
         return (
             _adapter.ContextOutput(ev, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: WorkflowAdvancer.ReportVerdict(current, verdict))),
             $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
@@ -55,21 +56,22 @@ internal sealed class ResultHandler(
 
     private bool TryResolveActiveBuildStep(
         NormalizedHookEvent ev,
-        out WorkflowRepo repo,
+        out ResolvedHookRun resolved,
         out CurrentStep current,
         out string skipReason)
     {
-        repo = null!;
+        resolved = null!;
         current = null!;
         skipReason = "no run";
 
-        var resolved = _runResolver.Resolve(ev);
-        if (resolved is null || !_fs.FileExists(resolved.WorkflowRepo.RunMarkerPath))
+        var found = _runResolver.Resolve(ev);
+        if (found is null || !_fs.FileExists(found.WorkflowRepo.RunMarkerPath))
         {
             return false;
         }
 
-        repo = resolved.WorkflowRepo;
+        resolved = found;
+        var repo = found.WorkflowRepo;
         if (!HookSessionScope.IsRunSession(repo, ev, _time.GetUtcNow(), out var marker, out var step)
             || !HookSessionScope.IsParentRunSession(marker!, ev))
         {
@@ -89,7 +91,8 @@ internal sealed class ResultHandler(
 
     public (string? Output, string Decision) HandleSubagentStop(NormalizedHookEvent ev, string? rolesRoot)
     {
-        var repo = _runResolver.Resolve(ev)?.WorkflowRepo;
+        var resolved = _runResolver.Resolve(ev);
+        var repo = resolved?.WorkflowRepo;
         if (repo is null || !_fs.FileExists(repo.RunMarkerPath))
         {
             return (_adapter.EmptyOutput(ev.Harness), "no run");
@@ -109,7 +112,7 @@ internal sealed class ResultHandler(
             return (_adapter.EmptyOutput(ev.Harness), "not the step's subagent");
         }
 
-        var (verdict, step) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, repo.ReadRunMarker()?.SessionId);
+        var (verdict, step) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, repo.ReadRunMarker()?.SessionId, resolved!.ProductRepoName);
         TurnState.QueuePendingReport(repo, WorkflowAdvancer.ReportVerdict(current, verdict), _fs);
         return (_adapter.EmptyOutput(ev.Harness), $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
     }

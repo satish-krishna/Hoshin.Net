@@ -59,6 +59,7 @@ public sealed class HoshinServices
     private readonly Lazy<EventRunner> _eventRunner;
     private readonly Lazy<IAllowListedCommandRunner> _allowListedRunner;
     private readonly Lazy<BuildLogWriter> _buildLogWriter;
+    private readonly Lazy<IWorkspaceLocator> _workspaceLocator;
     private readonly Lazy<IWorkflowEventBridge> _workflowEventBridge;
     private readonly Lazy<ITaskRepoResolver> _taskRepoResolver;
     private readonly Lazy<ITaskEvaluator> _taskEvaluator;
@@ -124,6 +125,7 @@ public sealed class HoshinServices
     public EventRunner EventRunner => _eventRunner.Value;
     public IAllowListedCommandRunner AllowListedRunner => _allowListedRunner.Value;
     public BuildLogWriter BuildLogWriter => _buildLogWriter.Value;
+    public IWorkspaceLocator WorkspaceLocator => _workspaceLocator.Value;
     public IWorkflowEventBridge WorkflowEventBridge => _workflowEventBridge.Value;
     public ITaskRepoResolver TaskRepoResolver => _taskRepoResolver.Value;
     public ITaskEvaluator TaskEvaluator => _taskEvaluator.Value;
@@ -235,8 +237,9 @@ public sealed class HoshinServices
             TimeProvider));
         _allowListedRunner = new(() => new AllowListedCommandRunner());
         _buildLogWriter = new(() => new BuildLogWriter(FileSystem));
-        _workflowEventBridge = new(() => new WorkflowEventBridge(EventContext, EventRunner, FileSystem));
-        _taskRepoResolver = new(() => new TaskRepoResolver(Resolver, Apps, Git, FileSystem, Ledger));
+        _workspaceLocator = new(() => new WorkspaceLocator(Resolver));
+        _workflowEventBridge = new(() => new WorkflowEventBridge(EventContext, EventRunner, WorkspaceLocator, FileSystem));
+        _taskRepoResolver = new(() => new TaskRepoResolver(WorkspaceLocator, Apps, Git, FileSystem, Ledger));
         _taskEvaluator = new(() => new TaskEvaluator(Git, Git, Git, Git, AllowListedRunner, BuildLogWriter, WorkflowEventBridge, TaskRepoResolver, TimeProvider));
         _checkRunner = new(() => new CheckRunner(Git, AllowListedRunner, WorkflowEventBridge, TaskRepoResolver, TimeProvider));
         _approvalRecorder = new(() => new ApprovalRecorder(TimeProvider));
@@ -259,8 +262,8 @@ public sealed class HoshinServices
             ApprovalRecorder,
             Publisher,
             DocumentCommitter));
-        _workflowStateReader = new(() => new WorkflowStateReader(PlanReader, ChangeState, TaskRepoResolver, FileSystem));
-        _changeStarter = new(() => new ChangeStarter(Resolver, MarkerReader, ChangeLocator, ChangeList, ScopeRules, EventRunner, Git, Git, Git, FileSystem, TimeProvider));
+        _workflowStateReader = new(() => new WorkflowStateReader(PlanReader, ChangeState, TaskRepoResolver, WorkspaceLocator, FileSystem));
+        _changeStarter = new(() => new ChangeStarter(WorkspaceLocator, MarkerReader, ChangeLocator, ChangeList, ScopeRules, EventRunner, Git, Git, Git, FileSystem, TimeProvider));
         _hookRunResolver = new(() => new HookRunResolver(Resolver, MarkerReader, Git, Git, Git, FileSystem, Ledger));
         _hookAdapter = new(() => new HarnessAdapter(TimeProvider));
         _hookOrchestrator = new(() => new HookOrchestrator(

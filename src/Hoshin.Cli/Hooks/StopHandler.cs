@@ -23,12 +23,13 @@ internal sealed class StopHandler(
 
     public (string? Output, string Decision) Handle(NormalizedHookEvent ev, string? rolesRoot)
     {
-        var repo = _runResolver.Resolve(ev)?.WorkflowRepo;
-        if (repo is null)
+        var resolved = _runResolver.Resolve(ev);
+        if (resolved is null)
         {
             return (_adapter.EmptyOutput(ev.Harness), "no run");
         }
 
+        var repo = resolved.WorkflowRepo;
         if (!_fs.FileExists(repo.RunMarkerPath))
         {
             var tamper = GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, _advancer.StateReader, rolesRoot);
@@ -50,8 +51,9 @@ internal sealed class StopHandler(
             return wait;
         }
 
-        var verdictReport = CollectVerdictReport(ev, repo, rolesRoot, current, trackedAgentId);
-        return DispatchActiveStepStop(ev, repo, rolesRoot, current, verdictReport);
+        var sessionRepo = resolved.ProductRepoName;
+        var verdictReport = CollectVerdictReport(ev, repo, rolesRoot, current, trackedAgentId, sessionRepo);
+        return DispatchActiveStepStop(ev, repo, rolesRoot, current, verdictReport, sessionRepo);
     }
 
     private (string? Output, string Decision)? WaitForRunningBackgroundSubagent(NormalizedHookEvent ev, string? trackedAgentId)
@@ -74,14 +76,15 @@ internal sealed class StopHandler(
         WorkflowRepo repo,
         string? rolesRoot,
         CurrentStep? current,
-        string? trackedAgentId)
+        string? trackedAgentId,
+        string? sessionRepo)
     {
         var report = TurnState.DrainPendingReport(repo, _fs);
         if (current is { Task: not null }
             && trackedAgentId is not null
             && !repo.ReadLedger().WorkflowVerdicts.Any(v => v.Task == current.Task && v.Attempt == current.Attempt))
         {
-            var (verdict, _) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId);
+            var (verdict, _) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId, sessionRepo);
             report += WorkflowAdvancer.ReportVerdict(current, verdict);
         }
 
@@ -93,12 +96,13 @@ internal sealed class StopHandler(
         WorkflowRepo repo,
         string? rolesRoot,
         CurrentStep? current,
-        string verdictReport)
+        string verdictReport,
+        string? sessionRepo)
     {
         var hasReport = verdictReport.Length > 0;
         if (current?.Kind == StepKind.Review)
         {
-            if (hasReport && _advancer.ReadState(repo, rolesRoot, out _) is { } rs && WorkflowEngine.Next(rs) is ReviewDocument rv)
+            if (hasReport && _advancer.ReadState(repo, rolesRoot, out _, sessionRepo) is { } rs && WorkflowEngine.Next(rs) is ReviewDocument rv)
             {
                 return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(rv, ev.Harness, prefix: verdictReport)), "continue: report Review");
             }
@@ -111,7 +115,7 @@ internal sealed class StopHandler(
             return StopWhileFixing(ev, repo, rolesRoot);
         }
 
-        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
+        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, sessionRepo: sessionRepo);
         return step is WriteDocument write
             ? StopWhileWriting(ev, repo, rolesRoot, write)
             : HandleAdvancedStepStop(ev, repo, step, verdictReport, hasReport);

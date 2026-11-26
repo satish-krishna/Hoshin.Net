@@ -13,14 +13,16 @@ public sealed class WorkflowStateReader(
     PlanReader planReader,
     ChangeStateService changeState,
     ITaskRepoResolver taskRepoResolver,
+    IWorkspaceLocator workspaceLocator,
     IFileSystem fileSystem)
 {
     private readonly PlanReader _planReader = planReader ?? throw new ArgumentNullException(nameof(planReader));
     private readonly ChangeStateService _changeState = changeState ?? throw new ArgumentNullException(nameof(changeState));
     private readonly ITaskRepoResolver _taskRepos = taskRepoResolver ?? throw new ArgumentNullException(nameof(taskRepoResolver));
+    private readonly IWorkspaceLocator _workspaceLocator = workspaceLocator ?? throw new ArgumentNullException(nameof(workspaceLocator));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
 
-    public WorkflowState? Read(WorkflowRepo repo, string? skillsRoot = null)
+    public WorkflowState? Read(WorkflowRepo repo, string? skillsRoot = null, string? sessionRepo = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
 
@@ -55,12 +57,13 @@ public sealed class WorkflowStateReader(
             changeItem,
             repoLedgers,
             repoPaths,
-            isLightTrack);
+            isLightTrack,
+            sessionRepo);
     }
 
     private ChangeStateItem? TryComputeChangeState(WorkflowRepo repo)
     {
-        if (!HasWorkspaceMarker(repo) || !IsIntentLayout(repo) || !HasIntentDocument(repo))
+        if (!_workspaceLocator.HasWorkspaceMarker(repo.Root) || !IsIntentLayout(repo) || !HasIntentDocument(repo))
         {
             return null;
         }
@@ -81,23 +84,8 @@ public sealed class WorkflowStateReader(
         return repo.GitQuery.ExistsAt(repo.Root, "HEAD", relative);
     }
 
-    private bool HasWorkspaceMarker(WorkflowRepo repo)
-    {
-        if (_fs.FileExists(Path.Combine(repo.Root, MarkerConstants.FileName)))
-        {
-            return true;
-        }
-
-        var parent = Directory.GetParent(repo.Root)?.FullName;
-        return parent is not null && _fs.FileExists(Path.Combine(parent, "master", MarkerConstants.FileName));
-    }
-
-    private static bool IsIntentLayout(WorkflowRepo repo)
-    {
-        var relative = Path.GetRelativePath(repo.Root, repo.ChangeFolder).Replace('\\', '/').Trim('/');
-        var parts = relative.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 3 && parts[0].Equals("intent", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsIntentLayout(WorkflowRepo repo) =>
+        ChangeLedgerPaths.TryExtractIntentSystemAndChange(repo.ChangeFolder, out _, out _);
 
     private static WorkflowPlan? BuildFallbackPlan(WorkflowRepo repo, ChangeStateItem? changeItem)
     {

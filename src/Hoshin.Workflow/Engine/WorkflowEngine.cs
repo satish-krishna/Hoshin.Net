@@ -170,7 +170,9 @@ public static class WorkflowEngine
         var review = state.Ledger.WorkflowReviews.LastOrDefault(r => r.Head == codeHead);
         if (review is null)
         {
-            return new ReviewDocument(Path.Combine(state.ChangeFolder, "build", "review.md"), codeHead, WorkflowBriefs.Review(state));
+            return !string.IsNullOrWhiteSpace(state.SessionRepo)
+                ? new Done(true, $"all tasks for `{state.SessionRepo}` are built and checks pass; next step: run `review` from the master repository")
+                : new ReviewDocument(Path.Combine(state.ChangeFolder, "build", "review.md"), codeHead, WorkflowBriefs.Review(state));
         }
 
         if (review.HighCount > 0)
@@ -256,15 +258,7 @@ public static class WorkflowEngine
             return null;
         }
 
-        var completed = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var task in state.Plan.Tasks)
-        {
-            if (state.VerdictsForTask(task).Any(v => v.Passed))
-            {
-                completed.Add(task.Id);
-            }
-        }
-
+        var completed = CompletedTaskIds(state);
         var scheduleInputs = state.Plan.Tasks
             .Select(t => new ScheduledTaskInput(
                 t.Id,
@@ -282,7 +276,12 @@ public static class WorkflowEngine
             return new Done(false, "plan tasks are blocked by circular or unsatisfied cross-repository dependencies");
         }
 
-        var nextId = schedule.Repos.First(r => r.State == "ready" && r.Task is not null).Task!;
+        var nextId = SelectNextTaskId(state, schedule, out var sessionHandoff);
+        if (sessionHandoff is not null)
+        {
+            return sessionHandoff;
+        }
+
         var nextTask = state.Plan.Tasks.First(t => t.Id == nextId);
         var verdicts = state.VerdictsForTask(nextTask);
         if (verdicts.Count >= state.Plan.EffectiveMaxAttempts)
@@ -294,6 +293,52 @@ public static class WorkflowEngine
         return verdicts.Count == 0
             ? new Implement(WorkflowBriefs.Implement(state, nextTask, attempt, []))
             : new Retry(WorkflowBriefs.Implement(state, nextTask, attempt, verdicts[^1].Reasons), verdicts[^1].Reasons);
+    }
+
+    private static HashSet<string> CompletedTaskIds(WorkflowState state)
+    {
+        var completed = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var task in state.Plan.Tasks)
+        {
+            if (state.VerdictsForTask(task).Any(v => v.Passed))
+            {
+                completed.Add(task.Id);
+            }
+        }
+
+        return completed;
+    }
+
+    private static string? SelectNextTaskId(WorkflowState state, ChangeSchedule schedule, out Step? sessionHandoff)
+    {
+        sessionHandoff = null;
+        if (string.IsNullOrWhiteSpace(state.SessionRepo))
+        {
+            return schedule.Repos.First(r => r.State == "ready" && r.Task is not null).Task!;
+        }
+
+        var repoEntry = schedule.Repos.FirstOrDefault(r => string.Equals(r.Repo, state.SessionRepo, StringComparison.Ordinal));
+        if (repoEntry is { State: "ready", Task: not null })
+        {
+            return repoEntry.Task;
+        }
+
+        if (repoEntry is { State: "waiting" })
+        {
+            var deps = string.Join(", ", repoEntry.WaitingOn.Select(w => $"{w.Task} in `{w.Repo}`"));
+            sessionHandoff = new Done(true, $"`{state.SessionRepo}` is waiting on {deps}; next step: run `build` in the dependency repository first");
+            return null;
+        }
+
+        var nextReady = schedule.Repos
+            .Where(r => r.State == "ready" && r.Task is not null)
+            .Select(r => $"`{r.Repo}` ({r.Task})")
+            .ToList();
+        var nextHint = nextReady.Count > 0
+            ? $"next step: run `build` in {string.Join(", ", nextReady)}"
+            : "remaining repositories are blocked";
+        sessionHandoff = new Done(true, $"all tasks for `{state.SessionRepo}` are built; {nextHint}");
+        return null;
     }
 
     public static string? OwnerOf(Step step) => step switch
