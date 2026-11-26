@@ -131,6 +131,193 @@ public sealed class MultiRepoBuildTests
     }
 
     [Fact]
+    public void HookDrivenMultiRepoBuild_WithChangeStartedInCopy_CommitsInEachRepoAndWritesBuildLogs()
+    {
+        using var tmp = new TempDir("hoshin-r02-multi-copy-");
+        var masterDir = Path.Combine(tmp.Path, "master");
+        var appDir = Path.Combine(tmp.Path, "app");
+        var apiDir = Path.Combine(tmp.Path, "api");
+
+        TestGitFixture.InitRepo(masterDir, new Dictionary<string, string>
+        {
+            [".hoshin.json"] = """
+                {
+                  "version": 1,
+                  "systems": {
+                    "demo": {
+                      "repos": ["app", "api"]
+                    }
+                  }
+                }
+                """,
+        });
+        TestGitFixture.InitRepo(appDir, new Dictionary<string, string> { ["README.md"] = "# app\n" });
+        TestGitFixture.InitRepo(apiDir, new Dictionary<string, string> { ["README.md"] = "# api\n" });
+
+        var started = TestServices.Default.ChangeStarter.StartFromHook(masterDir, "intent", "copy-multi");
+        Assert.True(started.Ok, started.Error);
+        var copyRoot = started.CopyRoot!;
+        var changeFolder = started.ChangeFolder!;
+        var changeName = started.ChangeName!;
+
+        TestGitFixture.Write(
+            Path.Combine(changeFolder, "intent.md"),
+            """
+            ```jsonc
+            { "title": "Multi repo copy", "system": "demo", "author": "t", "date": "2026-11-26", "status": "accepted", "scope": "demo" }
+            ```
+
+            # Intent: Multi repo copy
+            """);
+        TestGitFixture.Git(copyRoot, "add", ".");
+        TestGitFixture.Git(copyRoot, "commit", "-q", "-m", $"docs(demo): accept intent {changeName}", "-m", "Generated-By: hoshin");
+        var intentSha = TestGitFixture.Git(copyRoot, "rev-parse", "HEAD");
+
+        TestGitFixture.Write(
+            Path.Combine(changeFolder, "spec.md"),
+            $$"""
+            ```jsonc
+            { "layout": 2, "system": "demo", "status": "accepted", "source_intent_commit": "{{intentSha}}" }
+            ```
+
+            # Spec: Multi repo copy
+
+            ```gherkin
+            Feature: Multi repo copy
+
+              @R1 @from:intent
+              Rule: App and API helpers
+
+                @R1.1
+                Scenario: App greets
+                  Given app
+                  When called
+                  Then returns app-ok
+
+                @R1.2
+                Scenario: API greets
+                  Given api
+                  When called
+                  Then returns api-ok
+            ```
+            """);
+        TestGitFixture.Git(copyRoot, "add", ".");
+        TestGitFixture.Git(copyRoot, "commit", "-q", "-m", $"docs(demo): accept spec {changeName}", "-m", "Generated-By: hoshin");
+        var specSha = TestGitFixture.Git(copyRoot, "rev-parse", "HEAD");
+
+        TestGitFixture.Write(
+            Path.Combine(changeFolder, "plan.md"),
+            $$"""
+            ```jsonc
+            { "layout": 2, "system": "demo", "status": "accepted", "source_spec_commit": "{{specSha}}" }
+            ```
+
+            # Plan: Multi repo copy
+
+            ## Tasks
+
+            ### T1: Add app helper
+
+            ```jsonc
+            { "id": "T1", "repo": "app", "depends_on": [], "covers": ["R1.1"], "supports": [], "test": ["node", "--test", "test/app.test.mjs"] }
+            ```
+
+            #### Change
+            Add `src/app.mjs` in `app`.
+
+            #### Tests
+            Add `test/app.test.mjs` in `app`.
+
+            ### T2: Add api helper
+
+            ```jsonc
+            { "id": "T2", "repo": "api", "depends_on": ["T1"], "covers": ["R1.2"], "supports": [], "test": ["node", "--test", "test/api.test.mjs"] }
+            ```
+
+            #### Change
+            Add `src/api.mjs` in `api`.
+
+            #### Tests
+            Add `test/api.test.mjs` in `api`.
+            """);
+        TestGitFixture.Git(copyRoot, "add", ".");
+        TestGitFixture.Git(copyRoot, "commit", "-q", "-m", $"docs(demo): accept plan {changeName}", "-m", "Generated-By: hoshin");
+
+        var orchestrator = TestServices.HookOrchestrator;
+        const string session = "claude-r02-copy";
+
+        var (startOut, _) = orchestrator.HandleStart(
+            TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
+            {
+                hook_event_name = "UserPromptExpansion",
+                session_id = session,
+                cwd = masterDir,
+                command_name = "hoshin:build",
+            })),
+            rolesRoot: null);
+        Assert.NotNull(startOut);
+        Assert.Contains(appDir, ExtractContext(startOut!), StringComparison.OrdinalIgnoreCase);
+
+        var masterRepo = TestServices.FindRepo(masterDir)!;
+        var step1 = masterRepo.ReadStep();
+        Assert.Equal("T1", step1?.Task);
+
+        TestGitFixture.Write(
+            Path.Combine(appDir, "test", "app.test.mjs"),
+            """
+            import test from 'node:test';
+            import assert from 'node:assert/strict';
+            import { greetApp } from '../src/app.mjs';
+            test('app greets', () => { assert.equal(greetApp(), 'app-ok'); });
+            """);
+        TestGitFixture.Write(Path.Combine(appDir, "src", "app.mjs"), "export const greetApp = () => 'app-ok';\n");
+
+        var (res1Out, _) = orchestrator.HandleResult(
+            TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
+            {
+                hook_event_name = "PostToolUse",
+                session_id = session,
+                cwd = masterDir,
+                tool_name = "Agent",
+                tool_input = new { prompt = $"Implement T1\n{step1!.DispatchNonce}" },
+                tool_response = new { content = "done" },
+            })),
+            rolesRoot: null);
+        Assert.NotNull(res1Out);
+        Assert.Contains(apiDir, ExtractContext(res1Out!), StringComparison.OrdinalIgnoreCase);
+
+        var step2 = masterRepo.ReadStep();
+        Assert.Equal("T2", step2?.Task);
+
+        TestGitFixture.Write(
+            Path.Combine(apiDir, "test", "api.test.mjs"),
+            """
+            import test from 'node:test';
+            import assert from 'node:assert/strict';
+            import { greetApi } from '../src/api.mjs';
+            test('api greets', () => { assert.equal(greetApi(), 'api-ok'); });
+            """);
+        TestGitFixture.Write(Path.Combine(apiDir, "src", "api.mjs"), "export const greetApi = () => 'api-ok';\n");
+
+        orchestrator.HandleResult(
+            TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
+            {
+                hook_event_name = "PostToolUse",
+                session_id = session,
+                cwd = masterDir,
+                tool_name = "Agent",
+                tool_input = new { prompt = $"Implement T2\n{step2!.DispatchNonce}" },
+                tool_response = new { content = "done" },
+            })),
+            rolesRoot: null);
+
+        Assert.True(File.Exists(Path.Combine(changeFolder, "build", "app.md")));
+        Assert.True(File.Exists(Path.Combine(changeFolder, "build", "api.md")));
+        Assert.Equal($"change/{changeName}", TestGitFixture.Git(appDir, "branch", "--show-current"));
+        Assert.Equal($"change/{changeName}", TestGitFixture.Git(apiDir, "branch", "--show-current"));
+    }
+
+    [Fact]
     public void Next_OrdersMultiRepoTasksByScheduleDependencies()
     {
         var t1Web = new WorkflowTask("T1", "Web consumer", "Use api", ["node", "-e", "process.exit(0)"], Repo: "web", DependsOn: ["T2"]);

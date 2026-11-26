@@ -69,6 +69,7 @@ public sealed class HoshinServices
     private readonly Lazy<IWorkflowRunner> _workflowRunner;
     private readonly Lazy<WorkflowStateReader> _workflowStateReader;
     private readonly Lazy<IChangeStarter> _changeStarter;
+    private readonly Lazy<IHookRunResolver> _hookRunResolver;
     private readonly Lazy<HarnessAdapter> _hookAdapter;
     private readonly Lazy<HookOrchestrator> _hookOrchestrator;
 
@@ -133,6 +134,7 @@ public sealed class HoshinServices
     public IWorkflowRunner WorkflowRunner => _workflowRunner.Value;
     public WorkflowStateReader WorkflowStateReader => _workflowStateReader.Value;
     public IChangeStarter ChangeStarter => _changeStarter.Value;
+    public IHookRunResolver HookRunResolver => _hookRunResolver.Value;
     public HarnessAdapter HookAdapter => _hookAdapter.Value;
     public HookOrchestrator HookOrchestrator => _hookOrchestrator.Value;
 
@@ -259,19 +261,17 @@ public sealed class HoshinServices
             DocumentCommitter));
         _workflowStateReader = new(() => new WorkflowStateReader(PlanReader, ChangeState, TaskRepoResolver, FileSystem));
         _changeStarter = new(() => new ChangeStarter(Resolver, MarkerReader, ChangeLocator, ChangeList, ScopeRules, EventRunner, Git, Git, Git, FileSystem, TimeProvider));
+        _hookRunResolver = new(() => new HookRunResolver(Resolver, MarkerReader, Git, Git, Git, FileSystem, Ledger));
         _hookAdapter = new(() => new HarnessAdapter(TimeProvider));
         _hookOrchestrator = new(() => new HookOrchestrator(
             HookAdapter,
+            HookRunResolver,
             TaskEvaluator,
             CheckRunner,
             ApprovalRecorder,
             Publisher,
             DocumentCommitter,
-            Git,
-            Git,
-            Git,
             FileSystem,
-            Ledger,
             WorkflowStateReader,
             WorkflowEventBridge,
             ChangeStarter,

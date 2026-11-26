@@ -135,7 +135,33 @@ public sealed class WorkflowRepo
         var root = Path.GetFullPath(top);
         var commonDir = Path.GetFullPath(dirs.Common);
         var changeFolder = ChangeFolderResolver.Resolve(root, commonDir, explicitChangeFolder, fileSystem);
+        root = ResolveCheckoutForChangeFolder(root, commonDir, changeFolder, gitWorktrees, fileSystem);
         return new WorkflowRepo(root, commonDir, changeFolder, gitQuery, gitStatus, fileSystem, ledgerStore);
+    }
+
+    private static string ResolveCheckoutForChangeFolder(
+        string fallbackRoot,
+        string commonDir,
+        string changeFolder,
+        IGitWorktrees gitWorktrees,
+        IFileSystem fs)
+    {
+        var probe = Path.GetFullPath(changeFolder);
+        while (!string.IsNullOrEmpty(probe) && !fs.DirectoryExists(probe))
+        {
+            probe = Path.GetDirectoryName(probe);
+        }
+
+        if (string.IsNullOrEmpty(probe))
+        {
+            return fallbackRoot;
+        }
+
+        var top = gitWorktrees.TopLevel(probe);
+        var dirs = top is null ? null : gitWorktrees.GitDirs(top);
+        return top is not null && dirs is not null && PathHelpers.PathsEqual(dirs.Common, commonDir)
+            ? Path.GetFullPath(top)
+            : fallbackRoot;
     }
 
     public string Head() => _gitQuery.CommitOf(Root, "HEAD") ?? "";

@@ -6,12 +6,12 @@ namespace Hoshin.Cli.Hooks;
 /// <summary>Resolves which open change a <c>hook start</c> invocation targets, or starts a new one via <see cref="IChangeStarter"/>.</summary>
 internal sealed class StartChangeResolver(
     IChangeStarter changeStarter,
-    WorkflowAdvancer advancer,
+    IHookRunResolver runResolver,
     IFileSystem fileSystem,
     TimeProvider timeProvider)
 {
     private readonly IChangeStarter _changeStarter = changeStarter ?? throw new ArgumentNullException(nameof(changeStarter));
-    private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
+    private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -31,7 +31,7 @@ internal sealed class StartChangeResolver(
         var openChanges = _changeStarter.ListOpenChanges(repo);
         if (TryMatchOpenChange(openChanges, matchArgs) is { } matched)
         {
-            repo = _advancer.ResolveRepoAt(matched.MasterRoot, matched.ChangeFolder) ?? repo;
+            repo = _runResolver.ResolveAt(matched.MasterRoot, matched.ChangeFolder) ?? repo;
             return false;
         }
 
@@ -58,7 +58,7 @@ internal sealed class StartChangeResolver(
 
         if (openChanges.Count == 1)
         {
-            repo = _advancer.ResolveRepoAt(openChanges[0].MasterRoot, openChanges[0].ChangeFolder) ?? repo;
+            repo = _runResolver.ResolveAt(openChanges[0].MasterRoot, openChanges[0].ChangeFolder) ?? repo;
         }
 
         return false;
@@ -106,7 +106,7 @@ internal sealed class StartChangeResolver(
             return true;
         }
 
-        repo = _advancer.ResolveRepoAt(started.CopyRoot!, started.ChangeFolder) ?? repo;
+        repo = _runResolver.ResolveAt(started.CopyRoot!, started.ChangeFolder) ?? repo;
         return false;
     }
 

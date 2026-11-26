@@ -2,31 +2,21 @@ using System.Diagnostics;
 using Hoshin.Cli.Hooks;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
-using Hoshin.Workflow.Events;
-using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Commands;
 
 /// <summary>
 /// Dual-harness lifecycle hook entry point (<c>hoshin hook &lt;start|result|subagent-stop|stop|log&gt; [--roles &lt;dir&gt;]</c>).
-/// Always exits <c>0</c> and reports any internal failure to <c>stderr</c> so hooks never crash an active session.
+/// Always exits <c>0</c> and reports any internal failure to <c>stderr</c>, <c>hooks.jsonl</c>, and harness output so hooks never crash an active session.
 /// </summary>
 public sealed class HookCommand(
     HarnessAdapter hookAdapter,
     HookOrchestrator hookOrchestrator,
-    IGitWorktrees gitWorktrees,
-    IGitQuery gitQuery,
-    IGitStatus gitStatus,
-    IFileSystem fileSystem,
-    LedgerStore ledgerStore) : IHoshinCommand
+    IHookRunResolver runResolver) : IHoshinCommand
 {
     private readonly HarnessAdapter _hookAdapter = hookAdapter ?? throw new ArgumentNullException(nameof(hookAdapter));
     private readonly HookOrchestrator _hookOrchestrator = hookOrchestrator ?? throw new ArgumentNullException(nameof(hookOrchestrator));
-    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
-    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
-    private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
-    private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
-    private readonly LedgerStore _ledgerStore = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
+    private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
 
     public string Name => "hook";
     public string Usage => "hook start|result|subagent-stop|stop [--roles <path>]";
@@ -62,7 +52,7 @@ public sealed class HookCommand(
             var rolesRoot = o.Get("roles") ?? DefaultRolesDir();
 
             ev = _hookAdapter.Parse(readStdin().TrimStart('\uFEFF'));
-            repo = WorkflowRepo.Find(ev.Cwd ?? Directory.GetCurrentDirectory(), _gitWorktrees, _gitQuery, _gitStatus, _fs, _ledgerStore);
+            repo = _runResolver.Resolve(ev)?.WorkflowRepo;
 
             var (output, decision) = Dispatch(sub, ev, rolesRoot);
 

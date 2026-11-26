@@ -6,6 +6,7 @@ namespace Hoshin.Cli.Hooks;
 /// <summary>Handles <c>hoshin hook stop</c> (tampering checks, async verdict reporting, document/review/fix commit loops, and step advancement).</summary>
 internal sealed class StopHandler(
     IHookAdapter adapter,
+    IHookRunResolver runResolver,
     IDocumentCommitter documents,
     WorkflowAdvancer advancer,
     IFileSystem fileSystem,
@@ -14,6 +15,7 @@ internal sealed class StopHandler(
     private const int MaxStopBlocks = 3;
 
     private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+    private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
     private readonly IDocumentCommitter _documents = documents ?? throw new ArgumentNullException(nameof(documents));
     private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
@@ -21,7 +23,7 @@ internal sealed class StopHandler(
 
     public (string? Output, string Decision) Handle(NormalizedHookEvent ev, string? rolesRoot)
     {
-        var repo = _advancer.ResolveRepo(ev);
+        var repo = _runResolver.Resolve(ev)?.WorkflowRepo;
         if (repo is null)
         {
             return (_adapter.EmptyOutput(ev.Harness), "no run");
@@ -159,7 +161,8 @@ internal sealed class StopHandler(
 
     private (string? Output, string Decision) StopWhileWriting(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot, WriteDocument write)
     {
-        var state = _advancer.ReadState(repo, rolesRoot, out _)!;
+        var state = _advancer.ReadState(repo, rolesRoot, out var error)
+            ?? throw new InvalidOperationException(error ?? $"Could not read workflow state for {repo.Root} ({repo.ChangeFolder}).");
         var docName = write.Document.ToWireName();
         var doc = state.Document(write.Document);
         var shown = Path.GetRelativePath(repo.Root, write.Path).Replace('\\', '/');

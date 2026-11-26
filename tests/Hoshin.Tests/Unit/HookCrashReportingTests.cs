@@ -223,11 +223,7 @@ public sealed class HookCrashReportingTests
         return new HookCommand(
             TestServices.HookAdapter,
             orchestrator,
-            TestServices.Git,
-            TestServices.Git,
-            TestServices.Git,
-            TestServices.FileSystem,
-            TestServices.Ledger);
+            TestServices.Default.HookRunResolver);
     }
 
     private static ActiveBuildFixture CreateActiveBuildFixture(string sessionId)

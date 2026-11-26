@@ -6,6 +6,7 @@ namespace Hoshin.Cli.Hooks;
 /// <summary>Handles <c>hoshin hook start</c> (skill detection, human-only approval/acceptance/rejection/reopen enforcement, gate checks, and step dispatch).</summary>
 internal sealed class StartHandler(
     IHookAdapter adapter,
+    IHookRunResolver runResolver,
     IApprovalRecorder approvals,
     IDocumentCommitter documents,
     IChangeStarter changeStarter,
@@ -14,20 +15,23 @@ internal sealed class StartHandler(
     TimeProvider timeProvider)
 {
     private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+    private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
     private readonly IApprovalRecorder _approvals = approvals ?? throw new ArgumentNullException(nameof(approvals));
     private readonly IDocumentCommitter _documents = documents ?? throw new ArgumentNullException(nameof(documents));
-    private readonly StartChangeResolver _changes = new(changeStarter, advancer, fileSystem, timeProvider);
+    private readonly StartChangeResolver _changes = new(changeStarter, runResolver, fileSystem, timeProvider);
     private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public (string? Output, string Decision) Handle(NormalizedHookEvent ev, string? rolesRoot)
     {
-        var repo = _advancer.ResolveRepo(ev);
-        if (repo is null)
+        var resolved = _runResolver.Resolve(ev);
+        if (resolved is null)
         {
             return (_adapter.EmptyOutput(ev.Harness), "no repo");
         }
+
+        var repo = resolved.WorkflowRepo;
 
         var invocation = SkillInvocationDetector.Detect(ev);
         if (invocation is { Skill: "setup" or "context" })
@@ -170,13 +174,12 @@ internal sealed class StartHandler(
         }
 
         var prefix = ApplyHumanAcceptanceIfNeeded(ev, repo, state, invoked, isFixAccept);
-        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, isFixAccept ? null : invoked);
-
-        if ((invoked == "accept" || isFixAccept) && TryFormatPostAcceptMessage(ev, repo, step, prefix) is { } postAccept)
+        if ((invoked == "accept" || isFixAccept) && TryFormatPostAcceptMessage(ev, repo, rolesRoot, prefix) is { } postAccept)
         {
             return postAccept;
         }
 
+        var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, isFixAccept ? null : invoked);
         var suffix = BuildPromptSuffix(invoked, args, step);
         return EmitStartContext(ev, repo, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: prefix, suffix: suffix), $"{invoked}: {step.Kind}");
     }
@@ -308,17 +311,28 @@ internal sealed class StartHandler(
     private (string? Output, string Decision)? TryFormatPostAcceptMessage(
         NormalizedHookEvent ev,
         WorkflowRepo repo,
-        Step step,
+        string? rolesRoot,
         string prefix)
     {
-        if (step is WriteDocument nextWrite)
+        var updatedState = _advancer.ReadState(repo, rolesRoot, out _);
+        if (updatedState is null)
         {
-            return EmitStartContext(ev, repo, prefix + $"Tell the person the next step is {WorkflowEngine.Describe(step)}. Then end your turn.", $"accept: next {step.Kind} {nextWrite.Document.ToWireName()}");
+            return null;
         }
 
-        if (step is Implement)
+        var nextStep = WorkflowEngine.Next(updatedState);
+        if (nextStep is WriteDocument nextWrite)
         {
-            return EmitStartContext(ev, repo, prefix + $"Tell the person the plan is accepted and the next step is {WorkflowEngine.Describe(step)}. Then end your turn.", "accept: next Implement");
+            TurnState.ClearTurnFiles(repo, _fs);
+            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+            return EmitStartContext(ev, repo, prefix + $"Tell the person the next step is {WorkflowEngine.Describe(nextStep)}. Then end your turn.", $"accept: next {nextStep.Kind} {nextWrite.Document.ToWireName()}");
+        }
+
+        if (nextStep is Implement)
+        {
+            TurnState.ClearTurnFiles(repo, _fs);
+            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+            return EmitStartContext(ev, repo, prefix + $"Tell the person the plan is accepted and the next step is {WorkflowEngine.Describe(nextStep)}. Then end your turn.", "accept: next Implement");
         }
 
         return null;

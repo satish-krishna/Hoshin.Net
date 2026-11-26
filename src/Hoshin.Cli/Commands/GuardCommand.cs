@@ -4,7 +4,6 @@ using System.Text.RegularExpressions;
 using Hoshin.Cli.Hooks;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
-using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Cli.Commands;
@@ -17,19 +16,13 @@ namespace Hoshin.Cli.Commands;
 /// </summary>
 public sealed class GuardCommand(
     HarnessAdapter adapter,
-    IGitWorktrees gitWorktrees,
-    IGitQuery gitQuery,
-    IGitStatus gitStatus,
+    IHookRunResolver runResolver,
     IFileSystem fileSystem,
-    LedgerStore ledgerStore,
     TimeProvider timeProvider) : IHoshinCommand
 {
     private readonly HarnessAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
-    private readonly IGitWorktrees _gitWorktrees = gitWorktrees ?? throw new ArgumentNullException(nameof(gitWorktrees));
-    private readonly IGitQuery _gitQuery = gitQuery ?? throw new ArgumentNullException(nameof(gitQuery));
-    private readonly IGitStatus _gitStatus = gitStatus ?? throw new ArgumentNullException(nameof(gitStatus));
+    private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
-    private readonly LedgerStore _ledgerStore = ledgerStore ?? throw new ArgumentNullException(nameof(ledgerStore));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     private const string GitPrefix = @"\bgit\s+(?:(?:(?:-C|-c|--git-dir|--work-tree|--namespace)(?:=\S+|\s+\S+)|--?[\w-]+(?:=\S+)?)\s+)*";
@@ -100,20 +93,21 @@ public sealed class GuardCommand(
     }
 
     public (WorkflowRepo? Repo, string? Reason) Evaluate(NormalizedHookEvent ev) =>
-        Evaluate(ev, _gitWorktrees, _gitQuery, _gitStatus, _fs, _ledgerStore, _time);
+        Evaluate(ev, _runResolver, _fs, _time);
 
     public static (WorkflowRepo? Repo, string? Reason) Evaluate(
         NormalizedHookEvent ev,
-        IGitWorktrees gitWorktrees,
-        IGitQuery gitQuery,
-        IGitStatus gitStatus,
+        IHookRunResolver runResolver,
         IFileSystem fileSystem,
-        LedgerStore ledgerStore,
         TimeProvider timeProvider)
     {
-        // 1. Scope first (D2): guard applies only inside a repository with an active, non-stale hoshin run for this session.
-        var cwd = string.IsNullOrWhiteSpace(ev.Cwd) ? Directory.GetCurrentDirectory() : ev.Cwd;
-        var repo = WorkflowRepo.Find(cwd, gitWorktrees, gitQuery, gitStatus, fileSystem, ledgerStore);
+        ArgumentNullException.ThrowIfNull(runResolver);
+        ArgumentNullException.ThrowIfNull(fileSystem);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+
+        // 1. Scope first (D2): guard applies only inside a repository/workspace with an active, non-stale hoshin run for this session.
+        var resolved = runResolver.Resolve(ev);
+        var repo = resolved?.WorkflowRepo;
         if (repo is null || !fileSystem.FileExists(repo.RunMarkerPath))
         {
             return (null, null);
@@ -151,11 +145,24 @@ public sealed class GuardCommand(
                     Path.Combine(step.ChangeFolder ?? repo.ChangeFolder, "plan.md"),
                 ],
                 "fix"),
-            { Kind: StepKind.Implement or StepKind.Retry } => CheckDuringBuildStep(ev, repo, step),
+            { Kind: StepKind.Implement or StepKind.Retry } => CheckDuringBuildStep(ev, ResolveBuildTargetRepo(resolved!), step),
             _ => null,
         };
 
         return (repo, stepReason);
+    }
+
+    private static WorkflowRepo ResolveBuildTargetRepo(ResolvedHookRun resolved)
+    {
+        var repo = resolved.WorkflowRepo;
+        if (string.IsNullOrWhiteSpace(resolved.SessionRepoRoot)
+            || PathHelpers.PathsEqual(resolved.SessionRepoRoot, repo.Root))
+        {
+            return repo;
+        }
+
+        var commonDir = Path.GetDirectoryName(repo.HoshinDir) ?? repo.HoshinDir;
+        return repo.ForTarget(resolved.SessionRepoRoot, commonDir, resolved.SessionRepoName ?? repo.RepoKey);
     }
 
     private static string? CheckDuringBuildStep(NormalizedHookEvent ev, WorkflowRepo repo, CurrentStep step)

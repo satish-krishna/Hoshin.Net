@@ -6,12 +6,14 @@ namespace Hoshin.Cli.Hooks;
 /// <summary>Handles <c>hoshin hook result</c> (subagent launch/completion) and <c>hoshin hook subagent-stop</c>.</summary>
 internal sealed class ResultHandler(
     IHookAdapter adapter,
+    IHookRunResolver runResolver,
     ITaskEvaluator tasks,
     WorkflowAdvancer advancer,
     IFileSystem fileSystem,
     TimeProvider timeProvider)
 {
     private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
+    private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
     private readonly ITaskEvaluator _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
     private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
@@ -19,21 +21,9 @@ internal sealed class ResultHandler(
 
     public (string? Output, string Decision) HandleResult(NormalizedHookEvent ev, string? rolesRoot)
     {
-        var repo = _advancer.ResolveRepo(ev);
-        if (repo is null || !_fs.FileExists(repo.RunMarkerPath))
+        if (!TryResolveActiveBuildStep(ev, out var repo, out var current, out var skipReason))
         {
-            return (_adapter.EmptyOutput(ev.Harness), "no run");
-        }
-
-        if (!HookSessionScope.IsRunSession(repo, ev, _time.GetUtcNow(), out var marker, out var current)
-            || !HookSessionScope.IsParentRunSession(marker!, ev))
-        {
-            return (_adapter.EmptyOutput(ev.Harness), "not the run session");
-        }
-
-        if (current is not { Kind: StepKind.Implement or StepKind.Retry, Task: not null })
-        {
-            return (_adapter.EmptyOutput(ev.Harness), $"step is {current?.Kind.ToString() ?? "none"}");
+            return (_adapter.EmptyOutput(ev.Harness), skipReason);
         }
 
         if (ev.IsAntigravity && ev.IsTaskManageTool)
@@ -63,9 +53,43 @@ internal sealed class ResultHandler(
             $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
     }
 
+    private bool TryResolveActiveBuildStep(
+        NormalizedHookEvent ev,
+        out WorkflowRepo repo,
+        out CurrentStep current,
+        out string skipReason)
+    {
+        repo = null!;
+        current = null!;
+        skipReason = "no run";
+
+        var resolved = _runResolver.Resolve(ev);
+        if (resolved is null || !_fs.FileExists(resolved.WorkflowRepo.RunMarkerPath))
+        {
+            return false;
+        }
+
+        repo = resolved.WorkflowRepo;
+        if (!HookSessionScope.IsRunSession(repo, ev, _time.GetUtcNow(), out var marker, out var step)
+            || !HookSessionScope.IsParentRunSession(marker!, ev))
+        {
+            skipReason = "not the run session";
+            return false;
+        }
+
+        if (step is not { Kind: StepKind.Implement or StepKind.Retry, Task: not null })
+        {
+            skipReason = $"step is {step?.Kind.ToString() ?? "none"}";
+            return false;
+        }
+
+        current = step;
+        return true;
+    }
+
     public (string? Output, string Decision) HandleSubagentStop(NormalizedHookEvent ev, string? rolesRoot)
     {
-        var repo = _advancer.ResolveRepo(ev);
+        var repo = _runResolver.Resolve(ev)?.WorkflowRepo;
         if (repo is null || !_fs.FileExists(repo.RunMarkerPath))
         {
             return (_adapter.EmptyOutput(ev.Harness), "no run");
