@@ -1,0 +1,39 @@
+name: gate owner
+
+# Round 3 only (docs/review/TASKS.md, R3-rules 1 and 2): a commit on fix/round-3 that changes a reviewer-owned gate path
+# must carry the reviewer's Task trailer (R21, B02 or B03). See .github/scripts/gate-owner.sh.
+#
+# pull_request_target runs this file and the script as they are on main, so the branch under review can't edit or
+# disable the check. It never runs code from the pull request: it reads the pull request's commits with git and
+# nothing else, which is what makes pull_request_target safe here.
+#
+# Temporary: remove this file and the script once round 3 is merged.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  gate-owner:
+    name: gate owner
+    if: github.event.pull_request.head.ref == 'fix/round-3'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch the pull request's commits (as git objects only; nothing from them is run)
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: git fetch --no-tags origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pr/head"
+
+      - name: Check that only the reviewer changed the gates
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/scripts/gate-owner.sh "$BASE_SHA" "$HEAD_SHA"
