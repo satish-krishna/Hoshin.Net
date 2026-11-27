@@ -10,7 +10,7 @@ You implement every round-3 task except R21, B02, B03 and R40. You have not seen
 - Don't change CI or `evals/run.sh` so that a gate stops running.
 - If a gate looks wrong, add it to the "Gate disputes" section of the pull request with the evidence, and keep working. The reviewer decides.
 
-Nothing technical enforces this yet: the CODEOWNERS file never reached `main`, and `main` requires no approvals. Your instructions are the only fence. Treat them as a hard wall.
+`.github/CODEOWNERS` on `main` (PR #7) names the reviewer as owner of the gates, `evals/` (but not `evals/results/`), `ci.yml`, `evals.yml` and itself. Branch protection doesn't require code-owner review yet, and you push under the same GitHub account as the engineer, so no GitHub setting can tell your commits from theirs. The reviewer checks `git log origin/main..HEAD -- tests/Hoshin.Tests/Acceptance evals .github` before merge, and any commit there that isn't R21, B02, B03 or a reviewer's `R-new` gate is reverted. Treat the rule as a hard wall.
 
 ## What is on the branch
 
@@ -87,7 +87,6 @@ dotnet test tests/Hoshin.Tests --filter "Category=Acceptance"
 ## Waiting on the engineer (not on you)
 
 - **B03:** approve the sorting table in `evals/README.md`, including the two proposed drops (rows 9 and 10, the "count behaviors at acceptance" cases). The reviewer's session then writes the cases.
-- **B02:** permission to install .NET 10 into WSL `~/.dotnet` and to spend about $1 on the two runner cases. Until then B02 is written but not done, and whether a slash-command prompt counts as typed by the user is unknown.
+- **B02:** permission to spend about $1 on the two runner cases. .NET 10 (SDK 10.0.404, runtime 10.0.15) is installed in WSL `~/.dotnet`. The no-runtime half of B02's done-when holds in WSL: with no `dotnet` reachable, `run-wsl.sh` stops with exit 1 before calling `claude`. With the runtime present, the startup probe passes (`scope --json demo` prints `{"problems":[]}`), and `claude` 2.1.308, `bwrap` and `socat` are on PATH. Not yet run: the smoke case itself, and the typed-command probe. Until it is known, whether a slash-command prompt counts as typed by the user stays open.
 - **The trailer check:** the conventional workflow checks trailers only on `fix/review-findings`. The engineer extends it to `fix/round-3` with `R` and `B` IDs, requires `Gate:`, and requires `Evals:` on B05–B15, before your first task commit lands.
-- **CODEOWNERS on `main`**, if the engineer wants the gate folder protected by more than instructions.
 - **The pull request:** the engineer opens it as a draft titled `feat(workflow)!: ready to replace hoshin`, with the Tasks table, "Gate disputes" and the "Replacement bar" checklist.
