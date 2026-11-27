@@ -10,7 +10,7 @@ You implement every round-3 task except R21, B02, B03 and R40. You have not seen
 - Don't change CI or `evals/run.sh` so that a gate stops running.
 - If a gate looks wrong, add it to the "Gate disputes" section of the pull request with the evidence, and keep working. The reviewer decides.
 
-`.github/CODEOWNERS` on `main` (PR #7) names the reviewer as owner of the gates, `evals/` (but not `evals/results/`), `ci.yml`, `evals.yml` and itself. Branch protection doesn't require code-owner review yet, and you push under the same GitHub account as the engineer, so no GitHub setting can tell your commits from theirs. The reviewer checks `git log origin/main..HEAD -- tests/Hoshin.Tests/Acceptance evals .github` before merge, and any commit there that isn't R21, B02, B03 or a reviewer's `R-new` gate is reverted. Treat the rule as a hard wall.
+`.github/CODEOWNERS` on `main` (PR #7) names the reviewer as owner of the gates, `evals/` (but not `evals/results/`), `ci.yml`, `evals.yml` (removed since: the suite runs only in WSL) and itself. Branch protection doesn't require code-owner review yet, and you push under the same GitHub account as the engineer, so no GitHub setting can tell your commits from theirs. The reviewer checks `git log origin/main..HEAD -- tests/Hoshin.Tests/Acceptance evals .github` before merge, and any commit there that isn't R21, B02, B03 or a reviewer's `R-new` gate is reverted. Treat the rule as a hard wall.
 
 ## What is on the branch
 
@@ -19,7 +19,7 @@ You implement every round-3 task except R21, B02, B03 and R40. You have not seen
 | Commit | Task | What |
 | :--- | :--- | :--- |
 | `82fb3d4` | R21 | The user-path acceptance gate. The R0 harness moved to `tests/Hoshin.Tests/Acceptance/Harness/`, shared by both gates; R0 still passes 3 of 3. |
-| `f11fd78` | B02 | The eval runner (`evals/run.sh`, `evals/run-wsl.sh`, `.github/workflows/evals.yml`), the smoke case and the typed-command probe. Not run yet. |
+| `f11fd78` | B02 | The eval runner (`evals/run.sh`, `evals/run-wsl.sh`, and a CI workflow removed later), the smoke case and the typed-command probe. |
 | `5d47acd` | B02 | `.gitattributes`: shell scripts stay LF on every checkout. |
 | `1498f52`, `39d2457` | — | This handoff, the index statuses, and B14 engine item 6. |
 | `fa8194f` | B03 | The ported eval suite (39 cases, with grader self-tests), the C# parity tests under `Acceptance/Parity/`, and `EvalGraderSelfTests`. |
@@ -112,6 +112,6 @@ dotnet test tests/Hoshin.Tests --filter "Category=Acceptance"
 
 ## Waiting on the engineer (not on you)
 
-- **B02 is settled** (TASKS.md, B02's reviewer notes). In WSL, .NET 10 is in `~/.dotnet`, Claude Code is logged in, and the runner works. A slash-command prompt counts as typed by the user. The smoke case waits on R-new-1, and the Linux run waits on the first `run-evals` label in CI, which needs the `ANTHROPIC_API_KEY` secret.
+- **B02 is settled** (TASKS.md, B02's reviewer notes). In WSL, .NET 10 is in `~/.dotnet`, Claude Code is logged in, and the runner works. A slash-command prompt counts as typed by the user. The smoke case waits on R-new-1. The suite runs only in WSL, never in CI: each skill task runs its own cases with `run-wsl.sh` (about $0.50 per case per run) and records them in its `Evals:` trailer.
 - **The trailer check:** the conventional workflow checks trailers only on `fix/review-findings`. The engineer extends it to `fix/round-3` with `R` and `B` IDs, requires `Gate:`, and requires `Evals:` on B05–B15, before your first task commit lands.
 - **The pull request:** the engineer opens it as a draft titled `feat(workflow)!: ready to replace hoshin`, with the Tasks table, "Gate disputes" and the "Replacement bar" checklist.

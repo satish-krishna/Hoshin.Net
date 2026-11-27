@@ -1229,7 +1229,7 @@ The engineer chose to deliver all of it in one round, on one branch. The IDs in 
 Hoshin.Net is ready to replace hoshin when all five hold:
 
 1. **Acceptance:** every test under `tests/Hoshin.Tests/Acceptance/` passes on Linux and Windows in CI, including the ones R21 adds.
-2. **Evals:** every case under `evals/` passes against the built Claude Code bundle in at least 2 of 3 runs, in one recorded run under `evals/results/` (B02, B03).
+2. **Evals:** every case under `evals/` passes against the built Claude Code bundle in at least 2 of 3 runs, in one recorded run under `evals/results/`, made in WSL with `evals/run-wsl.sh` (B02, B03).
 3. **Parity:** every row of ANALYSIS §9 reads "None" or "Low", or names a difference listed under "Accepted differences" below.
 4. **Dogfood:** one real change, not a fixture, has gone from intent to merged pull requests through the release candidate, in a real workspace with a master and at least one product repository (R40).
 5. **Release:** a tagged release and a marketplace entry exist (D8), and the docs make none of the claims ANALYSIS §11 lists as false (R20).
@@ -1614,13 +1614,13 @@ Text that drives `hoshin.ts` in the original is not ported; the engine does that
   3. Find out whether a case prompt that starts with a slash command reaches the hooks as typed by the user. Record the answer in `evals/README.md`. If it doesn't, the typed half of each case is covered by B03's C# tests, and the eval grades up to the typed step.
   4. A CI workflow that runs the suite on a label and on release tags, on Linux, with a cost cap, and writes the run under `evals/results/<timestamp>/`. Not on every push: a full run costs about $0.50 per case per run.
   5. Find out whether the runner accepts JSON case files. If it doesn't, add `evals/**/case.yaml` to AGENTS.md invariant 4 as its one more exception, with the reason.
-- **Done when:** one trivial case passes through the runner on Linux and in WSL, and a case with the runtime removed fails at startup instead of passing.
+- **Done when:** one trivial case passes through the runner in WSL, and a case with the runtime removed fails at startup instead of passing.
 - **Reviewer notes (2026-11-27, from the first paid runs, $0.50 in all):**
   1. Item 1 can't be done as written. `claude plugin eval` 2.1.308 loads a plugin named in a case's `plugins:` only from inside that case's own folder: one beside the suite is outside the containment root, and `evals/.bundle/` is refused as "covering" the case. So `run.sh` stages the bundle as the run's target, with the cases below it (`evals/.bundle/target/evals/`), and no case names a plugin. `cases.test.mjs` checks that.
   2. Item 3's answer is **yes**: a prompt that starts with `/hoshin:intent` reached `hook start` as a `UserPromptExpansion` event, before any `Skill` call. A case may type a human-only command as its prompt's first line. B03's design stands: the typed steps are mechanism, so they stay in the parity tests, and no case was changed.
   3. The smoke case found an engine defect: the sandbox's home folder is an empty git repository, and the workspace sits inside it, so the hooks can't resolve the workspace (R-new-1). Both runner cases passed in one diagnostic run whose fixtures deleted that repository. That run is not a record and was not kept. Until R-new-1 lands, the smoke case fails with the committed fixture, and so does every other case.
-  4. The no-runtime half of "done when" holds in WSL. The Linux half runs in CI on the first labeled pull request.
-  5. The cost cap's default is $70 (`HOSHIN_EVAL_MAX_COST` in `run.sh`, `max_cost_usd` in `evals.yml`): a full run of 39 cases at 3 runs each is about $58.
+  4. WSL only (decided by the engineer, 2026-11-27): the suite runs locally with `run-wsl.sh`, never in CI, so item 4's workflow was removed and "done when" no longer names Linux. The repository holds no API key, and a run spends real money. The no-runtime half of "done when" holds in WSL; the smoke-case half waits on R-new-1.
+  5. The cost cap's default is $70 (`HOSHIN_EVAL_MAX_COST` in `run.sh`): a full run of 39 cases at 3 runs each is about $58.
 
 ### B03 · Port the eval suite
 

@@ -32,7 +32,7 @@ MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu -- bash -l /mnt/<drive>/<path>/Hoshin.Net/e
 
 `run-wsl.sh` moves Docker Desktop's symbolic links out of `~/.docker` for the run (the sandbox refuses Bash while one is there) and puts a per-user .NET (`~/.dotnet`, or `HOSHIN_DOTNET`) first on `PATH`. WSL needs .NET 10, `bubblewrap` and `socat`.
 
-In CI, `.github/workflows/evals.yml` runs the suite on Linux on a pull request labeled `run-evals`, on a release tag, and by hand, and keeps `results/` as a build artifact. A recorded run for the replacement bar (item 2) is committed under `results/<timestamp>/`.
+The suite runs only in WSL on the engineer's machine, never in CI (decided by the engineer, 2026-11-27): the repository holds no API key, and a run spends real money. A recorded run for the replacement bar (item 2) is committed under `results/<timestamp>/`.
 
 ## Rules every case follows
 
