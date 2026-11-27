@@ -23,6 +23,7 @@ gated=(
   evals/
   .github/CODEOWNERS
   .github/workflows/evals.yml
+  .github/workflows/conventional.yml
   .github/workflows/gate-owner.yml
   .github/scripts/gate-owner.sh
 )

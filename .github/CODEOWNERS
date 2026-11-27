@@ -13,3 +13,8 @@
 
 # This file, so the rules above can't be removed in the same pull request that needs them gone.
 /.github/CODEOWNERS @satish-krishna
+
+# The round-3 checks: the trailer check, and the gate-owner check that keeps the branch from editing it or the gates.
+/.github/workflows/conventional.yml @satish-krishna
+/.github/workflows/gate-owner.yml @satish-krishna
+/.github/scripts/gate-owner.sh @satish-krishna
