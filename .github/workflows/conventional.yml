@@ -69,7 +69,7 @@ jobs:
           # tasks B05-B15. The reviewer's commits up to the handoff predate this check, and two of them carry their Task
           # line outside git's trailer block, so the check starts after that commit. gate-owner.yml still covers them.
           round3_reviewer_ids='^(R21|B02|B03)$'
-          round3_checked_after=0b9c87f37b49a8cfcccbcaaf0086d059551a1c91
+          round3_checked_after=f4febced5c41fa823354f27ca41443ad07bb35bf
           one_trailer() { git show -s --format="%(trailers:key=$2,valueonly)" "$1" | sed '/^[[:space:]]*$/d'; }
 
           declare -A seen_tasks=()
