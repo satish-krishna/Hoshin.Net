@@ -2,7 +2,8 @@ name: conventional
 
 # Squash merges use the pull request title as the commit on main, and reviewers step through
 # program pull requests one commit at a time, so PR titles, branch names, commit headers, and
-# program Task trailers must follow CONTRIBUTING.md §1.
+# program Task trailers must follow CONTRIBUTING.md §1. On fix/round-3, each task commit also carries the
+# trailers docs/review/HANDOFF-round-3.md lists. gate-owner.yml keeps that branch from editing this file.
 
 on:
   pull_request:
@@ -56,7 +57,20 @@ jobs:
             while IFS= read -r task_id; do
               [ -n "$task_id" ] && valid_tasks["$task_id"]=1
             done < <(sed -n 's/^| \([TA][0-9][0-9]*\|EPIC-[A-Z0-9-]*\) |.*/\1/p' docs/review/TASKS.md)
+          elif [ "$BRANCH" = "fix/round-3" ]; then
+            # Round 3's IDs only, from its own index: R10-R40, B01-B15 and the late R-new-<n> tasks (R3-rule 6).
+            while IFS= read -r task_id; do
+              [ -n "$task_id" ] && valid_tasks["$task_id"]=1
+            done < <(sed -n '/^## Round 3 index/,/^## /p' docs/review/TASKS.md | sed -n 's/^| \(R[0-9][0-9]*\|B[0-9][0-9]*\|R-new-[0-9][0-9]*\) |.*/\1/p')
           fi
+
+          # Round 3 (docs/review/HANDOFF-round-3.md, "Order of work"): the reviewer's gate tasks may span several commits;
+          # every other task is one commit with Test-first, Docs and Gate trailers, and an Evals trailer on the skill
+          # tasks B05-B15. The reviewer's commits up to the handoff predate this check, and two of them carry their Task
+          # line outside git's trailer block, so the check starts after that commit. gate-owner.yml still covers them.
+          round3_reviewer_ids='^(R21|B02|B03)$'
+          round3_checked_after=f4febced5c41fa823354f27ca41443ad07bb35bf
+          one_trailer() { git show -s --format="%(trailers:key=$2,valueonly)" "$1" | sed '/^[[:space:]]*$/d'; }
 
           declare -A seen_tasks=()
           for sha in "${shas[@]}"; do
@@ -64,6 +78,46 @@ jobs:
             if ! [[ "$subject" =~ $title_re ]]; then
               echo "::error::Commit $sha header '$subject' is not '<type>(<scope>): <subject>' (CONTRIBUTING.md §1)."
               status=1
+            fi
+
+            if [ "$BRANCH" = "fix/round-3" ]; then
+              if git merge-base --is-ancestor "$sha" "$round3_checked_after" 2>/dev/null; then
+                continue
+              fi
+
+              mapfile -t trailers < <(one_trailer "$sha" Task)
+              if [ "${#trailers[@]}" -ne 1 ]; then
+                echo "::error::Commit $sha on $BRANCH must have exactly one 'Task: <id>' trailer in its last paragraph, with the other trailers (found ${#trailers[@]})."
+                status=1
+                continue
+              fi
+
+              task_id="${trailers[0]}"
+              if [ -z "${valid_tasks[$task_id]:-}" ]; then
+                echo "::error::Commit $sha Task trailer '$task_id' is not an ID in docs/review/TASKS.md's round 3 index."
+                status=1
+                continue
+              fi
+
+              [[ "$task_id" =~ $round3_reviewer_ids ]] && continue
+
+              if [ -n "${seen_tasks[$task_id]:-}" ]; then
+                echo "::error::Commit $sha reuses Task ID '$task_id' already claimed by commit ${seen_tasks[$task_id]}: one commit per task."
+                status=1
+              else
+                seen_tasks["$task_id"]="$sha"
+              fi
+
+              required=(Docs Gate)
+              [ "$task_id" != "R40" ] && required+=(Test-first)
+              [[ "$task_id" =~ ^B(0[5-9]|1[0-5])$ ]] && required+=(Evals)
+              for key in "${required[@]}"; do
+                mapfile -t values < <(one_trailer "$sha" "$key")
+                if [ "${#values[@]}" -ne 1 ]; then
+                  echo "::error::Commit $sha ($task_id) must have exactly one '$key:' trailer (found ${#values[@]}). See docs/review/HANDOFF-round-3.md, \"Order of work\"."
+                  status=1
+                fi
+              done
             fi
 
             if [ "$BRANCH" = "fix/review-findings" ]; then
