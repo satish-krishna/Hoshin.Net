@@ -1,0 +1,73 @@
+schema_version: "1.1"
+name: fix-changes-refused-at-boundary
+description: A change the engineer asks for at the acceptance question, when it would need a second repository, leaves the redrafted fix exactly as it was (B14 engine items 1 and 3, B01's triage reference). Hoshin.Net has no acceptance question for the model to ask, so the fixture starts after the first round of feedback, with the fix redrafted for a hyphenated-name scenario and committed again, and the prompt is the engineer's answer to it, a change that also edits the web repository. The fix skill finds the one-repository rule broken before it writes anything, names it, recommends the intent skill, commits nothing more, and leaves the documents as the redraft committed them. Ported from the original's case of the same name.
+tags: [fix, b14]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    fix 2026-10-24-greeting-space
+
+    Operator feedback: I read the redrafted fix with the Mary-Jane scenario and I will not accept it as it stands. The landing page in the web repository, beside app, should show the greeting in bold, so change it there too. This session runs in the workspace folder, which holds the master repository (master/) and the two repositories app/ and web/, in system demo. I am not available for any other question: decide everything yourself.
+  max_turns: 60
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fix"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: change-gained-only-the-redraft
+    type: regex
+    pattern: '\tcommit: docs\(demo\): start change 2026-10-24-greeting-space\n[^\n]*\tcommit: docs\(demo\): draft fix 2026-10-24-greeting-space\n[^\n]*\tcommit: docs\(demo\): draft fix 2026-10-24-greeting-space\n$'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-10-24-greeting-space/logs/HEAD
+  - name: master-main-gains-no-commit
+    type: regex
+    pattern: '\tcommit: chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: spec-keeps-the-redraft-and-not-the-change
+    type: regex
+    pattern: '^(?![\s\S]*\b(?:web|bold)\b)(?=[\s\S]*Mary-Jane)[\s\S]*"status"\s*:\s*"draft"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/spec.md
+  - name: plan-left-without-the-change
+    type: regex
+    pattern: '^(?![\s\S]*\b(?:web|bold)\b)[\s\S]*"status"\s*:\s*"draft"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/plan.md
+  - name: intent-left-without-the-change
+    type: regex
+    pattern: '^(?![\s\S]*\b(?:web|bold)\b)[\s\S]*"status"\s*:\s*"draft"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/intent.md
+  - name: output-names-the-one-repository-rule
+    type: regex
+    pattern: '\bone[\s-]+repositor|\b(?:single|second|another|more\s+than\s+one|multiple|two)\s+repositor|\brule\s*1\b'
+    flags: i
+    target: last_message
+  - name: output-points-to-intent
+    type: regex
+    pattern: '(?:/|\bhoshin:)intent\b|`intent\b|\bintent\s+skill\b|\bfull\s+pipeline\b'
+    flags: i
+    target: last_message

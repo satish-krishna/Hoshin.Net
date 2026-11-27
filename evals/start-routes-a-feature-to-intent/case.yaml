@@ -1,0 +1,62 @@
+schema_version: "1.1"
+name: start-routes-a-feature-to-intent
+description: A feature brought to the start skill by an engineer is routed to the full pipeline. Because the person is not the product owner, start gives the product owner's intent command instead of interviewing, never runs the fix skill or the intent skill, and writes, commits and starts nothing (B05). Ported from the original's case of the same name; the command is now the slash command with the plugin's prefix.
+tags: [start, intent, b05]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    I'm an engineer. Start a change in system demo: returning visitors should get a profile where they can edit the first name we greet them with, save a preferred greeting language, and download their visit history as a CSV file. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). Go ahead with whichever route you pick; I am not available for questions.
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: start-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?start"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: fix-never-ran
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fix"'
+    min: 0
+    max: 0
+  - name: output-gives-the-intent-command
+    type: regex
+    pattern: '(?:`|^)/?(?:hoshin:)?intent [^`\n]{10,}'
+    flags: m
+    target: last_message
+  - name: intent-never-ran
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?intent"'
+    min: 0
+    max: 0
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: master-gained-no-commit
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: no-change-left-behind
+    type: file_exists
+    path: "master/.git/refs/heads/change/*"
+    exists: false
+  - name: no-copy-created
+    type: file_exists
+    path: ".hoshin/copies"
+    exists: false

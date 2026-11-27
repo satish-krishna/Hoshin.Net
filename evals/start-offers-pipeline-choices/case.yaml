@@ -1,0 +1,66 @@
+schema_version: "1.1"
+name: start-offers-pipeline-choices
+description: A feature brought to the start skill by someone who holds both roles is routed to the full pipeline. Start shows the verdict with the light-track rule the change breaks, offers exactly the full pipeline and stopping, in that order, without offering the light track or asking who is running it, and ends at the choices, so it writes and commits nothing and starts no change (B05). Ported from the original's case of the same name.
+tags: [start, intent, b05]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    I'm both the engineer and the product owner here. Start a change in system demo: returning visitors should get a profile where they can edit the first name we greet them with, save a preferred greeting language, and download their visit history as a CSV file. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). Show me your verdict and the choices for how to go on, and leave the pick to me: I will answer in my next message, so end your reply with the choices. I am not available for other questions: decide everything else yourself.
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: start-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?start"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: full-pipeline-choices-offered-in-order
+    type: regex
+    pattern: 'Take the full pipeline[\s\S]*Stop here'
+    flags: i
+    target: last_message
+  - name: light-track-not-offered
+    type: regex
+    pattern: 'Take the light track'
+    match: not_contains
+    target: last_message
+  - name: verdict-names-the-broken-rule
+    type: regex
+    pattern: '(?:^|(?<=[.!?:;\n]))(?:(?!\b(?:no|not|never|without|neither|nor)\b|n''t)[^.:;\n])*(?:\b(?:more than|over|past|beyond|exceeds?)\s+(?:the\s+)?(?:three|3)\b|\b(?:three|3)[\s-]+tasks?\s+(?:cap|limit|maximum)|\b(?:[4-9]|\d{2,}|four|five|six|seven|eight|nine|ten)\s+(?:\w+\s+)?tasks\b|\b(?:changes?|settles?|breaks?|alters?|removes?)\s+(?:a|an|the)\s+(?:\w+\s+)?business rule|\b(?:second|another|other)\s+repositor|\bmore than one repositor|\btwo repositories|\bone-repository rule|\brule\s*[123]\b(?:(?!\b(?:no|not|never|without)\b|n''t)[^.\n])*\b(?:fails?|broken|breaks?)\b|\b(?:fails?|breaks?|broken)\b(?:(?!\b(?:no|not|never|without)\b|n''t)[^.\n])*\brule\s*[123]\b|\bC1\b)|\b(?:one\s+repositor\w*|no\s+business\s+rule(?:\s+in\s+the\s+context(?:\s+changes)?)?|at\s+most\s+(?:three|3)\s+tasks?)\W{0,8}(?:fails?|failed|broken|breaks?)\b'
+    flags: i
+    target: last_message
+  - name: role-never-asked
+    type: regex
+    pattern: 'who is running|who (?:are|is) (?:you|this|the person)|are you (?:the|an?) (?:engineer|product owner)|(?:engineer|product owner)\s+or\s+(?:an?\s+|the\s+)?(?:engineer|product owner)|which (?:role|hat)|what (?:role|hat) (?:are|do) you|what(?:.s| is) your role'
+    flags: i
+    match: not_contains
+    target: last_message
+  - name: fix-not-run
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fix"'
+    min: 0
+    max: 0
+  - name: master-gained-no-commit
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: no-change-left-behind
+    type: file_exists
+    path: "master/.git/refs/heads/change/*"
+    exists: false
+  - name: no-copy-created
+    type: file_exists
+    path: ".hoshin/copies"
+    exists: false

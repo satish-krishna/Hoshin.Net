@@ -7,7 +7,34 @@
 # The sandbox mounts /dev/null over dotfiles in the case folder; each repository lists them in .git/info/exclude so a
 # check for uncommitted files does not refuse on them before the case tests anything.
 set -euo pipefail
+evals_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+workspace_root="$(pwd)"
 git_in() { git -c user.name=eval -c user.email=eval@example.com -c core.autocrlf=false "$@"; }
+
+# The program itself, from the bundle under test (EVAL_HOSHIN_DLL overrides it; the grader self-tests point it at the
+# test build). A fixture moves a change to the state its case starts from through the program, never by writing git
+# history by hand, so commit subjects, pins and the change's copy are the ones the engine makes.
+hoshin() {
+  GIT_AUTHOR_NAME=eval GIT_AUTHOR_EMAIL=eval@example.com GIT_COMMITTER_NAME=eval GIT_COMMITTER_EMAIL=eval@example.com \
+    dotnet "${EVAL_HOSHIN_DLL:-$evals_dir/.bundle/claude-code/lib/hoshin.dll}" "$@"
+}
+
+# Starts a change from the master: change_start <change> <type> <scope>. Its copy is .hoshin/copies/<change>.
+change_start() {
+  (cd "$workspace_root/master" && hoshin change start --json --system demo --change "$1" --type "$2" --scope "$3" >/dev/null)
+}
+
+# The change's copy, where its documents live: copy_of <change>.
+copy_of() { echo "$workspace_root/.hoshin/copies/$1"; }
+
+# Commits one document of a change through the program: commit_doc <change> <kind> <path relative to the copy>.
+# Kinds are the library's: intent-draft, accept-intent, spec, accept-spec, plan, accept-plan, fix-draft, build-log,
+# review, reject-intent, reject-fix. A refusal fails the fixture, with the program's reason.
+commit_doc() {
+  local out
+  out="$(cd "$(copy_of "$1")" && hoshin commit --json --kind "$2" --change "$1" -- "$3")"
+  case "$out" in *'"committed":true'*) ;; *) echo "fixture: commit --kind $2 of $3 refused: $out" >&2; exit 1 ;; esac
+}
 exclude_sandbox_mounts() {
   printf '/%s\n' .bash_profile .bashrc .claude/ .eval-artifacts .gitconfig .gitmodules .idea .mcp.json .profile .ripgreprc .vscode .zprofile .zshrc >> .git/info/exclude
 }

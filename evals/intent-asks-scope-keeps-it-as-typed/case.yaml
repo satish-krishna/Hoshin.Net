@@ -1,0 +1,59 @@
+schema_version: "1.1"
+name: intent-asks-scope-keeps-it-as-typed
+description: An intent started without a scope in the invocation asks the product owner for one, who types PROJ-123 over any offered default. The scope is recorded exactly as typed, in the front matter and in the draft commit's header, with the capitals kept (B06 item 1). The model's commit is made by the Stop hook, so the case reads the change's reflog. Ported from the original's case of the same name.
+tags: [intent, scope, b06]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Use the hoshin intent skill for system demo with this request: "Customer can reset password"
+    This session runs in the workspace folder, which holds the master repository (master/) and the app (app/).
+    You are the product owner. Answers, in the order you ask: if you ask for the commit scope and offer a default, decline the default and type the scope PROJ-123, in capitals, exactly like that. After that, in the order the interview asks, the problem is that a customer who forgot the password can only phone support, which costs about ten minutes of support time per call. The happy path: the customer picks "forgot password" on the sign-in page, receives a one-time link by email, sets a new password, and is signed in. The success measure is that password calls to support drop by half within a quarter. Affected users: customers and support staff, and the system is demo. Constraints: the link must expire within an hour. For every edge case, take your suggested default. If the change gets a folder, name it 2026-11-01-password-reset. Confirm the title you propose and accept each summary as read. Do not wait for me and do not ask me anything else: finish the whole skill, ending your turn once the intent is written.
+  max_turns: 60
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?intent"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: front-matter-keeps-the-scope-as-typed
+    type: regex
+    pattern: '"scope"\s*:\s*"PROJ-123"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-password-reset/intent/demo/2026-11-01-password-reset/intent.md
+  - name: scope-never-lowercased
+    type: regex
+    pattern: 'proj-123'
+    match: not_contains
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-password-reset/intent/demo/2026-11-01-password-reset/intent.md
+  - name: draft-commit-keeps-the-capitals
+    type: regex
+    pattern: '\tcommit: docs\(PROJ-123\): draft intent 2026-11-01-password-reset\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-password-reset/logs/HEAD
+  - name: no-lowercased-commit
+    type: regex
+    pattern: 'proj-123'
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-password-reset/logs/HEAD
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0

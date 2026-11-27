@@ -1,0 +1,83 @@
+schema_version: "1.1"
+name: review-commits-an-interrupted-review
+description: A final review wrote build/review.md in the change's copy as "## Review 1" but stopped before it was committed (the file is untracked). Rerun, the review skill offers that review as it is instead of starting afresh, and, as the engineer said beforehand, it is committed as it is, with no reviewer dispatched, no second section and no new finding (B12 item 4). The hook commits it at the end of the turn, so the grader reads the change's reflog. Ported from the original's case of the same name.
+tags: [review, b12]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Run the final review of change 2026-11-01-vip-greeting in system demo. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). If you find a review that was written but never committed, commit it as it is rather than reviewing afresh. I am not available for questions: decide everything else yourself and finish.
+  max_turns: 40
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?review"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: review-commit-landed
+    type: regex
+    pattern: '\tcommit: docs\([^)]+\): (?:review|record review 1 of) 2026-11-01-vip-greeting\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-vip-greeting/logs/HEAD
+  - name: draft-kept
+    type: regex
+    pattern: 'An interrupted draft: a name with surrounding spaces is echoed as given\.'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting/intent/demo/2026-11-01-vip-greeting/build/review.md
+  - name: no-second-review
+    type: regex
+    pattern: '^## Review 2\s*$'
+    flags: m
+    match: not_contains
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting/intent/demo/2026-11-01-vip-greeting/build/review.md
+  - name: no-new-finding
+    type: regex
+    pattern: '"id"\s*:\s*"F2"'
+    match: not_contains
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting/intent/demo/2026-11-01-vip-greeting/build/review.md
+  - name: no-reviewer-dispatched
+    type: tool_used
+    tool: Agent
+    input_match: '[\s\S]'
+    min: 0
+    max: 0
+  - name: product-repository-unchanged
+    type: regex
+    pattern: '\tcommit: feat\(demo\): greet vip visitors as guests of honor\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD
+  - name: review-is-the-only-commit-after-the-log
+    type: regex
+    pattern: 'log T1 of 2026-11-01-vip-greeting\n(?:[^\n]*\n)*?[^\n]*\tcommit[^:\n]*: (?!docs\([^)]+\): (?:review|record review 1 of) 2026-11-01-vip-greeting\n)'
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-vip-greeting/logs/HEAD
+  - name: master-main-gains-no-commit
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD

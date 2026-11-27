@@ -1,0 +1,49 @@
+schema_version: "1.1"
+name: plan-applies-an-outline-correction
+description: The invocation carries no direction, so the plan skill asks for it and the engineer answers none. The skill then shows its approach outline and the engineer corrects it so the greeting texts live in a new module src/greetings.ts. The graders check the result of the correction, not that the outline was shown. The plan lists src/greetings.ts in a task's files and records the correction under an Engineer direction section (B10, one round of outline corrections). Ported from the original's case of the same name.
+tags: [plan, direction, b10]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Plan the change 2026-11-01-greeting in system demo. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). When I am asked about direction, answer: none. When you show the approach outline, correct it: the greeting texts must live in a new module src/greetings.ts. Take the recommended answer to every other question and finish the whole skill.
+  max_turns: 50
+  timeout_seconds: 1200
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?plan"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: a-task-changes-greetings
+    type: regex
+    pattern: '"files"\s*:\s*\[[^\]]*src/greetings\.ts'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: direction-recorded
+    type: regex
+    pattern: '## Engineer direction\r?\n(?:(?!\n## )[\s\S])*?src/greetings\.ts'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: plan-commit-landed
+    type: regex
+    pattern: '\tcommit: docs\([^)\s]+\): draft plan 2026-11-01-greeting\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-greeting/logs/HEAD
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0

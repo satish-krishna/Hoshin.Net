@@ -1,0 +1,93 @@
+schema_version: "1.1"
+name: setup-sets-team-naming
+description: Asked to set the team's naming for a system, a naming-only setup run asks for the two patterns, refuses the first branch pattern (it has a space), accepts the second, writes both into the system's naming setting after the program has checked them, and commits the marker alone as the usual setup commit (B09). Setup now gets a hook-issued step (D9, answered (a)), so the library checks and commits and the model never runs the naming command or commits; the graders read the marker, the reflog and the report. Nothing but the marker is written, so no instructions file appears. Ported from the original's case of the same name.
+tags: [setup, naming, b09]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Use the setup skill in naming-only mode (`--naming`) for system demo. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). Answers, in the order you ask: the branch pattern is `{type}/{scope} {slug}`. If that is refused, the branch pattern is `{type}/{scope}-{slug}` instead. The title pattern is `{type}({scope}): {title}`. Do not ask me anything else, and do not touch anything but the naming setting.
+  max_turns: 30
+  timeout_seconds: 400
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?setup"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: one-setup-commit-landed
+    type: regex
+    pattern: '\tcommit: chore\(demo\): set up hoshin for demo\n'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: not-two-setup-commits
+    type: regex
+    pattern: '\tcommit: chore\(demo\): set up hoshin for demo\n[\s\S]*\tcommit: chore\(demo\): set up hoshin for demo\n'
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: no-other-commit-landed
+    type: regex
+    pattern: '\tcommit(?: \(\w+\))?: (?!chore\(demo\): set up hoshin for demo\n)'
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: marker-holds-the-branch-pattern
+    type: regex
+    pattern: '"naming"[\s\S]{0,200}"branch"\s*:\s*"\{type\}/\{scope\}-\{slug\}"'
+    target:
+      source: file
+      path: master/.hoshin.json
+  - name: marker-holds-the-title-pattern
+    type: regex
+    pattern: '"naming"[\s\S]{0,200}"pullRequestTitle"\s*:\s*"\{type\}\(\{scope\}\): \{title\}"'
+    target:
+      source: file
+      path: master/.hoshin.json
+  - name: refused-pattern-not-kept
+    type: regex
+    pattern: '\{scope\} \{slug\}'
+    match: not_contains
+    target:
+      source: file
+      path: master/.hoshin.json
+  - name: marker-keeps-the-rest
+    type: regex
+    pattern: '"demo"\s*:\s*\{[\s\S]*"repos"\s*:\s*\[\s*"app"\s*\][\s\S]*"build\.finish"[\s\S]*"id"\s*:\s*"unit"'
+    target:
+      source: file
+      path: master/.hoshin.json
+  - name: no-instructions-written-in-the-master
+    type: file_exists
+    path: "master/intent/workspace.md"
+    exists: false
+  - name: no-workspace-instructions-written
+    type: file_exists
+    path: "CLAUDE.md"
+    exists: false
+  - name: report-names-the-patterns
+    type: regex
+    pattern: '^(?=[\s\S]*\{type\}/\{scope\}-\{slug\})(?=[\s\S]*\{type\}\(\{scope\}\): \{title\})'
+    target: last_message
+  - name: report-says-when-it-takes-effect
+    type: regex
+    pattern: 'base branch|merge|merged|pushed|other engineers'
+    flags: i
+    target: last_message

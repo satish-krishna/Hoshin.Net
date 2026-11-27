@@ -1,0 +1,99 @@
+schema_version: "1.1"
+name: start-routes-a-bug-to-fix
+description: A brief bug report given to the start skill is routed to the light track, and the same session runs the fix skill, which drafts the three documents in one draft fix commit with the root cause at its file and line, a reproduction scenario, and no product code (B05). LLM half of the original's case of the same name; the advance acceptance is gone because accepting is typed-only in Hoshin.Net, and the acceptance parity test covers it. Ported from the original's case of the same name.
+tags: [start, fix, b05]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    I'm an engineer. Start a change in system demo: returning visitors see "Welcome back,Mina" with no space after the comma. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). If the change gets a folder, name it 2026-11-01-greeting-space. Go ahead with whichever route you pick and run it in this session. I am not available for questions: decide everything yourself and finish.
+  max_turns: 60
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: start-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?start"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: fix-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fix"'
+  - name: intent-never-ran
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?intent"'
+    min: 0
+    max: 0
+  - name: fix-drafted-in-the-change-copy
+    type: regex
+    pattern: '\tcommit: docs\(demo\): draft fix 2026-11-01-greeting-space\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-greeting-space/logs/HEAD
+  - name: plan-written
+    type: file_exists
+    path: ".hoshin/copies/2026-11-01-greeting-space/intent/demo/2026-11-01-greeting-space/plan.md"
+    exists: true
+  - name: intent-marks-the-light-track
+    type: regex
+    pattern: '"track"\s*:\s*"fix"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting-space/intent/demo/2026-11-01-greeting-space/intent.md
+  - name: spec-reproduces-the-bug
+    type: regex
+    pattern: 'Welcome back, Mina'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting-space/intent/demo/2026-11-01-greeting-space/spec.md
+  - name: plan-names-the-root-cause
+    type: regex
+    pattern: 'greet\.sh'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting-space/intent/demo/2026-11-01-greeting-space/plan.md
+  - name: reply-gives-the-root-cause-line
+    type: regex
+    pattern: 'greet\.sh(?:\s*[:#(]\s*(?:lines?\s+)?L?|,?\s+(?:at\s+)?lines?\s+)4\b|\blines?\s+4\b[^\n]{0,60}greet\.sh'
+    flags: i
+    target: last_message
+  - name: nothing-accepted
+    type: regex
+    pattern: '\tcommit(?: \(amend\))?: docs\([\w-]+\): accept (?:intent|spec|plan) '
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-greeting-space/logs/HEAD
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: master-main-gains-no-commit
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: product-repository-unchanged
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): feat: greet visitors\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD
+  - name: product-code-untouched
+    type: regex
+    pattern: 'Welcome back\$\{2:\+,\$2\}'
+    target:
+      source: file
+      path: app/greet.sh

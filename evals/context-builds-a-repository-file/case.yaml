@@ -1,0 +1,105 @@
+schema_version: "1.1"
+name: context-builds-a-repository-file
+description: New in Hoshin.Net (B08, and decision D9 answered (a), so a hook-issued step carries each repository's commit and Stop commits what the skill wrote under the context kind). A first context run on a repository with no file writes intent/demo/context/app.md with the front matter fields, the app's own HEAD as source_commit, and every rule tagged. The engineer is away, so nothing may be tagged confirmed by engineer, the clear greeting rules are seen in code, and the one thing the code leaves in doubt (the cart and checkout disagree on when shipping is free) is intent unknown and named in the report. The library commits the file once, as build context for app.
+tags: [context, b08]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Build the context for system demo. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). I am the engineer and I am not available for questions: decide everything yourself and finish the whole skill.
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?context"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: committed-once-by-the-library
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n[^\n]*\tcommit: docs\(demo\): build context for app\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: front-matter-has-the-fields
+    type: regex
+    pattern: '^\s*```jsonc\s*\{(?=[^}]*"repo"\s*:\s*"app")(?=[^}]*"system"\s*:\s*"demo")(?=[^}]*"built"\s*:\s*"\d{4}-\d{2}-\d{2}")(?=[^}]*"built_by"\s*:\s*"[^"]+")'
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: source-commit-is-the-apps-head
+    type: regex
+    pattern: '"source_commit"\s*:\s*"9285be81b0e34eb12f7da374fd6e72ae9a52689c"'
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: rules-are-numbered-from-c1
+    type: regex
+    pattern: '^## Rules the system enforces\s*\n(?:(?!^## )[\s\S])*^\|\s*C1\s*\|'
+    flags: m
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: every-rule-has-a-provenance-tag
+    type: regex
+    pattern: '^\|\s*C\d+\s*\|[^|\n]*\|\s*(?!\s)(?!(?:seen in code|confirmed by engineer|intent unknown)\s*\|)'
+    flags: m
+    match: not_contains
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: greeting-rules-are-seen-in-code
+    type: regex
+    pattern: '^\|[^\n]*(?:Welcome back|greet)[^\n]*\|\s*seen in code\s*\|'
+    flags: im
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: shipping-disagreement-is-intent-unknown
+    type: regex
+    pattern: '^\|[^\n]*(?:shipping|delivery|freight|postage)[^\n]*\|\s*intent unknown\s*\|'
+    flags: im
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: nothing-confirmed-without-asking
+    type: regex
+    pattern: '^\|[^\n]*\|\s*confirmed by engineer\s*\|'
+    flags: m
+    match: not_contains
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: rules-and-prose-name-no-files
+    type: regex
+    pattern: '^\|\s*C\d+\s*\|[^|\n]*\b\w+\.sh\b|^(?![|`{ ])[^\n]*\b\w+\.sh\b'
+    flags: m
+    match: not_contains
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: report-names-the-shipping-doubt
+    type: regex
+    pattern: '^(?=[\s\S]*\bshipping\b)(?=[\s\S]*(?:5000|50\.00|\$50|4217|42\.17|\$42|contradict|disagree|conflict|inconsisten|differ))'
+    flags: i
+    target: last_message
+  - name: product-repository-unchanged
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): feat: greet visitors and ship orders\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD

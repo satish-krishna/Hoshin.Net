@@ -1,0 +1,84 @@
+schema_version: "1.1"
+name: fix-redrafts-from-feedback
+description: A drafted fix awaiting acceptance is redrafted from the engineer's written changes (B14 engine item 3). Given the fix skill on the drafted change with Operator feedback that adds one scenario and says the engineer accepts later, the skill redrafts the documents, commits exactly one new draft fix commit through the program that carries the new scenario in the spec and the plan, keeps the light-track boundary, and records no acceptance. Ported from the original's case of the same name.
+tags: [fix, b14]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    fix 2026-10-24-greeting-space
+
+    Operator feedback: add one scenario for a returning visitor named Mary-Jane, so that a hyphenated name keeps its hyphen: the greeting is "Welcome back, Mary-Jane". I will accept the fix later myself, so do not ask me to accept it and do not accept it. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/), in system demo. I am not available for questions, so decide everything yourself and finish.
+  max_turns: 50
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fix"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: redraft-committed-once
+    type: regex
+    pattern: '^(?:(?!draft fix )[\s\S])*draft fix ([\w-]+)\n(?:(?!draft fix )[\s\S])*draft fix \1\n(?:(?!draft fix )[\s\S])*$'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-10-24-greeting-space/logs/HEAD
+  - name: accepted-nothing
+    type: regex
+    pattern: '\tcommit(?: \(amend\))?: docs\([\w-]+\): accept (?:intent|spec|plan) '
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/worktrees/2026-10-24-greeting-space/logs/HEAD
+  - name: spec-has-the-new-scenario
+    type: regex
+    pattern: 'Mary-Jane'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/spec.md
+  - name: spec-keeps-its-first-scenario-and-gains-one
+    type: regex
+    pattern: '(?:^\s*Scenario(?: Outline)?:[\s\S]*){2}'
+    flags: m
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/spec.md
+  - name: plan-covers-the-new-scenario
+    type: regex
+    pattern: 'Mary-Jane|hyphen'
+    flags: i
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/plan.md
+  - name: spec-still-a-draft
+    type: regex
+    pattern: '"status"\s*:\s*"draft"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/spec.md
+  - name: plan-still-a-draft
+    type: regex
+    pattern: '"status"\s*:\s*"draft"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/plan.md
+  - name: product-repository-unchanged
+    type: regex
+    pattern: '\tcommit \(amend\): feat: greet visitors\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD

@@ -1,0 +1,69 @@
+schema_version: "1.1"
+name: review-reports-two-behaviors-in-a-fix-task
+description: A built light-track fix with one task whose test commit adds failing tests for two different new behaviors, a vip visitor's greeting and a staff visitor's. The final review writes build/review.md as "## Review 1", the hook commits it, and the review records a spec finding for repo app that the fix went past the light track's cap, because a task with two new behaviors breaks triage rule 3 (B12, the light-track new-behavior count). No product repository changes. Ported from the original's case of the same name.
+tags: [review, b12]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Run the final review of change 2026-11-01-vip-staff-greeting in system demo. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). I am not available for questions: decide everything yourself and finish.
+  max_turns: 60
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?review"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: review-commit-landed
+    type: regex
+    pattern: '\tcommit: docs\([^)]+\): (?:review|record review 1 of) 2026-11-01-vip-staff-greeting\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-vip-staff-greeting/logs/HEAD
+  - name: product-repository-unchanged
+    type: regex
+    pattern: '\tcommit: feat\(demo\): greet vip and staff visitors\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD
+  - name: cap-finding-recorded
+    type: regex
+    pattern: '(?:^|(?<=[.!?:;\n,]))(?:(?!(?:\b(?:no|not|never|without|neither|nor|none)\b|n[''’]t))[^.!?:;\n,])*(?:\bpast\b[^.!?:;\n,]{0,40}\b(?:cap|rule)\b|\b(?:over|exceed\w*|breach\w*)\b[^.!?:;\n,]{0,40}\bcap\b|full pipeline(?![^.!?:;\n,]*(?:\b(?:no|not|never|without|neither|nor|none)\b|n[''’]t))|\bcap\b(?![^.!?:;\n,]{0,40}(?:\b(?:no|not|never|without|neither|nor|none)\b|n[''’]t))[^.!?:;\n,]{0,40}\b(?:exceeded|breached)\b|\b(?:two|2|three|3|more than one|several|multiple)\s+new\s+behaviou?rs?\b|\bone new behaviou?r per task\b|\blight[- ]track(?:''s)?\s+(?:cap|limit)\b)'
+    flags: i
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-staff-greeting/intent/demo/2026-11-01-vip-staff-greeting/build/review.md
+  - name: cap-finding-is-a-spec-finding-on-app
+    type: regex
+    pattern: '\{(?=[^{}]*"concern"\s*:\s*"spec")(?=[^{}]*"repo"\s*:\s*"app")(?=[^{}]*"file"\s*:\s*"[^"]*(?:test\.sh|plan\.md)")[^{}]*\}'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-staff-greeting/intent/demo/2026-11-01-vip-staff-greeting/build/review.md
+  - name: review-is-the-only-commit-after-the-log
+    type: regex
+    pattern: 'log T1 of 2026-11-01-vip-staff-greeting\n(?:[^\n]*\n)*?[^\n]*\tcommit[^:\n]*: (?!docs\([^)]+\): (?:review|record review 1 of) 2026-11-01-vip-staff-greeting\n)'
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-vip-staff-greeting/logs/HEAD
+  - name: master-main-gains-no-commit
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD

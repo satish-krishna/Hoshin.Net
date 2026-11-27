@@ -1,0 +1,64 @@
+schema_version: "1.1"
+name: fix-refuses-a-large-change
+description: A "quick fix" that is really a feature (a visitor profile with an editable name, a list of past visit dates, a CSV export of visit history, and a way to delete that history) stays in one repository and changes no context rule, but needs more than three tasks (B14 judgment on rule 3, B01's triage reference). The skill's own example of a plainly large change is from a different domain, so a pass shows the rule was applied, not the example recognized. The fix skill refuses on the task cap, points to the intent skill, offers a split as the second option, writes nothing, and leaves no started change behind (B14 engine item 5). Ported from the original's case of the same name.
+tags: [fix, b14]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Quick fix in system demo: returning visitors should get a profile where they can edit the first name we greet them with, see the dates of their past visits, download their visit history as a CSV file, and delete that history. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). I am not available for questions: decide everything yourself.
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?(?:fix|start)"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: output-names-the-task-cap
+    type: regex
+    pattern: '\b(?:three|3)\b[\s-]+(?:new\s+|plan\s+)?(?:tasks?|steps?|behaviors?)\b|\b(?:cap|limit)\b.{0,40}\b(?:three|3)\b|\btask\s+cap\b'
+    flags: i
+    target: last_message
+  - name: output-points-to-intent
+    type: regex
+    pattern: '(?:/|\bhoshin:)intent\b|`intent\b|\bintent\s+skill\b|\bfull\s+pipeline\b'
+    flags: i
+    target: last_message
+  - name: output-offers-a-split
+    type: regex
+    pattern: '\bsplit(?:ting)?\b|\bseparate\s+(?:small\s+)?(?:fix(?:es)?|changes?)\b|\bsmaller\s+(?:fix(?:es)?|changes?|pieces?|slices?)\b|\bone\s+(?:fix|change)\s+(?:at\s+a\s+time|per)\b'
+    flags: i
+    target: last_message
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: master-main-gains-no-commit
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n[^\n]*\tcommit \(amend\): chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: no-change-left-behind
+    type: file_exists
+    path: "master/.git/refs/heads/change/*"
+    exists: false
+  - name: no-intent-written
+    type: file_exists
+    path: "**/intent.md"
+    exists: false
+  - name: no-spec-written
+    type: file_exists
+    path: "**/spec.md"
+    exists: false

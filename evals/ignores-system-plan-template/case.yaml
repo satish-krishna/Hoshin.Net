@@ -1,0 +1,67 @@
+schema_version: "1.1"
+name: ignores-system-plan-template
+description: The system keeps its own plan template, which is not the plugin's layout. The plan skill still writes the plan in the plugin's layout, names the unused template in its closing message, and leaves the template and main alone (B01 item 4, B10). The model's commit is made by the Stop hook, so the case reads the change's reflog instead of a commit command. Ported from the original's case of the same name.
+tags: [plan, template, b01]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Plan the change 2026-11-01-greeting in system demo. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). I am not available for questions: take the recommended answer to every question and finish the whole skill.
+  max_turns: 50
+  timeout_seconds: 1200
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?plan"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: plan-is-layout-2
+    type: regex
+    pattern: '^```jsonc\s*\n\s*\{[^`]*"layout"\s*:\s*2\b'
+    flags: m
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: system-template-not-used
+    type: regex
+    pattern: 'SYSTEM-TEMPLATE-MARKER'
+    match: not_contains
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: system-template-left-as-it-was
+    type: regex
+    pattern: 'SYSTEM-TEMPLATE-MARKER'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/templates/plan.md
+  - name: output-names-the-unused-template
+    type: regex
+    pattern: 'templates[/\\]plan\.md'
+    target: last_message
+  - name: plan-commit-landed
+    type: regex
+    pattern: '\tcommit: docs\([^)\s]+\): draft plan 2026-11-01-greeting\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-greeting/logs/HEAD
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: master-main-gains-no-commit
+    type: regex
+    pattern: '\tcommit: chore\(demo\): add a plan template\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD

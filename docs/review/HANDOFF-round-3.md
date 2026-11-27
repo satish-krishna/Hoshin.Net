@@ -21,7 +21,8 @@ You implement every round-3 task except R21, B02, B03 and R40. You have not seen
 | `82fb3d4` | R21 | The user-path acceptance gate. The R0 harness moved to `tests/Hoshin.Tests/Acceptance/Harness/`, shared by both gates; R0 still passes 3 of 3. |
 | `f11fd78` | B02 | The eval runner (`evals/run.sh`, `evals/run-wsl.sh`, `.github/workflows/evals.yml`), the smoke case and the typed-command probe. Not run yet. |
 | `5d47acd` | B02 | `.gitattributes`: shell scripts stay LF on every checkout. |
-| this commit | — | This handoff, the index statuses, and B14 engine item 6. |
+| `1498f52`, `39d2457` | — | This handoff, the index statuses, and B14 engine item 6. |
+| the B03 commit | B03 | The ported eval suite (39 cases, with grader self-tests), the C# parity tests under `Acceptance/Parity/`, and `EvalGraderSelfTests`. |
 
 ## Where the gate fails today
 
@@ -43,6 +44,29 @@ Last full run: 20 acceptance tests, 7 pass (R0 ×3, R21 (1) resume, R21 (9) for 
 | `R21_11_Done` | only the master's pull request URL is reported | B13 |
 
 Each test's `<summary>` in `UserPathAcceptanceTests.cs` names its R21 item and its task. Read the test before you start its task: it is the most exact statement of "done" you have.
+
+## B03's gates
+
+**Parity tests** (`tests/Hoshin.Tests/Acceptance/Parity/`, `Category=Acceptance`): 28 tests for the 26 rows the B03 table sends to Parity. 16 fail today at the step their task fixes, and 12 pass, because the engine already matches the original there. A passing parity test must stay green: one that goes red is a regression, not a gate.
+
+| Task | Failing parity tests |
+| :--- | :--- |
+| B05 | `LifecycleParityTests+StartRoutesABugToFix` |
+| B06 | `LifecycleParityTests+IntentKeepsScopeAsTyped` |
+| B10 | `LifecycleParityTests+PlanGivesUpAfterThree` (the unlisted-repository test; see B10's reviewer addition) |
+| B11 | `LifecycleParityTests+BuildCommitsCheckedEntry`, `+BuildPrintsTheSchedule`, `+BuildRecordsRed` (with R24), `+BuildRefusesAStrangerMaster` |
+| B13, B14 | `LifecycleParityTests+SingleRepoDoneOnePullRequest` (B14 item 6) |
+| B14 | `FixParityTests+Fix07_AcceptRefusesAGrownPlan`, `+Fix13_AcceptStopsAtUnrecordedChanges`, `+Fix17_FinishesAStoppedAcceptance`, `+Fix19_RecordsTheEngineersEdits` |
+| B15 | `FixParityTests+Fix23_RejectsADraftedFix`, `+Fix25_ReopenKeepsBuiltTasks`, `+Fix26_ReopensAnAcceptedFix`, `LifecycleParityTests+IntentRejectsAChange` |
+
+**Eval cases** (`evals/<case>/`): 39 cases, the 37 B03 owes plus the two runner cases. None has run against a model. Each skill task runs its own cases and records an `Evals:` trailer (R3-rule 4). The B03 table in `evals/README.md` names each case's task.
+
+**`EvalGraderSelfTests`** (`Category=Acceptance`) runs `evals/test/*.test.mjs`: 291 checks on the case files and their graders, about 6 minutes. It is not red on purpose; it always passes. If it fails after your commit, your commit broke something it reads (a CLI subject, a commit kind, a document check), and the fix belongs in your code, not in the test.
+
+Three reviewer additions came out of writing B03, and they are in TASKS.md:
+- B05, B06 and B14 pass the engineer's change name as the skill's first argument.
+- B10's Stop-time plan check enforces the system's repository list.
+- R3-rule 4's exception now covers the B03 parity tests.
 
 ## Two corrections to TASKS.md you must know about
 
@@ -86,7 +110,6 @@ dotnet test tests/Hoshin.Tests --filter "Category=Acceptance"
 
 ## Waiting on the engineer (not on you)
 
-- **B03:** approve the sorting table in `evals/README.md`, including the two proposed drops (rows 9 and 10, the "count behaviors at acceptance" cases). The reviewer's session then writes the cases.
 - **B02:** permission to spend about $1 on the two runner cases. .NET 10 (SDK 10.0.404, runtime 10.0.15) is installed in WSL `~/.dotnet`. The no-runtime half of B02's done-when holds in WSL: with no `dotnet` reachable, `run-wsl.sh` stops with exit 1 before calling `claude`. With the runtime present, the startup probe passes (`scope --json demo` prints `{"problems":[]}`), and `claude` 2.1.308, `bwrap` and `socat` are on PATH. Not yet run: the smoke case itself, and the typed-command probe. Until it is known, whether a slash-command prompt counts as typed by the user stays open.
 - **The trailer check:** the conventional workflow checks trailers only on `fix/review-findings`. The engineer extends it to `fix/round-3` with `R` and `B` IDs, requires `Gate:`, and requires `Evals:` on B05–B15, before your first task commit lands.
 - **The pull request:** the engineer opens it as a draft titled `feat(workflow)!: ready to replace hoshin`, with the Tasks table, "Gate disputes" and the "Replacement bar" checklist.

@@ -1,0 +1,87 @@
+schema_version: "1.1"
+name: setup-refuses-a-deprecated-hook-point
+description: Asked to add a hook that runs after every task is logged (the task.done event), a hooks-only setup run says that hooks on task.done are deprecated, names the three events that keep their hooks, and writes and commits nothing, since the engineer takes no other point (B09, the deprecated-event rule; the engine side is the hook test that a hook on task.done is refused and nothing is written). The system's hooks file exists and is empty and committed, so a hook written there is seen whether or not it is committed. The model no longer lists the hooks with a typed command, because the setup step carries them, so the graders read the report, the files and the reflog. Ported from the original's case of the same name.
+tags: [setup, hooks, b09]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Use the setup skill in hooks-only mode (`--hooks`) for system demo. Add one hook for this system: after every task of a build is logged (the task.done event), run `echo task logged`. I want it on that event and no other; if it cannot go there, add nothing. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). Do not ask me anything else.
+  max_turns: 30
+  timeout_seconds: 400
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?setup"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: says-deprecated
+    type: regex
+    pattern: 'deprecat'
+    flags: i
+    target: last_message
+  - name: names-the-three-points-that-stay
+    type: regex
+    pattern: '^(?=[\s\S]*build\.start)(?=[\s\S]*build\.finish)(?=[\s\S]*change\.done)'
+    target: last_message
+  - name: no-setup-commit
+    type: regex
+    pattern: '\tcommit: chore\(demo\): set up hoshin for demo\n'
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: nothing-committed-after-the-hooks-file
+    type: regex
+    pattern: '\tcommit: chore\(demo\): add an empty hooks file\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: marker-gained-no-hook
+    type: regex
+    pattern: 'task\.done|task logged'
+    match: not_contains
+    target:
+      source: file
+      path: master/.hoshin.json
+  - name: marker-keeps-its-one-hook
+    type: regex
+    pattern: '"hooks": \{ "build\.finish": \[\{ "id": "unit", "run": \["bash", "test\.sh"\] \}\] \}'
+    target:
+      source: file
+      path: master/.hoshin.json
+  - name: system-hooks-gained-no-hook
+    type: regex
+    pattern: 'task\.done|task logged'
+    match: not_contains
+    target:
+      source: file
+      path: master/intent/demo/hooks.json
+  - name: system-hooks-file-is-as-it-was
+    type: regex
+    pattern: '^\{ "version": 1, "hooks": \{\} \}\s*$'
+    target:
+      source: file
+      path: master/intent/demo/hooks.json
+  - name: no-global-hook-script-written
+    type: file_exists
+    path: "master/intent/hooks/*"
+    exists: false
+  - name: no-system-hook-script-written
+    type: file_exists
+    path: "master/intent/demo/hooks/*"
+    exists: false

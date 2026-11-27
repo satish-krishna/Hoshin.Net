@@ -1,0 +1,81 @@
+schema_version: "1.1"
+name: fix-reopens-an-accepted-fix
+description: Reopening an accepted fix sends it back to one acceptance (B14 engine item 3, B15). Reopening is typed-only in Hoshin.Net, so the fixture makes the reopen commit through the program, with spec and plan back to draft and the intent still accepted. Given the fix skill on that change with Operator feedback that changes a scenario, the skill applies the feedback to the spec and to the plan, commits it, leaves the intent accepted, and accepts nothing again. The typed reopen itself is this case's parity half. Ported from the original's case of the same name.
+tags: [fix, b14, b15]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    fix 2026-10-24-greeting-space
+
+    Operator feedback: change the first scenario so that the returning visitor is named Zara instead of Mina. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/), in system demo. I will accept the fix again myself later, so do not accept it. I am not available for questions: decide everything yourself and finish.
+  max_turns: 50
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fix"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: redraft-committed-after-the-reopen
+    type: regex
+    pattern: '\tcommit: docs\([\w-]+\): reopen fix [\w-]+\n(?:[^\n]*\n)*[^\n]*\tcommit: docs\([\w-]+\): (?:draft|reopen) fix '
+    target:
+      source: file
+      path: master/.git/worktrees/2026-10-24-greeting-space/logs/HEAD
+  - name: no-acceptance-after-the-reopen
+    type: regex
+    pattern: '\tcommit: docs\([\w-]+\): reopen fix [\w-]+\n(?:(?!\tcommit(?: \(amend\))?: docs\([\w-]+\): accept )[\s\S])*$'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-10-24-greeting-space/logs/HEAD
+  - name: intent-still-accepted
+    type: regex
+    pattern: '"status"\s*:\s*"accepted"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/intent.md
+  - name: spec-back-to-draft
+    type: regex
+    pattern: '"status"\s*:\s*"draft"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/spec.md
+  - name: plan-back-to-draft
+    type: regex
+    pattern: '"status"\s*:\s*"draft"'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/plan.md
+  - name: spec-has-the-changed-scenario
+    type: regex
+    pattern: '^(?![\s\S]*\bMina\b)[\s\S]*first name is Zara'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/spec.md
+  - name: plan-follows-the-changed-scenario
+    type: regex
+    pattern: '^(?![\s\S]*\bMina\b)[\s\S]*\bZara\b'
+    target:
+      source: file
+      path: .hoshin/copies/2026-10-24-greeting-space/intent/demo/2026-10-24-greeting-space/plan.md
+  - name: product-repository-unchanged
+    type: regex
+    pattern: '\tcommit \(amend\): feat: greet visitors\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD

@@ -1,0 +1,68 @@
+schema_version: "1.1"
+name: spec-in-copy-reads-the-workspace
+description: Resolution inside a change's own copy of the master repository (B07). The session starts in the copy, a linked worktree on the change's branch that also holds master/ (the engineer's checkout, on main) and app/ (the product repository) beside the change's files. The context file is one commit behind app, so the spec skill reports it as stale, reads app's code from inside the copy, which alone names home.sh, and writes the spec in the copy. The hook commits it there, and the engineer's checkout gains no commit and stays on main. Ported from the original's case of the same name; the original's two graders that read the model calling the program's resolve and stale commands are gone, because the Hoshin.Net hooks resolve and warn on the model's behalf.
+tags: [spec, resolve, copy, b07]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Write the spec for the accepted intent 2026-11-01-new-arrivals in system demo. This session runs inside the change's own copy of the master repository: this folder is the copy, and the engineer's checkout of the master (master/) and the product repository (app/) are next to the change's files in it. Say where the note appears, using the product code. I am not available for questions: decide everything yourself and finish the whole skill.
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?spec"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: spec-is-a-draft
+    type: regex
+    pattern: '"status"\s*:\s*"draft"'
+    target:
+      source: file
+      path: intent/demo/2026-11-01-new-arrivals/spec.md
+  - name: spec-uses-the-product-code
+    type: regex
+    pattern: 'home\.sh'
+    target:
+      source: file
+      path: intent/demo/2026-11-01-new-arrivals/spec.md
+  - name: commit-landed-in-the-copy
+    type: regex
+    pattern: '\tcommit: docs\([\w-]+\): write spec 2026-11-01-new-arrivals\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-new-arrivals/logs/HEAD
+  - name: engineer-checkout-gained-no-commit
+    type: regex
+    pattern: 'write spec 2026-11-01-new-arrivals'
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: engineer-checkout-still-on-main
+    type: regex
+    pattern: '^ref: refs/heads/main\s*$'
+    flags: m
+    target:
+      source: file
+      path: master/.git/HEAD
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: reports-the-stale-context
+    type: regex
+    pattern: '\b(?:1|one)\s+commits?\b[^\n]*\b(?:behind|after|since|stale|out of date)|\b(?:stale|out of date|behind)\b[^\n]*\b(?:1|one)\s+commit'
+    flags: i
+    target: last_message

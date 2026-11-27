@@ -1,0 +1,71 @@
+schema_version: "1.1"
+name: review-ignores-a-stricter-protecting-test
+description: A built light-track fix with one task covering one scenario. The task's test commit adds one new test and also makes two existing tests stricter with a precondition that fails until the production commit, so three tests fail in it. A stricter protecting test is not a new behavior, so the final review records no finding that the fix went past the light track's cap (B12, the light-track new-behavior count by triage rule 3; B14's rule that a protecting test does not count). The review is still written and committed, so a run that records nothing does not pass. Ported from the original's case of the same name.
+tags: [review, b12]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Run the final review of change 2026-11-01-vip-greeting in system demo. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). I am not available for questions: decide everything yourself and finish.
+  max_turns: 60
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?review"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: review-commit-landed
+    type: regex
+    pattern: '\tcommit: docs\([^)]+\): (?:review|record review 1 of) 2026-11-01-vip-greeting\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-vip-greeting/logs/HEAD
+  - name: product-repository-unchanged
+    type: regex
+    pattern: '\tcommit: feat\(demo\): greet vip visitors as guests of honor\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD
+  - name: review-section-exists
+    type: regex
+    pattern: '^## Review 1\s*$'
+    flags: m
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting/intent/demo/2026-11-01-vip-greeting/build/review.md
+  - name: no-cap-finding
+    type: regex
+    pattern: '(?:^|(?<=[.!?:;\n,]))(?:(?!(?:\b(?:no|not|never|without|neither|nor|none)\b|n[''’]t))[^.!?:;\n,])*(?:\bpast\b[^.!?:;\n,]{0,40}\b(?:cap|rule)\b|\b(?:over|exceed\w*|breach\w*)\b[^.!?:;\n,]{0,40}\bcap\b|full pipeline(?![^.!?:;\n,]*(?:\b(?:no|not|never|without|neither|nor|none)\b|n[''’]t))|\bcap\b(?![^.!?:;\n,]{0,40}(?:\b(?:no|not|never|without|neither|nor|none)\b|n[''’]t))[^.!?:;\n,]{0,40}\b(?:exceeded|breached)\b)'
+    flags: i
+    match: not_contains
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting/intent/demo/2026-11-01-vip-greeting/build/review.md
+  - name: review-is-the-only-commit-after-the-log
+    type: regex
+    pattern: 'log T1 of 2026-11-01-vip-greeting\n(?:[^\n]*\n)*?[^\n]*\tcommit[^:\n]*: (?!docs\([^)]+\): (?:review|record review 1 of) 2026-11-01-vip-greeting\n)'
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-vip-greeting/logs/HEAD
+  - name: master-main-gains-no-commit
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD

@@ -38,7 +38,7 @@ In CI, `.github/workflows/evals.yml` runs the suite on Linux on a pull request l
 
 - **The hook trace must exist.** Every case has a `hook-trace-has-an-entry` grader that reads the master's `.git/hoshin/hooks.jsonl`. The trace is written only while a run is active, so a case whose hooks never ran fails there, whatever its other graders say.
 - **Agent is allowed.** The original suite withheld the `Agent` tool so the build's work stayed in the graded trace. Hoshin.Net's build dispatches every task through `Agent`, and its hooks judge the subagent's result, so a build case needs it. Graders of build cases read commits and the hook trace, not the subagent's tool calls.
-- **Commits are read from the reflog.** The sandbox turns git hooks off, so a grader reads `<repo>/.git/logs/HEAD` (or `.git/worktrees/<change>/logs/HEAD` for a change's copy): one line per commit, ending in `commit: <subject>`. Hoshin.Net's subjects are `docs(<scope>): draft <doc> <change>`, `docs(<scope>): accept <doc> <change>`, `docs(<scope>): log <task> <change>` and `docs(<scope>): review <change>`, and the library makes every one of them. "Committed through the program" becomes: the subject is the library's, and `no-hand-commit` sees no `git commit` typed by the model (the guard denies it during a run anyway).
+- **Commits are read from the reflog.** The sandbox turns git hooks off, so a grader reads `<repo>/.git/logs/HEAD` (or `.git/worktrees/<change>/logs/HEAD` for a change's copy): one line per commit, ending in `commit: <subject>`. The hooks' subjects are `docs(<scope>): start change <change>`, `draft intent|spec|plan <change>`, `draft fix <change>`, `accept intent|spec|plan <change>`, `log T<n> <change>`, `review <change>` and `reject intent <change>`, and the library makes every one of them. A fixture that commits through the CLI's `commit --kind` gets that kind's subject instead, which differs for three kinds: `spec` and `plan` write `write spec` and `write plan`, where the hooks write `draft spec` and `draft plan`, and `review` writes `record review <n> of <change>`, where the hooks write `review <change>`. A grader of a run reads the hooks' subjects. "Committed through the program" becomes: the subject is the library's, and `no-hand-commit` sees no `git commit` typed by the model (the guard denies it during a run anyway).
 - **Documents are read as JSONC front matter.** A grader matches `"status": "draft"`, not `status: draft`.
 
 ## Typed commands
@@ -53,7 +53,7 @@ Hoshin.Net refuses the human-only commands (accept, done, decline, reject, reope
 
 The original plugin's suite (`hoshin/evals`, at `hoshin@47f9d7b`) has 56 cases. TASKS.md says 60; the count is 56. Every one has a row. **LLM** means it is rewritten here. **Parity** means it becomes a C# test under `tests/Hoshin.Tests/Acceptance/Parity/` that drives hook payloads, the human-only steps as typed-user payloads. **Dropped** names the accepted difference that explains it. A case split across two destinations has both.
 
-**Status: proposed, waiting for the engineer's approval.** No case is written until it is approved.
+**Status: approved by the engineer, 2026-11-26, with both drops.** Rows 9 and 10 are listed under TASKS.md's "Accepted differences".
 
 | # | Original case | Destination | Task | Why |
 | ---: | :--- | :--- | :--- | :--- |
@@ -65,8 +65,8 @@ The original plugin's suite (`hoshin/evals`, at `hoshin@47f9d7b`) has 56 cases. 
 | 6 | done-refuses-an-unreviewed-change | Parity | B13 | `change.done` refuses before anything leaves the machine; the hook says review comes first. |
 | 7 | fix-accept-refuses-a-grown-plan | Parity | B14 | The boundary is rechecked at a typed `fix --accept` (B14 item 1). |
 | 8 | fix-accept-refuses-a-rejected-fix | Parity | B14, B15 | A typed accept of a rejected fix says the change is closed and commits nothing. |
-| 9 | fix-accept-refuses-several-tests-in-a-task | Dropped (proposed) | B14 | In the original the model counts new behaviors at acceptance. Hoshin.Net's acceptance is typed and has no model ("Advance acceptance" row), so nothing reads the plan's prose at that step. The same rule is judged at drafting (`fix-refuses-a-large-change`) and at review (`review-reports-two-behaviors-in-a-fix-task`). Needs a new "Accepted differences" row. |
-| 10 | fix-accept-refuses-two-behaviors-in-one-task | Dropped (proposed) | B14 | As row 9. |
+| 9 | fix-accept-refuses-several-tests-in-a-task | Dropped | B14 | In the original the model counts new behaviors at acceptance. Hoshin.Net's acceptance is typed and has no model ("Advance acceptance" row), so nothing reads the plan's prose at that step. The same rule is judged at drafting (`fix-refuses-a-large-change`) and at review (`review-reports-two-behaviors-in-a-fix-task`). Accepted difference: "No model at a typed `fix --accept`". |
+| 10 | fix-accept-refuses-two-behaviors-in-one-task | Dropped | B14 | As row 9. |
 | 11 | fix-accepts-a-bug-fix | LLM + Parity | B14 | LLM: names the root cause and drafts three documents that pass the check, with `track: fix`, and no product code. Parity: the typed accept commits intent, spec and plan acceptances in order, with pins that hold. |
 | 12 | fix-accepts-a-task-with-a-protecting-test | Parity | B14, R24 | A typed accept counts one new failing test per task; a protecting test is not a second behavior. |
 | 13 | fix-accept-stops-at-unrecorded-changes | Parity | B14 | A typed accept over an uncommitted hand edit records the edit as a draft and accepts nothing (B14 item 4). |
@@ -125,8 +125,14 @@ Cases the original never had, which Hoshin.Net's skills now need (B03 item 5):
 | runner-reaches-the-hooks | LLM | B02 | The runner's smoke case: the built bundle's hooks run inside the eval. |
 | runner-typed-command-is-the-users | probe | B02 | Answers "Typed commands" above; not counted against the bar. |
 
-Totals: of the 56, 33 go to LLM (5 of them also to Parity), 21 to Parity only, and 2 are proposed as dropped.
+Totals: of the 56, 33 go to LLM (5 of them also to Parity), 21 to Parity only, and 2 are dropped.
 
 ## Grader self-tests
 
-`node --test "evals/test/*.test.mjs"` checks the graders themselves, in the form the black-box suites under `tests/Hoshin.Tests/BlackBox/` use: each one builds its case's real fixture, makes the commits a passing run would make, and runs the case's regexes over the result. They need bash and git.
+`node --test "evals/test/*.test.mjs"` checks the graders themselves, in the form the black-box suites under `tests/Hoshin.Tests/BlackBox/` use. They cost nothing, so the fast suite runs them on every commit (`EvalGraderSelfTests`), against the test build of `hoshin.dll`. They need bash (Git Bash on Windows), git and dotnet.
+
+- `cases.test.mjs` checks every case's shape (the narrow YAML subset the case files keep to, so a broken file is found before a paid run), that every case carries `hook-trace-has-an-entry`, that no grader reads the original's mechanism, and that this README's table, the case folders, the parity tests (`[Trait("Original", "<case>")]`) and TASKS.md's accepted differences agree.
+- `<case>.test.mjs`, one per case, tries each of its graders on both sides: on what a passing run leaves and on what a failing run leaves. It builds the case's real fixture, and makes the commits a run would make through the program (`withHelpers`), never by writing git history by hand. `fix-refuses-a-rule-change.test.mjs` is the model.
+- `lib.mjs` holds the helpers: `graders`, `matches`, `fixture`, `withHelpers`, `target`, `traceLine`.
+
+A fixture reaches the state its case starts from through the program as well: `shared/workspace.sh` gives it `hoshin`, `change_start`, `copy_of` and `commit_doc`, so subjects, pins and the change's copy are the engine's own.

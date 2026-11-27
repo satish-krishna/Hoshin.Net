@@ -1,0 +1,81 @@
+schema_version: "1.1"
+name: plan-keeps-whole-app-checks-out-of-tasks
+description: The app's contributing guide asks for a production build and a three-minute browser check before a merge, and the system has no build.finish hooks. The plan scopes each task to a filtered test run, keeps the build and the browser check out of every task's Done when and test command, names both under Checks at build finish, and tells the engineer to add them as hooks on the base branch (B10, whole-app checks decided by scope). On a fixture this small a planner keeps the checks out of a task even without the rule, so the section and the closing message are what tell the two apart. Ported from the original's case of the same name.
+tags: [plan, checks, b10]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Plan the change 2026-11-01-greeting in system demo. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). I am not available for questions: take the recommended answer to every question and finish the whole skill.
+  max_turns: 50
+  timeout_seconds: 1200
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?plan"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: plan-is-layout-2
+    type: regex
+    pattern: '^```jsonc\s*\n\s*\{[^`]*"layout"\s*:\s*2\b'
+    flags: m
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: no-done-when-runs-a-whole-app-check
+    type: regex
+    pattern: '#### Done when\r?\n(?:(?!\n#{2,4} )[\s\S])*?(?:check:boot|npm run build\b|vite build|npm (?:run )?test(?!\s+--\s+\S)(?![\w:-]))'
+    match: not_contains
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: no-task-command-runs-a-whole-app-check
+    type: regex
+    pattern: '"(?:test|compile)"\s*:\s*\[[^\]]*(?:check:boot|check-boot|"build")'
+    match: not_contains
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: a-task-runs-a-filtered-test
+    type: regex
+    pattern: '"test"\s*:\s*\[[^\]]*\.test\.ts'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: checks-section-names-the-browser-check
+    type: regex
+    pattern: '## Checks at build finish\r?\n(?:(?!\n## )[\s\S])*?check:boot'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: checks-section-names-the-build
+    type: regex
+    pattern: '## Checks at build finish\r?\n(?:(?!\n## )[\s\S])*?(?:npm run build|vite build)'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting/intent/demo/2026-11-01-greeting/plan.md
+  - name: output-says-add-the-hooks-on-the-base-branch
+    type: regex
+    pattern: 'check:boot[\s\S]*base branch|base branch[\s\S]*check:boot'
+    flags: i
+    target: last_message
+  - name: plan-commit-landed
+    type: regex
+    pattern: '\tcommit: docs\([^)\s]+\): draft plan 2026-11-01-greeting\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-greeting/logs/HEAD
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0

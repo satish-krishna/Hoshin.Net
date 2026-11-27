@@ -1,0 +1,56 @@
+schema_version: "1.1"
+name: fix-follows-written-rules
+description: A light-track bug fix in an app whose CONTRIBUTING.md links to docs/changes.md, which asks every change a visitor can see to add a line to CHANGELOG.md, a rule the code does not show (B14, B01's written-rules reference). The fix skill runs from the workspace folder, where nothing of the app's is loaded, so it reads the app's written rules, links included, before drafting the plan, and a plan task lists CHANGELOG.md in its files. The changelog line is not a second new behavior, so the fix stays on the light track and its draft is committed. Accepting is typed-only in Hoshin.Net, so the case grades up to the draft. Ported from the original's case of the same name.
+tags: [fix, conventions, b14]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Quick fix in system demo: returning visitors see "Welcome back,Mina" with no space after the comma. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). If the change gets a folder, name it 2026-11-01-greeting-space. I will accept the fix myself later, so do not accept it and do not ask me to. I am not available for questions: decide everything yourself and finish.
+  max_turns: 50
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?(?:fix|start)"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: a-task-adds-the-changelog-line
+    type: regex
+    pattern: '"files"\s*:\s*\[[^\]]*CHANGELOG\.md'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-greeting-space/intent/demo/2026-11-01-greeting-space/plan.md
+  - name: stayed-on-the-light-track
+    type: regex
+    pattern: '\tcommit: docs\([\w-]+\): draft fix 2026-11-01-greeting-space\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-greeting-space/logs/HEAD
+  - name: accepted-nothing
+    type: regex
+    pattern: '\tcommit(?: \(amend\))?: docs\([\w-]+\): accept (?:intent|spec|plan) '
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-greeting-space/logs/HEAD
+  - name: product-repository-unchanged
+    type: regex
+    pattern: '\tcommit \(amend\): feat: greet visitors\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD

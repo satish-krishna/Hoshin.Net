@@ -1,0 +1,120 @@
+schema_version: "1.1"
+name: review-dispatches-per-repository
+description: A fully built two-repository change (T1 in app, T2 in lib; the fixture adds lib to the base workspace and to the system in the marker). The review skill dispatches one reviewer per touched repository plus one across them (three Agent calls), each reading its own repository's written rules, and merges their findings into one appended section, "## Review 1", committed by the hook. Each repository's new script breaks that repository's own rule (app breaks the script header rule, lib breaks the usage comment rule), so the merged section holds one convention finding per repository citing that repository's own rule. Numbering runs on across the merge (B12 items 1 and 3). New case; the original dispatched reviewers inside its own skill.
+tags: [review, b12]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Run the final review of change 2026-11-01-vip-greeting-and-farewell in system demo. This session runs in the workspace folder, which holds the master repository (master/) and the two product repositories of the system (app/ and lib/). I am not available for questions: decide everything yourself and finish.
+  max_turns: 80
+  timeout_seconds: 1200
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?review"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: three-reviewers-dispatched
+    type: tool_used
+    tool: Agent
+    input_match: '[\s\S]'
+    min: 3
+    max: 3
+  - name: a-reviewer-for-app
+    type: tool_used
+    tool: Agent
+    input_match: '\bapp\b'
+  - name: a-reviewer-for-lib
+    type: tool_used
+    tool: Agent
+    input_match: '\blib\b'
+  - name: a-reviewer-across-repositories
+    type: tool_used
+    tool: Agent
+    input_match: '[Aa]cross|[Cc]ross-repositor|[Bb]oth repositories|[Ee]very repository|[Ss]eam'
+  - name: review-commit-landed
+    type: regex
+    pattern: '\tcommit: docs\([^)]+\): (?:review|record review 1 of) 2026-11-01-vip-greeting-and-farewell\n'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-vip-greeting-and-farewell/logs/HEAD
+  - name: one-appended-section
+    type: regex
+    pattern: '^## Review 1\s*$'
+    flags: m
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting-and-farewell/intent/demo/2026-11-01-vip-greeting-and-farewell/build/review.md
+  - name: no-second-section
+    type: regex
+    pattern: '^## Review 2\s*$'
+    flags: m
+    match: not_contains
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting-and-farewell/intent/demo/2026-11-01-vip-greeting-and-farewell/build/review.md
+  - name: header-names-both-repositories
+    type: regex
+    pattern: '"commits"\s*:\s*\{(?=[^{}]*"app")(?=[^{}]*"lib")'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting-and-farewell/intent/demo/2026-11-01-vip-greeting-and-farewell/build/review.md
+  - name: app-convention-finding-cites-its-rule
+    type: regex
+    pattern: '\{(?=[^{}]*"concern"\s*:\s*"convention")(?=[^{}]*"repo"\s*:\s*"app")(?=[^{}]*"rule"\s*:\s*"CONTRIBUTING\.md:[56](?:-[56])?")(?=[^{}]*"file"\s*:\s*"[^"]*vip\.sh")[^{}]*\}'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting-and-farewell/intent/demo/2026-11-01-vip-greeting-and-farewell/build/review.md
+  - name: lib-convention-finding-cites-its-rule
+    type: regex
+    pattern: '\{(?=[^{}]*"concern"\s*:\s*"convention")(?=[^{}]*"repo"\s*:\s*"lib")(?=[^{}]*"rule"\s*:\s*"CONTRIBUTING\.md:[56](?:-[56])?")(?=[^{}]*"file"\s*:\s*"[^"]*farewell\.sh")[^{}]*\}'
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting-and-farewell/intent/demo/2026-11-01-vip-greeting-and-farewell/build/review.md
+  - name: finding-numbers-are-not-repeated
+    type: regex
+    pattern: '"id"\s*:\s*"(F\d+)"[\s\S]*"id"\s*:\s*"\1"'
+    match: not_contains
+    target:
+      source: file
+      path: .hoshin/copies/2026-11-01-vip-greeting-and-farewell/intent/demo/2026-11-01-vip-greeting-and-farewell/build/review.md
+  - name: app-repository-unchanged
+    type: regex
+    pattern: '\tcommit: feat\(demo\): greet vip visitors as guests of honor\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD
+  - name: lib-repository-unchanged
+    type: regex
+    pattern: '\tcommit: feat\(demo\): thank vip visitors on leaving\n$'
+    target:
+      source: file
+      path: lib/.git/logs/HEAD
+  - name: review-is-the-only-commit-after-the-log
+    type: regex
+    pattern: 'log T2 of 2026-11-01-vip-greeting-and-farewell\n(?:[^\n]*\n)*?[^\n]*\tcommit[^:\n]*: (?!docs\([^)]+\): (?:review|record review 1 of) 2026-11-01-vip-greeting-and-farewell\n)'
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-vip-greeting-and-farewell/logs/HEAD
+  - name: master-main-gains-no-commit
+    type: regex
+    pattern: '\tcommit: chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD

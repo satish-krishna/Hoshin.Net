@@ -1,0 +1,61 @@
+schema_version: "1.1"
+name: start-offers-fixed-choices
+description: A bug brought to the start skill by someone who holds both roles is routed to the light track. Start shows the verdict, offers exactly the light track's three choices in order without asking who is running it, and ends at the choices, so it writes and commits nothing and starts no change (B05, the verdict layout and its fixed choice sets). Ported from the original's case of the same name.
+tags: [start, fix, b05]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    I'm both the engineer and the product owner here. Start a change in system demo: returning visitors see "Welcome back,Mina" with no space after the comma. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). Show me your verdict and the choices for how to go on, and leave the pick to me: I will answer in my next message, so end your reply with the choices. I am not available for other questions: decide everything else yourself.
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: start-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?start"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: light-track-choices-offered-in-order
+    type: regex
+    pattern: 'Take the light track[\s\S]*Take the full pipeline instead[\s\S]*Stop here'
+    flags: i
+    target: last_message
+  - name: verdict-states-repository-and-estimate
+    type: regex
+    pattern: '^(?=[\s\S]*\bapp\b)(?=[\s\S]*\b(?:\d+|one|two|three)\s+(?:plan\s+)?tasks?\b)'
+    flags: i
+    target: last_message
+  - name: role-never-asked
+    type: regex
+    pattern: 'who is running|who (?:are|is) (?:you|this|the person)|are you (?:the|an?) (?:engineer|product owner)|(?:engineer|product owner)\s+or\s+(?:an?\s+|the\s+)?(?:engineer|product owner)|which (?:role|hat)|what (?:role|hat) (?:are|do) you|what(?:.s| is) your role'
+    flags: i
+    match: not_contains
+    target: last_message
+  - name: fix-not-run
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fix"'
+    min: 0
+    max: 0
+  - name: master-gained-no-commit
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: no-change-left-behind
+    type: file_exists
+    path: "master/.git/refs/heads/change/*"
+    exists: false
+  - name: no-copy-created
+    type: file_exists
+    path: ".hoshin/copies"
+    exists: false

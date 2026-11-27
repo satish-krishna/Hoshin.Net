@@ -1,0 +1,68 @@
+schema_version: "1.1"
+name: start-drafts-a-fix-for-later-acceptance
+description: A bug brought to the start skill with the triage text a driver sends, by a person who takes the light track when asked, is handed to the fix skill in the same session, which drafts the three documents in one draft fix commit and accepts nothing, in advance or otherwise (B05). Ported from the original's case of the same name; the advance-acceptance graders now look for a document written as accepted, since accepting is a typed command.
+tags: [start, fix, b05]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    Use the hoshin start skill for system demo. The change: returning visitors see "Welcome back,Mina" with no space after the comma. The person running this is both the engineer and the product owner and may take either route. If the route is the light track and the person takes it, run the fix skill in this session; the engineer accepts the fix later, so do not ask for acceptance.
+
+    This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). If the change gets a folder, name it 2026-11-01-greeting-space. If you offer the choices, I take the light track. I am not available for other questions: decide everything else yourself and finish.
+  max_turns: 60
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: start-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?start"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: fix-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?fix"'
+  - name: drafted-once
+    type: regex
+    pattern: '^(?:(?!draft fix )[\s\S])*draft fix ([\w-]+)\n(?:(?!draft fix )[\s\S])*$'
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-greeting-space/logs/HEAD
+  - name: accepted-nothing
+    type: regex
+    pattern: '\tcommit(?: \(amend\))?: docs\([\w-]+\): accept (?:intent|spec|plan) '
+    match: not_contains
+    target:
+      source: file
+      path: master/.git/worktrees/2026-11-01-greeting-space/logs/HEAD
+  - name: no-document-written-as-accepted-by-write
+    type: tool_used
+    tool: Write
+    input_match: 'status\\*"\s*:\s*\\*"accepted'
+    min: 0
+    max: 0
+  - name: no-document-written-as-accepted-by-edit
+    type: tool_used
+    tool: Edit
+    input_match: 'status\\*"\s*:\s*\\*"accepted'
+    min: 0
+    max: 0
+  - name: no-document-written-as-accepted-by-bash
+    type: tool_used
+    tool: Bash
+    input_match: 'status\\*"\s*:\s*\\*"accepted'
+    min: 0
+    max: 0
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0

@@ -1,0 +1,142 @@
+schema_version: "1.1"
+name: context-refreshes-a-stale-file
+description: New in Hoshin.Net (B08, and decision D9 answered (a), so the hook-issued step carries the commit, the paths changed since source_commit and the rule-number history). A refresh of a context file that is two commits behind carries the unchanged rules forward with their numbers, tags and notes (C1, C3), retires the rule the code no longer follows (C2) and records what the code does now as intent unknown under a new number with the earlier rule named in its note, retires the rule whose code is gone (C4), never reuses the retired C5 (the next free number is C6), tags nothing confirmed by engineer because the engineer is away, moves source_commit to the app's HEAD, and reports the counts carried, changed, added and removed. The library commits it once, as refresh context for app.
+tags: [context, b08]
+plugins: ["../.bundle/claude-code"]
+runs: 3
+execution:
+  prompt: |
+    The context for system demo is stale. Refresh it. This session runs in the workspace folder, which holds the master repository (master/) and the app (app/). I am the engineer and I am not available for questions: decide everything yourself and finish the whole skill.
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit, Agent]
+context:
+  scaffold_script: fixture.sh
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?context"'
+  - name: hook-trace-has-an-entry
+    type: regex
+    pattern: '"command"\s*:\s*"hook start"'
+    target:
+      source: file
+      path: master/.git/hoshin/hooks.jsonl
+  - name: committed-once-by-the-library
+    type: regex
+    pattern: '^[^\n]*\tcommit \(initial\): chore\(demo\): set up hoshin for demo\n[^\n]*\tcommit: docs\(demo\): build context for app\n[^\n]*\tcommit: docs\(demo\): refresh context for app\n[^\n]*\tcommit: docs\(demo\): refresh context for app\n$'
+    target:
+      source: file
+      path: master/.git/logs/HEAD
+  - name: no-hand-commit
+    type: tool_used
+    tool: Bash
+    input_match: '\bgit\s+(?:-[Cc]\s+\S+\s+)*commit\b'
+    min: 0
+    max: 0
+  - name: front-matter-is-fresh
+    type: regex
+    pattern: '^\s*```jsonc\s*\{(?=[^}]*"repo"\s*:\s*"app")(?=[^}]*"system"\s*:\s*"demo")(?=[^}]*"built"\s*:\s*"(?!2026-10-01")\d{4}-\d{2}-\d{2}")(?=[^}]*"built_by"\s*:\s*"[^"]+")'
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: source-commit-moved-to-the-apps-head
+    type: regex
+    pattern: '"source_commit"\s*:\s*"72c9ffbef8d7fb7a8fae5c6be326ca2238effd42"'
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: unchanged-confirmed-rule-carried-with-its-note
+    type: regex
+    pattern: '^\|\s*C1\s*\|[^|\n]*\|\s*confirmed by engineer\s*\|[^|\n]*Eve confirmed on the 2026-09-02 call'
+    flags: m
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: unchanged-unknown-rule-carried-with-its-note
+    type: regex
+    pattern: '^\|\s*C3\s*\|[^|\n]*\|\s*intent unknown\s*\|[^|\n]*Ask Pat in product'
+    flags: m
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: changed-rule-is-retired
+    type: regex
+    pattern: '^\|\s*C2\s*\|'
+    flags: m
+    match: not_contains
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: rule-whose-code-is-gone-is-not-carried-as-seen-in-code
+    type: regex
+    pattern: '^\|\s*C4\s*\|[^\n]*\|\s*seen in code\s*\|'
+    flags: m
+    match: not_contains
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: retired-number-is-not-reused
+    type: regex
+    pattern: '^\|\s*C5\s*\|'
+    flags: m
+    match: not_contains
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: new-behavior-of-first-time-visitors-is-intent-unknown
+    type: regex
+    pattern: '^\|\s*C(?:[6-9]|\d{2,})\s*\|[^|\n]*(?:first[- ]time|new visitor|stranger|not returning)[^|\n]*\|\s*intent unknown\s*\|'
+    flags: im
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: its-note-names-the-earlier-rule
+    type: regex
+    pattern: '^\|\s*C(?:[6-9]|\d{2,})\s*\|[^|\n]*(?:first[- ]time|new visitor|stranger|not returning)[^|\n]*\|\s*intent unknown\s*\|[^|\n]*(?:\bC2\b|no greeting|earlier|previous|before|used to|formerly|\bwas\b)'
+    flags: im
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: new-farewell-is-seen-in-code-under-a-new-number
+    type: regex
+    pattern: '^\|\s*C(?:[6-9]|\d{2,})\s*\|[^|\n]*(?:farewell|leav|goodbye|good-bye|see you)[^|\n]*\|\s*seen in code\s*\|'
+    flags: im
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: nothing-new-is-confirmed-without-asking
+    type: regex
+    pattern: '^\|\s*C(?:[2-9]|\d{2,})\s*\|[^\n]*\|\s*confirmed by engineer\s*\||^\|(?!\s*C\d+\s*\|)[^\n]*\|\s*confirmed by engineer\s*\|'
+    flags: m
+    match: not_contains
+    target:
+      source: file
+      path: master/intent/demo/context/app.md
+  - name: report-counts-the-carried-rules
+    type: regex
+    pattern: '\b(?:2|two)\b[^\n.;,\d]{0,40}\b(?:carried|unchanged|kept)|\b(?:carried|unchanged|kept)\b[^\n.;,\d]{0,40}\b(?:2|two)\b'
+    flags: i
+    target: last_message
+  - name: report-counts-the-changed-rule
+    type: regex
+    pattern: '\b(?:1|one)\b[^\n.;,\d]{0,40}\bchanged|\bchanged\b[^\n.;,\d]{0,40}\b(?:1|one)\b'
+    flags: i
+    target: last_message
+  - name: report-counts-the-added-rule
+    type: regex
+    pattern: '\b(?:1|one)\b[^\n.;,\d]{0,40}\badded|\badded\b[^\n.;,\d]{0,40}\b(?:1|one)\b'
+    flags: i
+    target: last_message
+  - name: report-counts-the-removed-rule
+    type: regex
+    pattern: '\b(?:1|one)\b[^\n.;,\d]{0,40}\bremoved|\bremoved\b[^\n.;,\d]{0,40}\b(?:1|one)\b'
+    flags: i
+    target: last_message
+  - name: product-repository-unchanged
+    type: regex
+    pattern: '\tcommit: feat: say goodbye, drop the banner\n$'
+    target:
+      source: file
+      path: app/.git/logs/HEAD
