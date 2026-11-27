@@ -272,7 +272,7 @@ public sealed class DualHarnessHookIntegrationTests
         Assert.Equal("", stopAtApproval);
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
-        // 9. Second session (claude-s2) invokes /hoshin:accept -> ignored, no state change!
+        // 9. Second session (claude-s2) invokes /hoshin:accept -> told claude-s1 owns the run, no state change!
         var (_, otherAcceptOut, _) = RunFixture(toy.RepoDir, "hook start", "claude-code", "UserPromptExpansion", o =>
         {
             o["cwd"] = toy.RepoDir;
@@ -280,7 +280,7 @@ public sealed class DualHarnessHookIntegrationTests
             o["command_name"] = "hoshin:accept";
             o["prompt"] = "/hoshin:accept";
         });
-        Assert.Equal("", otherAcceptOut);
+        Assert.Contains("claude-s1", ClaudeContext(otherAcceptOut));
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
         // 10. Original owning session (claude-s1) invokes /hoshin:accept -> records approval & publishes to origin!
@@ -562,7 +562,7 @@ public sealed class DualHarnessHookIntegrationTests
         });
         Assert.Equal("{}", doneStop);
 
-        // 6. Unrelated session 2 gets {} with no state change; owning session 1 /accept approves and publishes to origin.
+        // 6. Unrelated session 2 is told session 1 owns the run with no state change; owning session 1 /accept approves and publishes to origin.
         var (_, otherAcceptOut, _) = RunFixture(toy.RepoDir, "hook start", "antigravity", "PreInvocation", o =>
         {
             o["conversationId"] = "agy-parent-2";
@@ -571,7 +571,7 @@ public sealed class DualHarnessHookIntegrationTests
             o["invocationNum"] = 0;
             o["lastUserInput"] = "/accept";
         });
-        Assert.Equal("{}", otherAcceptOut);
+        Assert.Contains("agy-parent-1", AgyInjectedMessage(otherAcceptOut));
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(TestServices.ReadState(toy.Repo)!));
 
         var (_, acceptOut, _) = RunFixture(toy.RepoDir, "hook start", "antigravity", "PreInvocation", o =>

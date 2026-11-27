@@ -131,7 +131,10 @@ stateDiagram-v2
 - `ReviewDocument(Path, Head, Brief)` — Required review gate after `RunChecks` passes, keyed by **composite code head** (`WorkflowCodeHead`: sorted `<repo>=<HEAD>` across all touched product repositories in multi-repo workspaces, or the single-repo `CodeHead` excluding `build/review.md` and `change.jsonc` so neither review commits nor `change.done`'s `change.jsonc` PR-record commit invalidate checks, reviews, or published state), written and committed to `build/review.md` and firing `review.finish`. High findings stop with `Done(false)` until the engineer invokes `/hoshin:build <instructions>` from the target repository, which dispatches a fix subagent (`FIX-R<n>`) carrying the findings and instructions, commits the fix (`test(...)` / `fix(...)`), moves that repository's head in the composite code head, re-runs `build.finish` checks, and advances to the next review; zero high findings advance to `NeedsApproval`.
 - `NeedsApproval(Head, Reason)` — Built, checked, and cleanly reviewed change waiting for human approval at the current code head. Once approved and published (`Done(true)`), `StartHandler` clears `run.json` and turn files so every subsequent hook across all workspace sessions remains quiet and `/hoshin:build` dispatches nothing.
 - `Publish(Head, Ref)` — Fires `EventRunner` `change.done` (`ChangeDoneStep`) in Hoshin workspaces (pushing every repository on `change/<change>` and opening/reusing PRs via `IPullRequestClient`), with direct push + PR fallback in standalone `.hoshin/` repos.
-- `Done(Success, Outcome)` — Terminal state.
+- `Handoff(Message)` — Per-session completion in a multi-repository change (this session's repository has no tasks left or waits on another repository, while the change itself continues elsewhere); has no step owner and clears `run.json` only from the owning session.
+- `Done(Success, Outcome)` — Change-level terminal state.
+
+Session ownership: while a non-stale `run.json` exists for any step that has an owner (`WorkflowEngine.HasOwner`), `StartHandler` blocks workflow skill invocations from other sessions with a message naming the owning session (keeping unrelated non-workflow prompts silent) and clears `run.json` only from the owning session or on change-level `Done`.
 
 ## 4. Two-Phase Red/Green Verification & Commits
 

@@ -284,6 +284,7 @@ public sealed class AuthoringAndReviewHookTests
         var intentCommittedReason = AssertBlockedStop(harness, RunHook(repoDir, "hook stop", StopPayload(harness, repoDir, session)).Stdout);
         Assert.Contains("intent draft is committed", intentCommittedReason);
         Assert.StartsWith("```jsonc\n{", File.ReadAllText(Path.Combine(repoDir, ".hoshin", "intent.md")));
+        AssertSilentStop(harness, RunHook(repoDir, "hook stop", StopPayload(harness, repoDir, session)).Stdout);
 
         // Out-of-order `spec` is refused while intent awaits acceptance.
         var (_, refusedSpec, _) = RunHook(repoDir, "hook start", StartPayload(harness, repoDir, session + "-o", "spec"));
@@ -352,6 +353,7 @@ public sealed class AuthoringAndReviewHookTests
         var specText = File.ReadAllText(Path.Combine(repoDir, ".hoshin", "spec.md"));
         Assert.StartsWith("```jsonc\n{", specText);
         Assert.Equal(intentSha, FrontMatter.TryGetScalar(specText, "spec.md", "source_intent_commit"));
+        AssertSilentStop(harness, RunHook(repoDir, "hook stop", StopPayload(harness, repoDir, session + "-s")).Stdout);
 
         // Accept spec.
         var (_, acceptSpec, _) = RunHook(repoDir, "hook start", StartPayload(harness, repoDir, session + "-a2", "accept"));
@@ -427,6 +429,7 @@ public sealed class AuthoringAndReviewHookTests
         var planText = File.ReadAllText(Path.Combine(repoDir, ".hoshin", "plan.md"));
         Assert.StartsWith("```jsonc\n{", planText);
         Assert.Equal(specSha, FrontMatter.TryGetScalar(planText, "plan.md", "source_spec_commit"));
+        AssertSilentStop(harness, RunHook(repoDir, "hook stop", StopPayload(harness, repoDir, session + "-p")).Stdout);
 
         // Accept plan -> unlocks build!
         var (_, acceptPlan, _) = RunHook(repoDir, "hook start", StartPayload(harness, repoDir, session + "-a3", "accept"));

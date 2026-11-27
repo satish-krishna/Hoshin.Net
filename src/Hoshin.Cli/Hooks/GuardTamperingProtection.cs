@@ -126,7 +126,7 @@ public static partial class GuardTamperingProtection
             }
 
             var next = WorkflowEngine.Next(state);
-            if (next is Done)
+            if (next is Done or Handoff)
             {
                 return null;
             }

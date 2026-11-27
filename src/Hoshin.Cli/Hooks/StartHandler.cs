@@ -40,9 +40,11 @@ internal sealed class StartHandler(
             return (_adapter.EmptyOutput(ev.Harness), $"{invocation.Skill}: allowed");
         }
 
-        if (IsBlockedByOtherActiveBuild(repo, ev))
+        if (TryGetOtherActiveRunOwner(repo, ev, out var ownerMarker, out var ownerStep))
         {
-            return (_adapter.EmptyOutput(ev.Harness), "different session owns active build run");
+            return invocation is null
+                ? (_adapter.EmptyOutput(ev.Harness), "different session owns active run")
+                : EmitStartContext(ev, repo, FormatOtherSessionOwnsRun(ownerMarker!, ownerStep!), $"blocked: session {ownerMarker!.SessionId} owns active {ownerStep!.Kind}");
         }
 
         if (TryDrainAntigravityPendingContext(ev, repo) is { } drained)
@@ -50,26 +52,33 @@ internal sealed class StartHandler(
             return drained;
         }
 
-        if (invocation is null)
-        {
-            return (_adapter.EmptyOutput(ev.Harness), "not ours");
-        }
-
-        return HandleSkillInvocation(ev, repo, resolved.ProductRepoName, invocation, rolesRoot);
+        return invocation is null
+            ? (_adapter.EmptyOutput(ev.Harness), "not ours")
+            : HandleSkillInvocation(ev, repo, resolved.ProductRepoName, invocation, rolesRoot);
     }
 
-    private bool IsBlockedByOtherActiveBuild(WorkflowRepo repo, NormalizedHookEvent ev)
+    private bool TryGetOtherActiveRunOwner(WorkflowRepo repo, NormalizedHookEvent ev, out RunMarker? marker, out CurrentStep? step)
     {
+        marker = null;
+        step = null;
         if (!_fs.FileExists(repo.RunMarkerPath))
         {
             return false;
         }
 
-        var existingMarker = repo.ReadRunMarker();
-        var existingStep = repo.ReadStep();
-        return existingStep is { Kind: StepKind.Implement or StepKind.Retry or StepKind.NeedsApproval }
-            && HookSessionScope.IsActiveNonStale(existingMarker, existingStep, _time.GetUtcNow())
-            && !HookSessionScope.IsParentRunSession(existingMarker!, ev);
+        marker = repo.ReadRunMarker();
+        step = repo.ReadStep();
+        return step is not null
+            && WorkflowEngine.HasOwner(step.Kind)
+            && HookSessionScope.IsActiveNonStale(marker, step, _time.GetUtcNow())
+            && !HookSessionScope.IsParentRunSession(marker!, ev);
+    }
+
+    private static string FormatOtherSessionOwnsRun(RunMarker marker, CurrentStep step)
+    {
+        var owner = string.IsNullOrWhiteSpace(marker.SessionId) ? "another session" : $"session `{marker.SessionId}`";
+        var stepDesc = string.IsNullOrWhiteSpace(step.Task) ? step.Kind.ToString() : $"{step.Kind} ({step.Task})";
+        return $"Another session ({owner}) currently owns the active `{stepDesc}` run for this change. Wait for that session to finish before running a workflow command here. Tell the engineer, then end your turn.";
     }
 
     private (string? Output, string Decision)? TryDrainAntigravityPendingContext(NormalizedHookEvent ev, WorkflowRepo repo)
@@ -188,11 +197,7 @@ internal sealed class StartHandler(
         }
 
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, isFixAccept ? null : invoked, sessionRepo, buildInstructions);
-        if (step is Done)
-        {
-            TurnState.ClearTurnFiles(repo, _fs);
-            TurnState.TryDelete(repo.RunMarkerPath, _fs);
-        }
+        ClearRunIfOwnedOrDone(repo, ev, step);
 
         var suffix = BuildPromptSuffix(invoked, args, step);
         return EmitStartContext(ev, repo, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: prefix, suffix: suffix), $"{invoked}: {step.Kind}");
@@ -207,11 +212,7 @@ internal sealed class StartHandler(
         }
 
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
-        if (step is Done)
-        {
-            TurnState.ClearTurnFiles(repo, _fs);
-            TurnState.TryDelete(repo.RunMarkerPath, _fs);
-        }
+        ClearRunIfOwnedOrDone(repo, ev, step);
 
         return EmitStartContext(
             ev,
@@ -337,19 +338,41 @@ internal sealed class StartHandler(
         var nextStep = WorkflowEngine.Next(updatedState);
         if (nextStep is WriteDocument nextWrite)
         {
-            TurnState.ClearTurnFiles(repo, _fs);
-            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+            ClearRunIfOwned(repo, ev);
             return EmitStartContext(ev, repo, prefix + $"Tell the person the next step is {WorkflowEngine.Describe(nextStep)}. Then end your turn.", $"accept: next {nextStep.Kind} {nextWrite.Document.ToWireName()}");
         }
 
         if (nextStep is Implement)
         {
-            TurnState.ClearTurnFiles(repo, _fs);
-            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+            ClearRunIfOwned(repo, ev);
             return EmitStartContext(ev, repo, prefix + $"Tell the person the plan is accepted and the next step is {WorkflowEngine.Describe(nextStep)}. Then end your turn.", "accept: next Implement");
         }
 
         return null;
+    }
+
+    private void ClearRunIfOwnedOrDone(WorkflowRepo repo, NormalizedHookEvent ev, Step step)
+    {
+        if (step is Done)
+        {
+            TurnState.ClearTurnFiles(repo, _fs);
+            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+        }
+        else if (step is Handoff)
+        {
+            ClearRunIfOwned(repo, ev);
+        }
+    }
+
+    private void ClearRunIfOwned(WorkflowRepo repo, NormalizedHookEvent ev)
+    {
+        if (_fs.FileExists(repo.RunMarkerPath)
+            && repo.ReadRunMarker() is { } marker
+            && HookSessionScope.IsParentRunSession(marker, ev))
+        {
+            TurnState.ClearTurnFiles(repo, _fs);
+            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+        }
     }
 
     private (string? Output, string Decision) EmitStartContext(NormalizedHookEvent ev, WorkflowRepo repo, string text, string decision)
