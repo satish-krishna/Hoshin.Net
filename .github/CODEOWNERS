@@ -1,0 +1,15 @@
+# Changes to these paths need the code owner's review once branch protection on main has "Require review from Code Owners" on.
+
+# The gates are reviewer-owned: the session that implements a task must not change them to make it pass (docs/review/TASKS.md, R-rules 1-2 and R3-rules 1-2).
+/tests/Hoshin.Tests/Acceptance/ @satish-krishna
+/evals/ @satish-krishna
+
+# Run records are the one thing under evals/ an implementer adds (R3-rule 2). A pattern with no owner clears the one above.
+/evals/results/
+
+# The workflows that run the gates, so a pull request can't stop running them.
+/.github/workflows/ci.yml @satish-krishna
+/.github/workflows/evals.yml @satish-krishna
+
+# This file, so the rules above can't be removed in the same pull request that needs them gone.
+/.github/CODEOWNERS @satish-krishna
