@@ -1298,9 +1298,9 @@ Today `hook start` returns nothing for setup and context (H2 kept them from taki
 
 | ID | Tier | Title | Fixes | Needs | Gate | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| R21 | R3-0 | Extend the acceptance gate (reviewer) | §12.2 | — | — | open |
-| B02 | R3-0 | An eval runner for the Claude Code bundle (reviewer) | EPIC-B | — | — | open |
-| B03 | R3-0 | Port the eval suite (reviewer) | EPIC-B | B02 | — | open |
+| R21 | R3-0 | Extend the acceptance gate (reviewer) | §12.2 | — | — | done (`82fb3d4`) |
+| B02 | R3-0 | An eval runner for the Claude Code bundle (reviewer) | EPIC-B | — | — | written (`f11fd78`, `5d47acd`), not yet run |
+| B03 | R3-0 | Port the eval suite (reviewer) | EPIC-B | B02 | — | sorting proposed in `evals/README.md`, waiting for the engineer's approval |
 | R23 | R3-1 | One session's hand-off doesn't end another session's run | S16, R03 × R07 | — | R21 (10) | open |
 | R22 | R3-1 | The engineer can decline at approval | W3 | D6 | R21 (2) | open |
 | R10 | R3-1 | `migrate` keeps in-flight changes valid | L13–L16, L1 | — | R21 (3) | open |
@@ -1717,7 +1717,8 @@ Text that drives `hoshin.ts` in the original is not ported; the engine does that
   4. The engineer's own edits to the drafts are kept, not rewritten. The row-3 brief stops saying "write all three", and a stopped draft is finished without rewriting what exists.
   5. A large change refused at the boundary is abandoned cleanly, without leaving a started change behind.
 - **Judgment** (`hoshin/skills/fix/SKILL.md`, `references/documents.md`, `states.md`, the shared triage reference): what rule 3 counts as a new behavior (a protecting test doesn't count; a Scenario Outline counts once); a refusal names the task and its tests, gives the intent command, and offers a split as the second option; a whole-repository check with no `build.finish` hook means the change isn't small; the intent skeleton (Root cause at `file:line`, the Decisions table, Open questions "None."); the spec rules (an Outline for three or more conditions, a neighboring scenario only when it's at risk, no extra requirements); the plan rules (one new failing test per task, no Shared decisions, a `test` on every task).
-- **Test first:** hook tests for engine items 1-5.
+  6. **Reviewer addition (2026-11-26, found while writing R21):** in a single-repository workspace the master and the app are one repository, so the review commit lands on the change branch after the review recorded its head. `/hoshin:done` then refuses ("latest review covered app at X but branch is now at Y"), and a light-track change can never publish. The review's own commit, and any other master-document commit, must not count as a change to the reviewed code. R21 (6) fails here today.
+- **Test first:** hook tests for engine items 1-6.
 - **Done when:** the tests pass, R21's light-track test (6) passes, and the fix cases pass.
 
 ### B15 · Reject, reopen and abandon
