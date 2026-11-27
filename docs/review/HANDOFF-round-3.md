@@ -1,6 +1,6 @@
 # Round 3 handoff: from the reviewer's session to the implementing session
 
-Written 2026-11-26 by the reviewer's session, which wrote round 3's task list and its gates. Read this, then `docs/review/TASKS.md` from "The replacement bar" to the end. TASKS.md is the authority; this file only says where things stand and what will trip you.
+Written 2026-11-26, and last updated 2026-11-27, by the reviewer's session, which wrote round 3's task list and its gates. Read this, then `docs/review/TASKS.md` from "The replacement bar" to the end. TASKS.md is the authority; this file only says where things stand and what will trip you.
 
 ## Who you are, and the one rule you can't break
 
@@ -23,7 +23,8 @@ You implement every round-3 task except R21, B02, B03 and R40. You have not seen
 | `5d47acd` | B02 | `.gitattributes`: shell scripts stay LF on every checkout. |
 | `1498f52`, `39d2457` | — | This handoff, the index statuses, and B14 engine item 6. |
 | `fa8194f` | B03 | The ported eval suite (39 cases, with grader self-tests), the C# parity tests under `Acceptance/Parity/`, and `EvalGraderSelfTests`. |
-| the B02 follow-up | B02 | From the first paid runs: the runner stages the bundle as the eval target, the cost cap's default is $70, the typed-command answer (yes), and the R-new-1 gate. |
+| `0fa44bb`, `0b9c87f` | B02 | From the first paid runs, and the engineer's WSL-only decision: the runner stages the bundle as the eval target, the cost cap's default is $70, the typed-command answer (yes), and the R-new-1 gate. |
+| the last reviewer commit | — | This handoff's final update: the trailer check (PR #9) and the draft pull request (#10). `conventional` checks trailers on every commit after it. |
 
 ## Where the gate fails today
 
@@ -84,15 +85,17 @@ R3-rule 5 sets the order, and the round-3 index lists the tasks within each tier
 3. **R3-3, parity (B01, B04–B15):** don't start until B03 has landed. Its eval cases don't exist yet, so a skill task has nothing to turn green and no `Evals:` trailer to write. The engine halves are tested in C# first, but they also come after R3-1 and R3-2, because an eval that fails on an engine defect says nothing about the skill.
 4. **R3-4, release:** R20. R40 is the engineer's.
 
-One commit per task, in index order, with these trailers:
+One commit per task, in index order. The trailers below go in the message's last paragraph, together with `Co-Authored-By:` and any other trailer, with no blank line between them. `conventional` reads them with git's trailer parser, which only sees the last paragraph:
 
 ```
 Task: R23
 Test-first: <test name> failed before the change: <one-line failure>
 Docs: <owner documents updated, or "none">
 Gate: <the first failing acceptance test after this commit, or "passes">
-Evals: <case n/3, …>            # B05–B15 only
+Evals: <case n/3, …>
 ```
+
+`Evals:` is on B05–B15 only. R40 has no `Test-first:`.
 
 `Gate:` names the first failing test in file order, as `UserPathAcceptanceTests+R21_02_Decline`. Today that is R21 (2), so your first commits will keep naming it until R22 lands. That is expected; what must never happen is a test that passed starting to fail. Keep the full list in the pull request's Tasks table.
 
@@ -110,8 +113,8 @@ dotnet test tests/Hoshin.Tests --filter "Category=Acceptance"
 - The harness fails a test on any swallowed `hoshin hook:` crash, not only on wrong output. If a test fails with a crash message, the crash is the defect.
 - `.git/hoshin/hooks.jsonl` is written only while `run.json` exists. A test that finds an empty trace after the run ended is reading it too late, not proving a hook didn't fire.
 
-## Waiting on the engineer (not on you)
+## Set up for you before you start
 
 - **B02 is settled** (TASKS.md, B02's reviewer notes). In WSL, .NET 10 is in `~/.dotnet`, Claude Code is logged in, and the runner works. A slash-command prompt counts as typed by the user. The smoke case waits on R-new-1. The suite runs only in WSL, never in CI: each skill task runs its own cases with `run-wsl.sh` (about $0.50 per case per run) and records them in its `Evals:` trailer.
-- **The trailer check:** the conventional workflow checks trailers only on `fix/review-findings`. The engineer extends it to `fix/round-3` with `R` and `B` IDs, requires `Gate:`, and requires `Evals:` on B05–B15, before your first task commit lands.
-- **The pull request:** the engineer opens it as a draft titled `feat(workflow)!: ready to replace hoshin`, with the Tasks table, "Gate disputes" and the "Replacement bar" checklist.
+- **The trailer check** (PR #9, on `main`): on `fix/round-3`, `conventional` fails a commit after the last reviewer commit (the table above) that lacks exactly one `Task:` from the round 3 index. It also fails a second commit for the same task, and a missing `Test-first:` (not on R40), `Docs:` or `Gate:`, or a missing `Evals:` on B05–B15. Every trailer goes in the message's last paragraph, with no blank line between them, or git doesn't see it. `gate owner` treats `conventional.yml` as a gate path.
+- **The pull request** is #10, a draft titled `feat(workflow)!: ready to replace hoshin`. Keep its Tasks table current with each commit: status, commit, and the `Gate:` value. Record any gate dispute in its "Gate disputes" section. Don't mark it ready: the engineer does that when the replacement bar holds.
