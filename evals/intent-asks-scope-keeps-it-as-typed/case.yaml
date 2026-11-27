@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: intent-asks-scope-keeps-it-as-typed
 description: An intent started without a scope in the invocation asks the product owner for one, who types PROJ-123 over any offered default. The scope is recorded exactly as typed, in the front matter and in the draft commit's header, with the capitals kept (B06 item 1). The model's commit is made by the Stop hook, so the case reads the change's reflog. Ported from the original's case of the same name.
 tags: [intent, scope, b06]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

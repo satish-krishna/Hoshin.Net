@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: plan-stops-on-direction-against-the-spec
 description: The engineer's direction says a returning visitor with a first name sees a greeting without the name, which contradicts the accepted spec's scenario R1.1 (the greeting says Mina). The plan skill stops, writes and commits nothing, names the contradiction, and tells the engineer to reopen the spec. Declining is a clean outcome (B10), and the typed reopen itself is not driven here because it is human-only. Ported from the original's case of the same name.
 tags: [plan, direction, b10]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

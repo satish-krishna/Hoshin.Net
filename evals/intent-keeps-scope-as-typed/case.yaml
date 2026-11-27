@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: intent-keeps-scope-as-typed
 description: An intent started with the scope PROJ-123 in the invocation records the scope exactly as typed, without asking the product owner for one. The scope is in the front matter and in the draft commit's header with the capitals kept (B06 item 1). This is the LLM half of the original's case of the same name. The program's own handling of a scope argument is covered by a parity test.
 tags: [intent, scope, b06]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

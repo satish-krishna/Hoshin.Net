@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: fix-refuses-a-large-change
 description: A "quick fix" that is really a feature (a visitor profile with an editable name, a list of past visit dates, a CSV export of visit history, and a way to delete that history) stays in one repository and changes no context rule, but needs more than three tasks (B14 judgment on rule 3, B01's triage reference). The skill's own example of a plainly large change is from a different domain, so a pass shows the rule was applied, not the example recognized. The fix skill refuses on the task cap, points to the intent skill, offers a split as the second option, writes nothing, and leaves no started change behind (B14 engine item 5). Ported from the original's case of the same name.
 tags: [fix, b14]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

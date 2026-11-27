@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: plan-applies-an-outline-correction
 description: The invocation carries no direction, so the plan skill asks for it and the engineer answers none. The skill then shows its approach outline and the engineer corrects it so the greeting texts live in a new module src/greetings.ts. The graders check the result of the correction, not that the outline was shown. The plan lists src/greetings.ts in a task's files and records the correction under an Engineer direction section (B10, one round of outline corrections). Ported from the original's case of the same name.
 tags: [plan, direction, b10]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: start-offers-fixed-choices
 description: A bug brought to the start skill by someone who holds both roles is routed to the light track. Start shows the verdict, offers exactly the light track's three choices in order without asking who is running it, and ends at the choices, so it writes and commits nothing and starts no change (B05, the verdict layout and its fixed choice sets). Ported from the original's case of the same name.
 tags: [start, fix, b05]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

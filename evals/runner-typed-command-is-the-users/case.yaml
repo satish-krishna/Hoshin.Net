@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: runner-typed-command-is-the-users
 description: A probe, not a test of the plugin (B02 item 3). The docs do not say whether a case prompt that starts with a slash command reaches the hooks as typed by the user (a UserPromptExpansion event) or as plain text the model then turns into a Skill call (PostToolUse). Hoshin.Net refuses typed-only commands (accept, done, decline, reject, reopen, fix --accept) from the model, so the answer decides how far an eval can drive them. typed-as-user passes only when the hooks saw the user's expansion. The result is recorded in evals/README.md, "Typed commands"; it is not counted against the replacement bar.
 tags: [runner, probe]
-plugins: ["../.bundle/claude-code"]
 runs: 1
 execution:
   prompt: |

@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: review-reports-two-behaviors-in-a-fix-task
 description: A built light-track fix with one task whose test commit adds failing tests for two different new behaviors, a vip visitor's greeting and a staff visitor's. The final review writes build/review.md as "## Review 1", the hook commits it, and the review records a spec finding for repo app that the fix went past the light track's cap, because a task with two new behaviors breaks triage rule 3 (B12, the light-track new-behavior count). No product repository changes. Ported from the original's case of the same name.
 tags: [review, b12]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: plan-cites-outline-examples
 description: The spec states the home page greeting as one Scenario Outline over three conditions, and its Examples list every reachable combination. That decision has three inputs, so the plan's decision-table rule applies, but the spec's Examples already are the table. The plan's task cites the outline's Examples in its Change instead of copying the rows into a table of its own, so the builder and the reviewer read one table (B10, the decision-table rules). Ported from the original's case of the same name.
 tags: [plan, decision-tables, b10]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

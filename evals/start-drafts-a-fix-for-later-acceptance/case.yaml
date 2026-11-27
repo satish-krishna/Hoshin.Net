@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: start-drafts-a-fix-for-later-acceptance
 description: A bug brought to the start skill with the triage text a driver sends, by a person who takes the light track when asked, is handed to the fix skill in the same session, which drafts the three documents in one draft fix commit and accepts nothing, in advance or otherwise (B05). Ported from the original's case of the same name; the advance-acceptance graders now look for a document written as accepted, since accepting is a typed command.
 tags: [start, fix, b05]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

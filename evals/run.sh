@@ -8,8 +8,11 @@
 #    The default package run writes artifacts/ and never touches evals/.bundle.
 # 2. Refuses to start without a .NET 10 runtime on PATH: every hook runs `dotnet lib/hoshin.dll`, and a hook that cannot
 #    start fails without blocking, so a case could pass its skill-fired grader while nothing ran.
-# 3. Runs `claude plugin eval` with TMPDIR outside /tmp (the sandbox denies writes there, and the hooks create folders
-#    under TMPDIR), a cost cap (HOSHIN_EVAL_MAX_COST, US dollars, default 30) and results under evals/results/<timestamp>/.
+# 3. Stages the bundle as the eval target, with the cases below it in evals/.bundle/target/evals/. A plugin named in a
+#    case's `plugins:` must sit inside that case's own folder, and one beside the suite is outside the containment root,
+#    so the bundle is the target instead: the layout the command documents, a plugin with its eval suite below it.
+# 4. Runs `claude plugin eval` with TMPDIR outside /tmp (the sandbox denies writes there, and the hooks create folders
+#    under TMPDIR), a cost cap (HOSHIN_EVAL_MAX_COST, US dollars, default 70) and results under evals/results/<timestamp>/.
 #
 # Extra options go to `claude plugin eval`, for example --case <name> --runs 1 --keep-temp.
 set -euo pipefail
@@ -49,11 +52,19 @@ echo "bundle: $bundle"
 echo "dotnet: $(dotnet --version) at $(command -v dotnet)"
 echo "results: $out"
 
-cd "$evals"
-TMPDIR="$HOME/.evaltmp" claude plugin eval . \
+target="$evals/.bundle/target"
+rm -rf "$target"
+cp -r "$bundle" "$target"
+mkdir -p "$target/evals"
+cp -r "$evals/shared" "$target/evals/"
+for case_yaml in "$evals"/*/case.yaml; do cp -r "$(dirname "$case_yaml")" "$target/evals/"; done
+echo "target: $target ($(find "$target/evals" -name case.yaml | wc -l) cases)"
+
+cd "$target"
+TMPDIR="$HOME/.evaltmp" claude plugin eval . --eval-dir evals \
   --scaffold --ablation none \
   --allow-tools Bash Write Edit \
   --no-publish --trust-plugin \
-  --max-cost-usd "${HOSHIN_EVAL_MAX_COST:-30}" \
+  --max-cost-usd "${HOSHIN_EVAL_MAX_COST:-70}" \
   --output-dir "$out" --json "$out/results.json" \
   "$@"

@@ -17,11 +17,11 @@ evals/run.sh --case runner-reaches-the-hooks --runs 1
 
 `run.sh` does three things the bare command doesn't:
 
-- **It tests the built bundle, not the source tree.** It builds `packaging/package.ps1` into `evals/.bundle/` (gitignored, and never wiped by the default package run), and every case's `plugins:` points at `../.bundle/claude-code`. Pass `--no-build` to reuse a bundle built elsewhere.
+- **It tests the built bundle, not the source tree.** It builds `packaging/package.ps1` into `evals/.bundle/` (gitignored, and never wiped by the default package run), and stages it as the run's target with the cases below it (`.bundle/target/evals/`). A case names no `plugins:`: the command loads a plugin named in a case only from inside that case's own folder. Pass `--no-build` to reuse a bundle built elsewhere.
 - **It refuses to start without a .NET 10 runtime.** Every hook runs `dotnet lib/hoshin.dll`. A hook that can't start fails without blocking, so without this check a case could pass `skill-fired` while nothing ran. It also starts the CLI once, the way a hook does.
 - **It sets `TMPDIR` outside `/tmp`.** The sandbox denies writes under `/tmp`, and the hooks create folders under `TMPDIR`.
 
-It caps the cost with `HOSHIN_EVAL_MAX_COST` (US dollars, default 30) and writes each run to `results/<timestamp>/` (`results.json`, `report.html`).
+It caps the cost with `HOSHIN_EVAL_MAX_COST` (US dollars, default 70: a full run of 39 cases at 3 runs each is about $58) and writes each run to `results/<timestamp>/` (`results.json`, `report.html`).
 
 On Windows, build the bundle there and run in WSL:
 
@@ -45,9 +45,11 @@ In CI, `.github/workflows/evals.yml` runs the suite on Linux on a pull request l
 
 Hoshin.Net refuses the human-only commands (accept, done, decline, reject, reopen and `fix --accept`) when the model invokes them, which is how a plain-language prompt reaches them. Whether a case prompt that starts with a slash command reaches the hooks as typed by the user is not documented, so `runner-typed-command-is-the-users` probes it: its `typed-as-user` grader passes only when the hooks saw a `UserPromptExpansion` event.
 
-**Answer:** not yet recorded; it comes from the first run of the probe. Until it is:
-- if the probe passes, a case may type a human-only command as its prompt's first line;
-- if it fails, a case grades only up to the human-only step, and the C# parity tests drive that step with typed-user payloads (B03 item 3).
+**Answer: yes** (2026-11-27, Claude Code 2.1.308, in WSL). A prompt that starts with `/hoshin:intent` reached `hook start` as a `UserPromptExpansion` event, before any `Skill` call, so a case may type a human-only command as its prompt's first line. No case does yet: the typed steps are mechanism, so the C# parity tests drive them (B03 item 3), and a case types one only when a model step follows it.
+
+## The sandbox's home repository (R-new-1)
+
+The sandbox's home folder is an empty git repository, and the case folder sits inside it. Until R-new-1 lands, the hooks take that repository for the session's own and answer every skill with "There is no change plan in this repository", so every case fails at `hook-trace-has-an-entry`, whatever the skill does. The answer above comes from one diagnostic run whose fixtures deleted that repository. That run isn't a record and wasn't kept. No committed fixture deletes it: an engineer with a dotfiles repository at `~` meets the same defect, and the smoke case is its eval-side gate.
 
 ## Where each original case went (B03)
 

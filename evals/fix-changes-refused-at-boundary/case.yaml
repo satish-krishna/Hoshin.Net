@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: fix-changes-refused-at-boundary
 description: A change the engineer asks for at the acceptance question, when it would need a second repository, leaves the redrafted fix exactly as it was (B14 engine items 1 and 3, B01's triage reference). Hoshin.Net has no acceptance question for the model to ask, so the fixture starts after the first round of feedback, with the fix redrafted for a hyphenated-name scenario and committed again, and the prompt is the engineer's answer to it, a change that also edits the web repository. The fix skill finds the one-repository rule broken before it writes anything, names it, recommends the intent skill, commits nothing more, and leaves the documents as the redraft committed them. Ported from the original's case of the same name.
 tags: [fix, b14]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

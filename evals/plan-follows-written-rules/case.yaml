@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: plan-follows-written-rules
 description: The plan runs from the workspace folder, where the app's CLAUDE.md is never loaded. That file holds a style rule (every exported function has a doc comment) and links to docs/visible-changes.md, which holds two rules the code does not show. New visible text goes in src/copy/en.json, and every visible change adds a line to CHANGELOG.md. The plan reads the app's written rules, links included, so a task lists both files, and it leaves the style rule to the build, which loads CLAUDE.md itself (B10, B01's written-rules reference). Ported from the original's case of the same name.
 tags: [plan, conventions, b10, b01]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

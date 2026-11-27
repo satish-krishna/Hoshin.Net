@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: fix-reopen-keeps-built-tasks
 description: Reopening an accepted fix whose first task is built keeps that task counting as built (B14 engine item 3, B15 reopen rule). Reopening is typed-only in Hoshin.Net, so the fixture makes the reopen commit through the program, over a two-task fix with T1 built and logged. Given the fix skill on that change with Operator feedback that changes only what T2 does, the skill redrafts T2 and its scenario, leaves T1 in plan.md exactly as it was written and the build log untouched, and accepts nothing, so the build still counts T1 as done. The typed reopen keeping T1 built is this case's parity half. Ported from the original's case of the same name.
 tags: [fix, b14, b15]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

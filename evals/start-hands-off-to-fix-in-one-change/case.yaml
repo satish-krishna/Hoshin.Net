@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: start-hands-off-to-fix-in-one-change
 description: New in Hoshin.Net (B05, which hands off to fix in the same session without starting a second change). A bug brought to the start skill by someone who holds both roles and takes the light track is handed to the fix skill in the same session, in the order start then fix, and the workspace ends up with one change, with one start commit and one draft commit in the named change's copy, and a single hook step that drafts a fix. Nothing is accepted.
 tags: [start, fix, b05]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

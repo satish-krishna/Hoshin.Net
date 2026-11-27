@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: plan-takes-engineer-direction
 description: The engineer gives direction in the invocation, so the greeting texts go in a new module src/greetings.ts that homeHeader imports. The plan lists src/greetings.ts in a task's files and records the point, and where it landed, under an Engineer direction section (B10, direction carried from the command's arguments). Ported from the original's case of the same name.
 tags: [plan, direction, b10]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

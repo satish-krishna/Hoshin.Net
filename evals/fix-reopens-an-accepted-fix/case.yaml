@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: fix-reopens-an-accepted-fix
 description: Reopening an accepted fix sends it back to one acceptance (B14 engine item 3, B15). Reopening is typed-only in Hoshin.Net, so the fixture makes the reopen commit through the program, with spec and plan back to draft and the intent still accepted. Given the fix skill on that change with Operator feedback that changes a scenario, the skill applies the feedback to the spec and to the plan, commits it, leaves the intent accepted, and accepts nothing again. The typed reopen itself is this case's parity half. Ported from the original's case of the same name.
 tags: [fix, b14, b15]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

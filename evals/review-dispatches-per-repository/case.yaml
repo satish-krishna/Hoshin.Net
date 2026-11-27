@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: review-dispatches-per-repository
 description: A fully built two-repository change (T1 in app, T2 in lib; the fixture adds lib to the base workspace and to the system in the marker). The review skill dispatches one reviewer per touched repository plus one across them (three Agent calls), each reading its own repository's written rules, and merges their findings into one appended section, "## Review 1", committed by the hook. Each repository's new script breaks that repository's own rule (app breaks the script header rule, lib breaks the usage comment rule), so the merged section holds one convention finding per repository citing that repository's own rule. Numbering runs on across the merge (B12 items 1 and 3). New case; the original dispatched reviewers inside its own skill.
 tags: [review, b12]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

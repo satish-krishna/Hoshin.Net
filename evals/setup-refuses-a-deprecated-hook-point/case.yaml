@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: setup-refuses-a-deprecated-hook-point
 description: Asked to add a hook that runs after every task is logged (the task.done event), a hooks-only setup run says that hooks on task.done are deprecated, names the three events that keep their hooks, and writes and commits nothing, since the engineer takes no other point (B09, the deprecated-event rule; the engine side is the hook test that a hook on task.done is refused and nothing is written). The system's hooks file exists and is empty and committed, so a hook written there is seen whether or not it is committed. The model no longer lists the hooks with a typed command, because the setup step carries them, so the graders read the report, the files and the reflog. Ported from the original's case of the same name.
 tags: [setup, hooks, b09]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

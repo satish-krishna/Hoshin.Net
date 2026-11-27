@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: start-offers-pipeline-choices
 description: A feature brought to the start skill by someone who holds both roles is routed to the full pipeline. Start shows the verdict with the light-track rule the change breaks, offers exactly the full pipeline and stopping, in that order, without offering the light track or asking who is running it, and ends at the choices, so it writes and commits nothing and starts no change (B05). Ported from the original's case of the same name.
 tags: [start, intent, b05]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

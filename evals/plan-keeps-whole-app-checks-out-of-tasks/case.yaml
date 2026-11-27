@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: plan-keeps-whole-app-checks-out-of-tasks
 description: The app's contributing guide asks for a production build and a three-minute browser check before a merge, and the system has no build.finish hooks. The plan scopes each task to a filtered test run, keeps the build and the browser check out of every task's Done when and test command, names both under Checks at build finish, and tells the engineer to add them as hooks on the base branch (B10, whole-app checks decided by scope). On a fixture this small a planner keeps the checks out of a task even without the rule, so the section and the closing message are what tell the two apart. Ported from the original's case of the same name.
 tags: [plan, checks, b10]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

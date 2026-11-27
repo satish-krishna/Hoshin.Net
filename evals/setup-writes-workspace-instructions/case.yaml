@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: setup-writes-workspace-instructions
 description: Rerunning setup for an existing system writes intent/workspace.md in the master repository from the marker, commits it as the usual setup commit, and appends a block holding a full copy of it to the workspace CLAUDE.md without touching the engineer's own notes there (B09). Setup now gets a hook-issued step (D9, answered (a)), so the library writes and commits what the engineer settled and the model never runs the instructions command or commits; the graders read the files and the master's reflog. The engineer's marker is kept as it is. Ported from the original's case of the same name.
 tags: [setup, workspace, b09]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

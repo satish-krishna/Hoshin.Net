@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: context-refreshes-a-stale-file
 description: New in Hoshin.Net (B08, and decision D9 answered (a), so the hook-issued step carries the commit, the paths changed since source_commit and the rule-number history). A refresh of a context file that is two commits behind carries the unchanged rules forward with their numbers, tags and notes (C1, C3), retires the rule the code no longer follows (C2) and records what the code does now as intent unknown under a new number with the earlier rule named in its note, retires the rule whose code is gone (C4), never reuses the retired C5 (the next free number is C6), tags nothing confirmed by engineer because the engineer is away, moves source_commit to the app's HEAD, and reports the counts carried, changed, added and removed. The library commits it once, as refresh context for app.
 tags: [context, b08]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

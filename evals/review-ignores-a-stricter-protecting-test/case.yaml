@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: review-ignores-a-stricter-protecting-test
 description: A built light-track fix with one task covering one scenario. The task's test commit adds one new test and also makes two existing tests stricter with a precondition that fails until the production commit, so three tests fail in it. A stricter protecting test is not a new behavior, so the final review records no finding that the fix went past the light track's cap (B12, the light-track new-behavior count by triage rule 3; B14's rule that a protecting test does not count). The review is still written and committed, so a run that records nothing does not pass. Ported from the original's case of the same name.
 tags: [review, b12]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: spec-in-copy-reads-the-workspace
 description: Resolution inside a change's own copy of the master repository (B07). The session starts in the copy, a linked worktree on the change's branch that also holds master/ (the engineer's checkout, on main) and app/ (the product repository) beside the change's files. The context file is one commit behind app, so the spec skill reports it as stale, reads app's code from inside the copy, which alone names home.sh, and writes the spec in the copy. The hook commits it there, and the engineer's checkout gains no commit and stays on main. Ported from the original's case of the same name; the original's two graders that read the model calling the program's resolve and stale commands are gone, because the Hoshin.Net hooks resolve and warn on the model's behalf.
 tags: [spec, resolve, copy, b07]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

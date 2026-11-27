@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: fix-refuses-a-rule-change
 description: A "quick fix" that would greet first-time visitors changes context rule C2, which an engineer confirmed, so it is not small. The fix skill refuses before it writes anything, names the rule, points to the intent skill, and leaves no started change behind (B14 item 5, B01's triage reference). Ported from the original's case of the same name.
 tags: [fix, b14]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

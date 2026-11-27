@@ -14,9 +14,11 @@ git_in() { git -c user.name=eval -c user.email=eval@example.com -c core.autocrlf
 # The program itself, from the bundle under test (EVAL_HOSHIN_DLL overrides it; the grader self-tests point it at the
 # test build). A fixture moves a change to the state its case starts from through the program, never by writing git
 # history by hand, so commit subjects, pins and the change's copy are the ones the engine makes.
+# run.sh stages the cases below the bundle (evals/.bundle/target/evals/), so the bundle's lib/ is one folder up there.
+if [ -f "$evals_dir/../lib/hoshin.dll" ]; then bundle_dll="$evals_dir/../lib/hoshin.dll"; else bundle_dll="$evals_dir/.bundle/claude-code/lib/hoshin.dll"; fi
 hoshin() {
   GIT_AUTHOR_NAME=eval GIT_AUTHOR_EMAIL=eval@example.com GIT_COMMITTER_NAME=eval GIT_COMMITTER_EMAIL=eval@example.com \
-    dotnet "${EVAL_HOSHIN_DLL:-$evals_dir/.bundle/claude-code/lib/hoshin.dll}" "$@"
+    dotnet "${EVAL_HOSHIN_DLL:-$bundle_dll}" "$@"
 }
 
 # Starts a change from the master: change_start <change> <type> <scope>. Its copy is .hoshin/copies/<change>.

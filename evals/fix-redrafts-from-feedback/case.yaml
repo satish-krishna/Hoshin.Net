@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: fix-redrafts-from-feedback
 description: A drafted fix awaiting acceptance is redrafted from the engineer's written changes (B14 engine item 3). Given the fix skill on the drafted change with Operator feedback that adds one scenario and says the engineer accepts later, the skill redrafts the documents, commits exactly one new draft fix commit through the program that carries the new scenario in the spec and the plan, keeps the light-track boundary, and records no acceptance. Ported from the original's case of the same name.
 tags: [fix, b14]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

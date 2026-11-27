@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: review-reads-red-from-the-program
 description: A fully built change whose only build-log entry says its red was not observed (not observed, no red recorded for T1 on this machine). The review skill takes the red verdict from the program's brief, not from its own reading of the log, and records a medium spec finding for repo app whose file is the build log and whose line is the entry's red line (B12 item 2 and the red-verdict judgment rule). The red line is line 12 of build/app.md; today's `read --json` reports only the entry's heading line, so a finished brief has to carry the red line. Ported from the original's case of the same name, minus its grader on a typed read command, since the brief now carries the build log.
 tags: [review, b12]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

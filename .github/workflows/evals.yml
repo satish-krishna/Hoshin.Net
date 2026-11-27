@@ -17,7 +17,7 @@ on:
       max_cost_usd:
         description: "Cost cap in US dollars"
         required: false
-        default: "40"
+        default: "70"
 
 permissions:
   contents: read
@@ -60,7 +60,7 @@ jobs:
       - name: Run the suite
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          HOSHIN_EVAL_MAX_COST: ${{ github.event.inputs.max_cost_usd || '40' }}
+          HOSHIN_EVAL_MAX_COST: ${{ github.event.inputs.max_cost_usd || '70' }}
           CASES: ${{ github.event.inputs.cases }}
         run: |
           if [ -n "$CASES" ]; then

@@ -71,7 +71,8 @@ test('every case names itself, uses schema 1.1, and tests the built bundle', () 
     const text = caseText(name);
     assert.match(text, /^schema_version: "1\.1"$/m, name);
     assert.match(text, new RegExp(`^name: ${name}$`, 'm'), `${name}: name is not the folder's`);
-    assert.match(text, /^plugins: \["\.\.\/\.bundle\/claude-code"\]$/m, `${name}: plugins must be the built bundle`);
+    // run.sh makes the built bundle the target, with the cases below it; the command refuses a plugins: entry outside the case's folder.
+    assert.doesNotMatch(text, /^plugins:/m, `${name}: names a plugin, but the bundle under test is the run's target`);
     assert.match(text, /^ {2}scaffold_script: fixture\.sh$/m, `${name}: no scaffold_script`);
     assert.match(text, /^ {2}prompt: \|$/m, `${name}: the prompt is not a block scalar`);
   }

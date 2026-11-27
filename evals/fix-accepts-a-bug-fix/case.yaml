@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: fix-accepts-a-bug-fix
 description: A bug in one repository that breaks a context rule takes the light track (B14 engine items 2 and 5, B01's triage reference). The fix skill names the root cause at its file and line, drafts intent.md (track fix), spec.md and plan.md that pass the check, and writes no product code. It stops before acceptance, because accepting is typed-only in Hoshin.Net and the typed accept with its pins is this case's parity half. Ported from the original's case of the same name, LLM half only.
 tags: [fix, b14]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

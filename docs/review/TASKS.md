@@ -1258,7 +1258,7 @@ Every R-rule of round 2 still applies, with these changes.
 1. **Gates first, written by someone else.** R21 (new acceptance tests), B02 (the eval runner) and B03 (the eval cases) are written before any task they gate, and not by the session that implements those tasks. A separate session counts only if it has not seen the implementation. They land in their own commits at the start of the branch, the way `617291d` did in round 2. **Who, decided by the engineer, 2026-11-26:** the reviewer's session that wrote round 3 writes the gates. A different session implements every other task, and it never writes under `tests/Hoshin.Tests/Acceptance/` or `evals/`.
 2. **The gates belong to the reviewer.** Don't edit, skip, filter, rename or re-trait anything under `tests/Hoshin.Tests/Acceptance/` or `evals/` (except new run records under `evals/results/`), and don't change CI or the eval runner so that it stops running them. When you think a gate is wrong, add it under "Gate disputes" in the pull request, as in round 2.
 3. **Skills are judged by evals, not by line count.** A skill task (B05–B15) is done when its eval cases pass and every judgment rule its task lists is covered. Its length doesn't matter. Much of the original's skill text drives `hoshin.ts`. In Hoshin.Net the engine does that work, so porting that text would be wrong, and the strict skill lint (AGENTS.md invariant 5) refuses it anyway.
-4. **The commit gate.** Every commit builds with 0 warnings and passes the fast suite and the acceptance folder. The exception is acceptance tests R21 and B03 (`Acceptance/Parity/`) added for tasks not yet done. `EvalGraderSelfTests` is not an exception: it always passes. The `Gate:` trailer names the first failing acceptance test, and it never moves backward. Evals cost too much to run on every commit, so each skill task runs its own cases and records the result in an `Evals:` trailer, for example `Evals: intent-keeps-scope-as-typed 3/3, intent-rejects-a-change 2/3`.
+4. **The commit gate.** Every commit builds with 0 warnings and passes the fast suite and the acceptance folder. The exception is acceptance tests R21, B03 (`Acceptance/Parity/`) and the reviewer's `R-new-<n>` gates, added for tasks not yet done. `EvalGraderSelfTests` is not an exception: it always passes. The `Gate:` trailer names the first failing acceptance test, and it never moves backward. Evals cost too much to run on every commit, so each skill task runs its own cases and records the result in an `Evals:` trailer, for example `Evals: intent-keeps-scope-as-typed 3/3, intent-rejects-a-change 2/3`.
 5. **Order.** Work through the tiers in order: R3-0 gates, R3-1 lifecycle and integrity, R3-2 enforcement, R3-3 parity, R3-4 release, then R40. Skills come after the engine tasks because the evals drive the real hooks. An eval that fails because of an engine defect says nothing about the skill.
 6. **A defect found late gets a gate first.** If R40 or an eval exposes an engine defect, the reviewer adds a failing acceptance test for it, and then it is fixed as `R-new-<n>`, added at the end of the index.
 
@@ -1300,7 +1300,7 @@ Today `hook start` returns nothing for setup and context (H2 kept them from taki
 | ID | Tier | Title | Fixes | Needs | Gate | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | R21 | R3-0 | Extend the acceptance gate (reviewer) | §12.2 | — | — | done (`82fb3d4`) |
-| B02 | R3-0 | An eval runner for the Claude Code bundle (reviewer) | EPIC-B | — | — | written (`f11fd78`, `5d47acd`), not yet run |
+| B02 | R3-0 | An eval runner for the Claude Code bundle (reviewer) | EPIC-B | — | — | done, but its smoke case fails until R-new-1: it passed once in WSL with the sandbox's home repository removed, and the typed-command probe answered yes (see B02's reviewer notes) |
 | B03 | R3-0 | Port the eval suite (reviewer) | EPIC-B | B02 | — | written: 39 cases, 28 parity tests, grader self-tests pass; the cases have not run against a model |
 | R23 | R3-1 | One session's hand-off doesn't end another session's run | S16, R03 × R07 | — | R21 (10) | open |
 | R22 | R3-1 | The engineer can decline at approval | W3 | D6 | R21 (2) | open |
@@ -1336,6 +1336,7 @@ Today `hook start` returns nothing for setup and context (H2 kept them from taki
 | R19 | R3-4 | Restore `start`/triage; package `reject` and `reopen` | §9, H13 | — | — | moved: B05, B15 |
 | R20 | R3-4 | Publish a marketplace entry, tag a release, fix the doc claims | §11 | D8 | bar item 5 | open |
 | R40 | R3-4 | A real change, run by the engineer | §12 switching criterion | all of the above | bar item 4 | open |
+| R-new-1 | R3-1 | A workspace inside another git repository | B02's smoke run | — | `WorkspaceInsideARepositoryAcceptanceTests`; `runner-reaches-the-hooks` | open |
 
 After this round, the findings in ANALYSIS.md that have no task are exactly the ones under "Accepted differences".
 
@@ -1540,6 +1541,15 @@ B02 and B03, the eval gates, are written up in R3-3 with the other EPIC-B tasks,
 - **Test first:** a spec with an example fence in a list item before the real one; a fence holding an indented backtick docstring; `change.jsonc` with `"branch": 3`; a hook script with Latin-1 bytes and a symlinked script.
 - **Done when:** the tests pass.
 
+### R-new-1 · A workspace inside another git repository
+
+- **Fixes:** found by B02's first paid run (R3-rule 6); no ANALYSIS.md finding.
+- **Where:** `HookRunResolver.TryClassifyWorkspaceSession` and `Resolve` (`src/Hoshin.Cli/Hooks/HookRunResolver.cs`), and any CLI command that resolves a workspace the same way.
+- **Problem:** a session started in the workspace folder, the folder that holds the master and the product repositories, resolves its run only when that folder is inside no git repository. If it is inside one, `git rev-parse --show-toplevel` returns the enclosing repository. That repository is neither the master nor a system repository, so `TryClassifyWorkspaceSession` returns false, `Resolve` falls back to treating the enclosing repository as a standalone one, and every skill is answered "There is no change plan in this repository". The eval sandbox's home folder is an empty git repository with the workspace under it, so every eval case fails this way. An engineer with a dotfiles repository at `~` meets it on every command from the workspace folder.
+- **Do:** when the session's folder is the workspace the resolver found, and the repository git reports is outside that workspace (it encloses the workspace rather than sitting in it), classify the session as the workspace session, the same way as when there is no repository at all. A repository the workspace sits inside never decides the run. Sessions in the master, a change's copy and the product repositories resolve as they do today.
+- **Test first:** `WorkspaceInsideARepositoryAcceptanceTests` (reviewer's gate): `RNew1_WorkspaceInsideARepository` fails today for an empty enclosing repository and for one with history; `RNew1_WorkspaceFolderAlone` passes today and must stay green. Add your own unit test for the resolver.
+- **Done when:** the gate passes, and `runner-reaches-the-hooks` passes in WSL with the committed fixture (no fixture removes the sandbox's home repository). Do it before R3-3: until it lands, every eval case fails at `hook-trace-has-an-entry`, whatever the skill does.
+
 ## R3-2 — enforcement
 
 ### R17 · Make the baseline shrink-only, count every suppression, close the scanner holes
@@ -1605,6 +1615,12 @@ Text that drives `hoshin.ts` in the original is not ported; the engine does that
   4. A CI workflow that runs the suite on a label and on release tags, on Linux, with a cost cap, and writes the run under `evals/results/<timestamp>/`. Not on every push: a full run costs about $0.50 per case per run.
   5. Find out whether the runner accepts JSON case files. If it doesn't, add `evals/**/case.yaml` to AGENTS.md invariant 4 as its one more exception, with the reason.
 - **Done when:** one trivial case passes through the runner on Linux and in WSL, and a case with the runtime removed fails at startup instead of passing.
+- **Reviewer notes (2026-11-27, from the first paid runs, $0.50 in all):**
+  1. Item 1 can't be done as written. `claude plugin eval` 2.1.308 loads a plugin named in a case's `plugins:` only from inside that case's own folder: one beside the suite is outside the containment root, and `evals/.bundle/` is refused as "covering" the case. So `run.sh` stages the bundle as the run's target, with the cases below it (`evals/.bundle/target/evals/`), and no case names a plugin. `cases.test.mjs` checks that.
+  2. Item 3's answer is **yes**: a prompt that starts with `/hoshin:intent` reached `hook start` as a `UserPromptExpansion` event, before any `Skill` call. A case may type a human-only command as its prompt's first line. B03's design stands: the typed steps are mechanism, so they stay in the parity tests, and no case was changed.
+  3. The smoke case found an engine defect: the sandbox's home folder is an empty git repository, and the workspace sits inside it, so the hooks can't resolve the workspace (R-new-1). Both runner cases passed in one diagnostic run whose fixtures deleted that repository. That run is not a record and was not kept. Until R-new-1 lands, the smoke case fails with the committed fixture, and so does every other case.
+  4. The no-runtime half of "done when" holds in WSL. The Linux half runs in CI on the first labeled pull request.
+  5. The cost cap's default is $70 (`HOSHIN_EVAL_MAX_COST` in `run.sh`, `max_cost_usd` in `evals.yml`): a full run of 39 cases at 3 runs each is about $58.
 
 ### B03 · Port the eval suite
 

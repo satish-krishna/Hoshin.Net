@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: review-commits-an-interrupted-review
 description: A final review wrote build/review.md in the change's copy as "## Review 1" but stopped before it was committed (the file is untracked). Rerun, the review skill offers that review as it is instead of starting afresh, and, as the engineer said beforehand, it is committed as it is, with no reviewer dispatched, no second section and no new finding (B12 item 4). The hook commits it at the end of the turn, so the grader reads the change's reflog. Ported from the original's case of the same name.
 tags: [review, b12]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

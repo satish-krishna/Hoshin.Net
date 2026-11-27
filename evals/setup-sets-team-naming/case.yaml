@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: setup-sets-team-naming
 description: Asked to set the team's naming for a system, a naming-only setup run asks for the two patterns, refuses the first branch pattern (it has a space), accepts the second, writes both into the system's naming setting after the program has checked them, and commits the marker alone as the usual setup commit (B09). Setup now gets a hook-issued step (D9, answered (a)), so the library checks and commits and the model never runs the naming command or commits; the graders read the marker, the reflog and the report. Nothing but the marker is written, so no instructions file appears. Ported from the original's case of the same name.
 tags: [setup, naming, b09]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

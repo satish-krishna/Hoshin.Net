@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: fix-follows-written-rules
 description: A light-track bug fix in an app whose CONTRIBUTING.md links to docs/changes.md, which asks every change a visitor can see to add a line to CHANGELOG.md, a rule the code does not show (B14, B01's written-rules reference). The fix skill runs from the workspace folder, where nothing of the app's is loaded, so it reads the app's written rules, links included, before drafting the plan, and a plan task lists CHANGELOG.md in its files. The changelog line is not a second new behavior, so the fix stays on the light track and its draft is committed. Accepting is typed-only in Hoshin.Net, so the case grades up to the draft. Ported from the original's case of the same name.
 tags: [fix, conventions, b14]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

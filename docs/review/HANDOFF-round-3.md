@@ -22,7 +22,8 @@ You implement every round-3 task except R21, B02, B03 and R40. You have not seen
 | `f11fd78` | B02 | The eval runner (`evals/run.sh`, `evals/run-wsl.sh`, `.github/workflows/evals.yml`), the smoke case and the typed-command probe. Not run yet. |
 | `5d47acd` | B02 | `.gitattributes`: shell scripts stay LF on every checkout. |
 | `1498f52`, `39d2457` | — | This handoff, the index statuses, and B14 engine item 6. |
-| the B03 commit | B03 | The ported eval suite (39 cases, with grader self-tests), the C# parity tests under `Acceptance/Parity/`, and `EvalGraderSelfTests`. |
+| `fa8194f` | B03 | The ported eval suite (39 cases, with grader self-tests), the C# parity tests under `Acceptance/Parity/`, and `EvalGraderSelfTests`. |
+| the B02 follow-up | B02 | From the first paid runs: the runner stages the bundle as the eval target, the cost cap's default is $70, the typed-command answer (yes), and the R-new-1 gate. |
 
 ## Where the gate fails today
 
@@ -42,8 +43,9 @@ Last full run: 20 acceptance tests, 7 pass (R0 ×3, R21 (1) resume, R21 (9) for 
 | `R21_09_CoLocatedTests(go)` | "no test file was added or modified" for `greet_test.go` | R25 |
 | `R21_10_TwoSessions` | a second master session typing `/hoshin:review` gets the same review brief | R23 |
 | `R21_11_Done` | only the master's pull request URL is reported | B13 |
+| `WorkspaceInsideARepositoryAcceptanceTests+RNew1_WorkspaceInsideARepository` (both cases) | a session in the workspace folder, inside an enclosing git repository, is told "There is no change plan in this repository" | R-new-1 |
 
-Each test's `<summary>` in `UserPathAcceptanceTests.cs` names its R21 item and its task. Read the test before you start its task: it is the most exact statement of "done" you have.
+`RNew1_WorkspaceFolderAlone` in the same file passes today and must stay green. Each test's `<summary>` in `UserPathAcceptanceTests.cs` names its R21 item and its task. Read the test before you start its task: it is the most exact statement of "done" you have.
 
 ## B03's gates
 
@@ -59,7 +61,7 @@ Each test's `<summary>` in `UserPathAcceptanceTests.cs` names its R21 item and i
 | B14 | `FixParityTests+Fix07_AcceptRefusesAGrownPlan`, `+Fix13_AcceptStopsAtUnrecordedChanges`, `+Fix17_FinishesAStoppedAcceptance`, `+Fix19_RecordsTheEngineersEdits` |
 | B15 | `FixParityTests+Fix23_RejectsADraftedFix`, `+Fix25_ReopenKeepsBuiltTasks`, `+Fix26_ReopensAnAcceptedFix`, `LifecycleParityTests+IntentRejectsAChange` |
 
-**Eval cases** (`evals/<case>/`): 39 cases, the 37 B03 owes plus the two runner cases. None has run against a model. Each skill task runs its own cases and records an `Evals:` trailer (R3-rule 4). The B03 table in `evals/README.md` names each case's task.
+**Eval cases** (`evals/<case>/`): 39 cases, the 37 B03 owes plus the two runner cases. Only the two runner cases have run against a model. Every case fails at `hook-trace-has-an-entry` until R-new-1 lands, because the sandbox's home folder is a git repository (`evals/README.md`, "The sandbox's home repository"). Don't spend on a case before then. Each skill task runs its own cases and records an `Evals:` trailer (R3-rule 4). The B03 table in `evals/README.md` names each case's task.
 
 **`EvalGraderSelfTests`** (`Category=Acceptance`) runs `evals/test/*.test.mjs`: 291 checks on the case files and their graders, about 6 minutes. It is not red on purpose; it always passes. If it fails after your commit, your commit broke something it reads (a CLI subject, a commit kind, a document check), and the fix belongs in your code, not in the test.
 
@@ -77,7 +79,7 @@ Three reviewer additions came out of writing B03, and they are in TASKS.md:
 
 R3-rule 5 sets the order, and the round-3 index lists the tasks within each tier:
 
-1. **R3-1, lifecycle and integrity:** R23, R22, R10, R11, R12, R13, R14, R15, R16, R24, R25, R26, R27, R28, R29, R30.
+1. **R3-1, lifecycle and integrity:** R23, R22, R10, R11, R12, R13, R14, R15, R16, R24, R25, R26, R27, R28, R29, R30, R-new-1. R-new-1 sits last in the index (R3-rule 6) but belongs to this tier, and it must land before any eval runs.
 2. **R3-2, enforcement:** R17 (needs R29), R18.
 3. **R3-3, parity (B01, B04–B15):** don't start until B03 has landed. Its eval cases don't exist yet, so a skill task has nothing to turn green and no `Evals:` trailer to write. The engine halves are tested in C# first, but they also come after R3-1 and R3-2, because an eval that fails on an engine defect says nothing about the skill.
 4. **R3-4, release:** R20. R40 is the engineer's.
@@ -110,6 +112,6 @@ dotnet test tests/Hoshin.Tests --filter "Category=Acceptance"
 
 ## Waiting on the engineer (not on you)
 
-- **B02:** permission to spend about $1 on the two runner cases. .NET 10 (SDK 10.0.404, runtime 10.0.15) is installed in WSL `~/.dotnet`. The no-runtime half of B02's done-when holds in WSL: with no `dotnet` reachable, `run-wsl.sh` stops with exit 1 before calling `claude`. With the runtime present, the startup probe passes (`scope --json demo` prints `{"problems":[]}`), and `claude` 2.1.308, `bwrap` and `socat` are on PATH. Not yet run: the smoke case itself, and the typed-command probe. Until it is known, whether a slash-command prompt counts as typed by the user stays open.
+- **B02 is settled** (TASKS.md, B02's reviewer notes). In WSL, .NET 10 is in `~/.dotnet`, Claude Code is logged in, and the runner works. A slash-command prompt counts as typed by the user. The smoke case waits on R-new-1, and the Linux run waits on the first `run-evals` label in CI, which needs the `ANTHROPIC_API_KEY` secret.
 - **The trailer check:** the conventional workflow checks trailers only on `fix/review-findings`. The engineer extends it to `fix/round-3` with `R` and `B` IDs, requires `Gate:`, and requires `Evals:` on B05–B15, before your first task commit lands.
 - **The pull request:** the engineer opens it as a draft titled `feat(workflow)!: ready to replace hoshin`, with the Tasks table, "Gate disputes" and the "Replacement bar" checklist.

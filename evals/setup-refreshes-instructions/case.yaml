@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: setup-refreshes-instructions
 description: Asked only to refresh the workspace instructions, setup (instructions-only mode) regenerates intent/workspace.md, replaces the out-of-date block in the workspace CLAUDE.md and leaves the engineer's text on both sides of it alone, and commits only the instructions, as a refresh and not as a full setup (B09). Setup now gets a hook-issued step (D9, answered (a)), so the library writes and commits and the model never runs the instructions command or commits; the graders read the files and the master's reflog. Ported from the original's case of the same name.
 tags: [setup, workspace, b09]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

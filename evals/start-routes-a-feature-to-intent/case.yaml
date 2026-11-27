@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: start-routes-a-feature-to-intent
 description: A feature brought to the start skill by an engineer is routed to the full pipeline. Because the person is not the product owner, start gives the product owner's intent command instead of interviewing, never runs the fix skill or the intent skill, and writes, commits and starts nothing (B05). Ported from the original's case of the same name; the command is now the slash command with the plugin's prefix.
 tags: [start, intent, b05]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

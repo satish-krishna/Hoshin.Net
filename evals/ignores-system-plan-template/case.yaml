@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: ignores-system-plan-template
 description: The system keeps its own plan template, which is not the plugin's layout. The plan skill still writes the plan in the plugin's layout, names the unused template in its closing message, and leaves the template and main alone (B01 item 4, B10). The model's commit is made by the Stop hook, so the case reads the change's reflog instead of a commit command. Ported from the original's case of the same name.
 tags: [plan, template, b01]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

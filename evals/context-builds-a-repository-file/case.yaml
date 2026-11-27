@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: context-builds-a-repository-file
 description: New in Hoshin.Net (B08, and decision D9 answered (a), so a hook-issued step carries each repository's commit and Stop commits what the skill wrote under the context kind). A first context run on a repository with no file writes intent/demo/context/app.md with the front matter fields, the app's own HEAD as source_commit, and every rule tagged. The engineer is away, so nothing may be tagged confirmed by engineer, the clear greeting rules are seen in code, and the one thing the code leaves in doubt (the cart and checkout disagree on when shipping is free) is intent unknown and named in the report. The library commits the file once, as build context for app.
 tags: [context, b08]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

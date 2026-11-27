@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: review-commits-findings
 description: A fully built change (documents accepted, T1 committed with its trailers, its build-log entry committed) is reviewed. The review skill writes build/review.md in the change's copy as "## Review 1", and the Stop hook validates and commits only that file. The product repository's CONTRIBUTING.md requires a header on every shell script and its lint script enforces it; the change's new script, vip.sh, lacks it, so the review records a convention finding for app that cites the rule (B12, the review brief's convention rule). No product repository changes. Ported from the original's case of the same name; the commit now comes from the hook at the end of the turn, not from the model, so the grader reads the change's reflog.
 tags: [review, b12]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |

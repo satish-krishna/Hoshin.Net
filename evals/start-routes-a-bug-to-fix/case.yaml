@@ -2,7 +2,6 @@ schema_version: "1.1"
 name: start-routes-a-bug-to-fix
 description: A brief bug report given to the start skill is routed to the light track, and the same session runs the fix skill, which drafts the three documents in one draft fix commit with the root cause at its file and line, a reproduction scenario, and no product code (B05). LLM half of the original's case of the same name; the advance acceptance is gone because accepting is typed-only in Hoshin.Net, and the acceptance parity test covers it. Ported from the original's case of the same name.
 tags: [start, fix, b05]
-plugins: ["../.bundle/claude-code"]
 runs: 3
 execution:
   prompt: |
