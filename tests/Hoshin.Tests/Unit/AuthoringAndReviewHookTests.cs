@@ -707,7 +707,7 @@ public sealed class AuthoringAndReviewHookTests
     {
         var expectedSkills = new[]
         {
-            "intent", "spec", "plan", "build", "review", "fix", "done", "accept", "setup", "context", "implement",
+            "intent", "spec", "plan", "build", "review", "fix", "done", "accept", "decline", "setup", "context", "implement",
         };
         foreach (var name in expectedSkills)
         {
@@ -761,10 +761,10 @@ public sealed class AuthoringAndReviewHookTests
             Assert.DoesNotContain("Yaml", nuspec, StringComparison.OrdinalIgnoreCase);
         }
 
-        // Verify Hoshin.Workflow assembly embeds all 11 role/skill procedures.
+        // Verify Hoshin.Workflow assembly embeds all role/skill procedures.
         var embeddedNames = typeof(WorkflowEngine).Assembly.GetManifestResourceNames();
-        var tenSkills = new[] { "intent", "spec", "plan", "build", "review", "fix", "done", "accept", "setup", "context" };
-        foreach (var role in tenSkills.Append("implement"))
+        var packagedSkills = new[] { "intent", "spec", "plan", "build", "review", "fix", "done", "accept", "decline", "setup", "context" };
+        foreach (var role in packagedSkills.Append("implement"))
         {
             Assert.Contains(embeddedNames, n => n.EndsWith($".skills.{role}.procedure.md", StringComparison.OrdinalIgnoreCase));
         }
@@ -775,7 +775,7 @@ public sealed class AuthoringAndReviewHookTests
             Path.Combine(outDir.Path, "antigravity", ".agents", "skills"),
         })
         {
-            foreach (var skill in tenSkills)
+            foreach (var skill in packagedSkills)
             {
                 var skillMd = Path.Combine(bundleRoot, skill, "SKILL.md");
                 var refProc = Path.Combine(bundleRoot, skill, "references", "procedure.md");
@@ -784,7 +784,7 @@ public sealed class AuthoringAndReviewHookTests
 
                 var wrapperText = File.ReadAllText(skillMd);
                 Assert.Contains("Read `references/procedure.md` and follow it.", wrapperText);
-                if (skill is "accept" or "done")
+                if (skill is "accept" or "decline" or "done")
                 {
                     Assert.Contains("disable-model-invocation: true", wrapperText);
                 }

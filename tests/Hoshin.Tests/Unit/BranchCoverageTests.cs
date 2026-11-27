@@ -228,7 +228,8 @@ public sealed class BranchCoverageTests
 
         var cleanReview = passedChecks with { Reviews = [new WorkflowReviewRun("aaaa1111", 1, 0, 0, DateTimeOffset.UtcNow)] };
         var rejectedApproval = cleanReview with { WorkflowApprovals = [new WorkflowApproval("aaaa1111", false, "nope", DateTimeOffset.UtcNow)] };
-        Assert.Contains("rejected", Assert.IsType<Done>(WorkflowEngine.Next(MakeState(ledger: rejectedApproval))).Outcome);
+        var declinedFix = Assert.IsType<Implement>(WorkflowEngine.Next(MakeState(ledger: rejectedApproval)));
+        Assert.Contains("nope", declinedFix.Agent.Prompt);
 
         var approvedAndPublished = cleanReview with
         {

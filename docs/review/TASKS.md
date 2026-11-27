@@ -1303,7 +1303,7 @@ Today `hook start` returns nothing for setup and context (H2 kept them from taki
 | B02 | R3-0 | An eval runner for the Claude Code bundle (reviewer) | EPIC-B | — | — | done, but its smoke case fails until R-new-1: it passed once in WSL with the sandbox's home repository removed, and the typed-command probe answered yes (see B02's reviewer notes) |
 | B03 | R3-0 | Port the eval suite (reviewer) | EPIC-B | B02 | — | written: 39 cases, 28 parity tests, grader self-tests pass; the cases have not run against a model |
 | R23 | R3-1 | One session's hand-off doesn't end another session's run | S16, R03 × R07 | — | R21 (10) | done |
-| R22 | R3-1 | The engineer can decline at approval | W3 | D6 | R21 (2) | open |
+| R22 | R3-1 | The engineer can decline at approval | W3 | D6 | R21 (2) | done |
 | R10 | R3-1 | `migrate` keeps in-flight changes valid | L13–L16, L1 | — | R21 (3) | open |
 | R11 | R3-1 | One stray commit doesn't burn every attempt | W7, H11, S17 | — | R21 (8) | open |
 | R12 | R3-1 | Honor event refusals; fail loudly on an unresolved repository | W8, W9 | — | R21 (7) | open |

@@ -178,7 +178,7 @@ public sealed class WorkflowNextTests
         Assert.False(doneChecks.Success);
         Assert.Contains("checks failed", doneChecks.Outcome);
 
-        // Engineer rejected at approval
+        // Engineer declined at approval -> routes to a fix step carrying the reason (R22)
         var ledgerReject = LedgerStore.Empty() with
         {
             Verdicts =
@@ -190,9 +190,9 @@ public sealed class WorkflowNextTests
             Reviews = [new WorkflowReviewRun("h2", 1, 0, 0, DateTimeOffset.UtcNow)],
             WorkflowApprovals = [new WorkflowApproval("h2", false, "needs redesign", DateTimeOffset.UtcNow)],
         };
-        var doneReject = Assert.IsType<Done>(WorkflowEngine.Next(MakeState(ledger: ledgerReject, head: "h2")));
-        Assert.False(doneReject.Success);
-        Assert.Contains("needs redesign", doneReject.Outcome);
+        var declineFix = Assert.IsType<Implement>(WorkflowEngine.Next(MakeState(ledger: ledgerReject, head: "h2")));
+        Assert.StartsWith("FIX-DECLINE-", declineFix.Agent.Task, StringComparison.Ordinal);
+        Assert.Contains("needs redesign", declineFix.Agent.Prompt);
 
         // Rejected documents stop immediately
         foreach (var docName in new[] { "intent", "spec", "plan" })

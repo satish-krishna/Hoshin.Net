@@ -188,7 +188,7 @@ public static class WorkflowEngine
 
         if (!approval.Approved)
         {
-            return new Done(false, $"rejected at {Short(codeHead)}: {approval.Note}");
+            return PostBuildFixEngine.NextForDeclinedApproval(state, approval);
         }
 
         var targetRef = $"refs/heads/{state.Plan.EffectiveBranch}";

@@ -106,11 +106,7 @@ internal sealed class StartHandler(
         if (RequiresHumanInvocation(invoked, isFixAccept) && invocation.Source != SkillInvocationSource.User)
         {
             var cmd = FormatHumanOnlyCommand(invoked, isFixAccept, ev.Harness);
-            return EmitStartContext(
-                ev,
-                repo,
-                $"Only the engineer can approve, accept, reopen, or reject a change. Ask the engineer to type `{cmd}`, then end your turn.",
-                $"{invoked}: refused model-sourced invocation");
+            return EmitStartContext(ev, repo, $"Only the engineer can approve, decline, accept, reopen, or reject a change. Ask the engineer to type `{cmd}`, then end your turn.", $"{invoked}: refused model-sourced invocation");
         }
 
         if (ev.IsAntigravity && ev.EventName == "PreInvocation")
@@ -134,23 +130,45 @@ internal sealed class StartHandler(
             return EmitStartContext(ev, repo, error ?? "There is no change plan in this repository. Tell the engineer, then end your turn.", "no plan");
         }
 
-        var gate = isFixAccept ? WorkflowEngine.GateFixAccept(state) : WorkflowEngine.Gate(state, invoked);
+        var gate = EvaluateGate(state, invoked, rawArgs, isFixAccept, ev.Harness, out var gateDecision);
         if (gate is not null)
         {
-            return EmitStartContext(ev, repo, gate + " Tell the person who asked, in one or two sentences, then end your turn.", $"{invoked}: refused, next is {WorkflowEngine.Next(state).Kind}");
+            return EmitStartContext(ev, repo, gate, gateDecision!);
         }
 
         StartRun(repo, ev);
         return DispatchSkill(ev, repo, state, sessionRepo, invocation, isFixAccept, rolesRoot, buildInstructions);
     }
 
+    private static string? EvaluateGate(
+        WorkflowState state, string invoked, string rawArgs, bool isFixAccept, HookHarness harness, out string? decision)
+    {
+        var gate = isFixAccept ? WorkflowEngine.GateFixAccept(state) : WorkflowEngine.Gate(state, invoked);
+        if (gate is not null)
+        {
+            decision = $"{invoked}: refused, next is {WorkflowEngine.Next(state).Kind}";
+            return gate + " Tell the person who asked, in one or two sentences, then end your turn.";
+        }
+
+        if (invoked == "decline" && rawArgs.Length == 0)
+        {
+            decision = "decline: missing reason";
+            return $"Declining approval requires a reason. Ask the engineer to type `{HookInstructions.SkillCommand("decline", harness)} <reason>`, then end your turn.";
+        }
+
+        decision = null;
+        return null;
+    }
+
     private static bool RequiresHumanInvocation(string invoked, bool isFixAccept) =>
-        invoked is "accept" or "done" or "reject" or "reopen" || isFixAccept;
+        invoked is "accept" or "decline" or "done" or "reject" or "reopen" || isFixAccept;
 
     private static string FormatHumanOnlyCommand(string invoked, bool isFixAccept, HookHarness harness) =>
         isFixAccept
             ? $"{HookInstructions.SkillCommand("fix", harness)} --accept"
-            : HookInstructions.SkillCommand(invoked is "reject" or "reopen" ? invoked : "accept", harness);
+            : invoked == "decline"
+                ? $"{HookInstructions.SkillCommand("decline", harness)} <reason>"
+                : HookInstructions.SkillCommand(invoked is "reject" or "reopen" ? invoked : "accept", harness);
 
     private static string? ExtractBuildInstructions(string invoked, string rawArgs) =>
         invoked == "build" && rawArgs.Length > 0 ? rawArgs : null;
@@ -167,17 +185,18 @@ internal sealed class StartHandler(
     }
 
     private (string? Output, string Decision) DispatchSkill(
-        NormalizedHookEvent ev,
-        WorkflowRepo repo,
-        WorkflowState state,
-        string? sessionRepo,
-        SkillInvocation invocation,
-        bool isFixAccept,
-        string? rolesRoot,
-        string? buildInstructions)
+        NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string? sessionRepo,
+        SkillInvocation invocation, bool isFixAccept, string? rolesRoot, string? buildInstructions)
     {
         var invoked = invocation.Skill;
         var args = (ev.CommandArgs ?? invocation.Args ?? "").Trim();
+
+        if (invoked == "decline")
+        {
+            _approvals.Answer(repo, state, approved: false, args);
+            ClearRunIfOwned(repo, ev);
+            return EmitStartContext(ev, repo, $"The engineer declined approval: {args}. Tell the engineer the next step is building the fix (`{HookInstructions.SkillCommand("build", ev.Harness)}`). Then end your turn.", "decline: recorded");
+        }
 
         if (invoked == "reject")
         {
@@ -214,19 +233,10 @@ internal sealed class StartHandler(
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
         ClearRunIfOwnedOrDone(repo, ev, step);
 
-        return EmitStartContext(
-            ev,
-            repo,
-            $"The intent is rejected, committed as {WorkflowEngine.Short(commit)}. Tell the engineer the change is closed, then end your turn.",
-            $"reject: committed {WorkflowEngine.Short(commit)}");
+        return EmitStartContext(ev, repo, $"The intent is rejected, committed as {WorkflowEngine.Short(commit)}. Tell the engineer the change is closed, then end your turn.", $"reject: committed {WorkflowEngine.Short(commit)}");
     }
 
-    private (string? Output, string Decision) HandleReopen(
-        NormalizedHookEvent ev,
-        WorkflowRepo repo,
-        WorkflowState state,
-        string args,
-        string? rolesRoot)
+    private (string? Output, string Decision) HandleReopen(NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string args, string? rolesRoot)
     {
         var target = ResolveReopenDocument(state, args);
         if (target is null)
@@ -241,11 +251,7 @@ internal sealed class StartHandler(
         }
 
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
-        return EmitStartContext(
-            ev,
-            repo,
-            $"The {target.Value.ToWireName()} is reopened (`status: draft`), committed as {WorkflowEngine.Short(commit)}. Next step: {WorkflowEngine.Describe(step)}. Tell the engineer, then end your turn.",
-            $"reopen: {target.Value.ToWireName()} {WorkflowEngine.Short(commit)}");
+        return EmitStartContext(ev, repo, $"The {target.Value.ToWireName()} is reopened (`status: draft`), committed as {WorkflowEngine.Short(commit)}. Next step: {WorkflowEngine.Describe(step)}. Tell the engineer, then end your turn.", $"reopen: {target.Value.ToWireName()} {WorkflowEngine.Short(commit)}");
     }
 
     private static WorkflowDocument? ResolveReopenDocument(WorkflowState state, string args)
@@ -264,37 +270,20 @@ internal sealed class StartHandler(
             return d.InHead && d.HeadStatus == "accepted" ? doc : null;
         }
 
-        foreach (var candidate in new[] { WorkflowDocument.Plan, WorkflowDocument.Spec, WorkflowDocument.Intent })
-        {
-            var d = state.Document(candidate);
-            if (d.InHead && d.HeadStatus == "accepted")
-            {
-                return candidate;
-            }
-        }
-
-        return null;
+        return new[] { WorkflowDocument.Plan, WorkflowDocument.Spec, WorkflowDocument.Intent }
+            .FirstOrDefault(c => state.Document(c) is { InHead: true, HeadStatus: "accepted" }) is var found
+            && state.Document(found) is { InHead: true, HeadStatus: "accepted" }
+                ? found
+                : null;
     }
 
-    private static string BuildPromptSuffix(string invoked, string args, Step step)
-    {
-        if (args.Length == 0)
-        {
-            return "";
-        }
-
-        if (invoked == "intent")
-        {
-            return $"\n\nThe product owner's idea, as they typed it: {args}";
-        }
-
-        if (invoked == "fix" && step is WriteFix)
-        {
-            return $"\n\nThe engineer's fix request: {args}";
-        }
-
-        return "";
-    }
+    private static string BuildPromptSuffix(string invoked, string args, Step step) => args.Length == 0
+        ? ""
+        : invoked == "intent"
+            ? $"\n\nThe product owner's idea, as they typed it: {args}"
+            : invoked == "fix" && step is WriteFix
+                ? $"\n\nThe engineer's fix request: {args}"
+                : "";
 
     private string ApplyHumanAcceptanceIfNeeded(NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string invoked, bool isFixAccept)
     {
