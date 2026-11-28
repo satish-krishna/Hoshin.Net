@@ -25,7 +25,7 @@ This repository contains **Hoshin.Net** (`v2.0.0`): the .NET 10 workflow library
    - each rule has one owner.
 
    Existing violations are baselined, and a change may not add one.
-4. **No YAML in Hoshin.Net:** All Hoshin documents use line-1 fenced ```` ```jsonc ```` front matter and ```` ```jsonc ```` record blocks; change records use `change.jsonc`. YAML appears only as input fixtures in migration/negative tests and in generated `SKILL.md` wrapper headers emitted by `packaging/package.ps1`.
+4. **No YAML in Hoshin.Net:** All Hoshin documents use line-1 fenced ```` ```jsonc ```` front matter and ```` ```jsonc ```` record blocks; change records use `change.jsonc`. YAML appears only as input fixtures in negative tests and in generated `SKILL.md` wrapper headers emitted by `packaging/package.ps1`.
 5. **Harness-neutral skills:** Files under `skills/*/procedure.md` contain judgment guidance only — zero YAML front matter, zero `hoshin`/`git` CLI invocations, and zero harness-specific tool names (`Agent`, `invoke_subagent`, `Bash`, `run_command`, `PreToolUse`, etc.). This invariant is enforced by `AuthoringAndReviewHookTests.AllSkills_PassStrictLint_NoYamlNoCliNoHarnessToolNames`.
 6. **Dogfooding safety:** This repository is developed outside the Hoshin workflow. Do **not** place `.agents/hooks.json` or `.claude-plugin/` in the repository root; keep harness manifests in `packaging/` and generated bundles in `artifacts/` (gitignored) so `hoshin guard` never intercepts development of `Hoshin.Net` itself.
 
@@ -37,7 +37,7 @@ Set `DOTNET_CLI_TELEMETRY_OPTOUT=1` when running `dotnet` in automation.
 # Build with zero warnings / zero errors
 dotnet build Hoshin.sln
 
-# Run fast C# unit, migration, state-machine, and dual-harness hook tests
+# Run fast C# unit, state-machine, and dual-harness hook tests
 dotnet test tests/Hoshin.Tests/Hoshin.Tests.csproj --filter "FullyQualifiedName!~BlackBoxConformanceTests"
 
 # Run the full test suite (all unit tests + all 44 black-box CLI conformance suites)

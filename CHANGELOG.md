@@ -4,6 +4,9 @@ All notable changes to **Hoshin.Net** are documented in this file.
 
 ## [Unreleased]
 
+### Removed
+- **BREAKING: `hoshin migrate` and the `Hoshin.Migration` assembly (YamlDotNet).** There is no YAML-to-JSONC upgrade command any more. YAML and layout 1 documents still exit `2`, now with the message `layout <n> is not read by this program; rewrite it as layout 2 JSONC`. Clients must drop `migrate` from their command list (CLIENTS.md). Finish a change started under the original hoshin there.
+
 ### Changed
 - **Cross-platform packager (`packaging/package.ps1`):** Uses `Join-Path` throughout, runs under `pwsh` on Linux and Windows, reads default version from `Directory.Build.props` (`VersionPrefix`), and stamps `-Version` into the generated Claude Code `plugin.json`.
 - **Strict analyzer & complexity build gate:** Enabled `TreatWarningsAsErrors`, `AnalysisLevel=latest-recommended`, `EnforceCodeStyleInBuild`, `.editorconfig`, and `CA1502` (cyclomatic complexity ≤ 15 via `CodeMetricsConfig.txt`); replaced per-call hot-path regexes with `[GeneratedRegex]`.

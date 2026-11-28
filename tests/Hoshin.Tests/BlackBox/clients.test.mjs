@@ -63,7 +63,7 @@ test('every command the contract lists is a command of the program', () => {
 test('a subcommand the usage text writes as alternatives counts as each of them', () => {
   assert.ok(usageCommands.has('red show') && usageCommands.has('red record'));
   assert.ok(!usageCommands.has('red'), 'red alone is not a command');
-  assert.ok(usageCommands.has('migrate') && usageCommands.has('change start'));
+  assert.ok(usageCommands.has('change start') && usageCommands.has('change show'));
 });
 
 test('every option the contract lists is in the usage text', () => {

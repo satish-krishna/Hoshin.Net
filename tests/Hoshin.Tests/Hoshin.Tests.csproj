@@ -15,7 +15,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Hoshin.Workflow\Hoshin.Workflow.csproj" />
-    <ProjectReference Include="..\..\src\Hoshin.Migration\Hoshin.Migration.csproj" />
     <ProjectReference Include="..\..\src\Hoshin.Cli\Hoshin.Cli.csproj" />
   </ItemGroup>
 

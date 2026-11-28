@@ -5,8 +5,6 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hoshin.Workflow", "src\Hoshin.Workflow\Hoshin.Workflow.csproj", "{A1B2C3D4-1111-4A11-8111-000000000001}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hoshin.Migration", "src\Hoshin.Migration\Hoshin.Migration.csproj", "{A1B2C3D4-4444-4A44-8444-000000000004}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hoshin.Cli", "src\Hoshin.Cli\Hoshin.Cli.csproj", "{A1B2C3D4-2222-4A22-8222-000000000002}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hoshin.Tests", "tests\Hoshin.Tests\Hoshin.Tests.csproj", "{A1B2C3D4-3333-4A33-8333-000000000003}"
@@ -21,10 +19,6 @@ Global
 		{A1B2C3D4-1111-4A11-8111-000000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-1111-4A11-8111-000000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A1B2C3D4-1111-4A11-8111-000000000001}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A1B2C3D4-4444-4A44-8444-000000000004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A1B2C3D4-4444-4A44-8444-000000000004}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A1B2C3D4-4444-4A44-8444-000000000004}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A1B2C3D4-4444-4A44-8444-000000000004}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A1B2C3D4-2222-4A22-8222-000000000002}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A1B2C3D4-2222-4A22-8222-000000000002}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A1B2C3D4-2222-4A22-8222-000000000002}.Release|Any CPU.ActiveCfg = Release|Any CPU

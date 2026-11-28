@@ -7,7 +7,6 @@ using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Events.Steps;
 using Hoshin.Workflow.Git;
-using Hoshin.Workflow.Migration;
 using Hoshin.Workflow.Red;
 using Hoshin.Workflow.Workspace;
 
@@ -42,9 +41,6 @@ public sealed class HoshinServices
     private readonly Lazy<Committer> _committer;
     private readonly Lazy<ChangeRenameService> _changeRename;
     private readonly Lazy<ChangeRemoveService> _changeRemove;
-    private readonly Lazy<IYamlToJsoncConverter> _yamlConverter;
-    private readonly Lazy<IDocumentMigrator> _documentMigrator;
-    private readonly Lazy<WorkspaceMigrator> _migrator;
     private readonly Lazy<HookConfigService> _hookConfig;
     private readonly Lazy<LedgerStore> _ledger;
     private readonly Lazy<HookScriptExporter> _hookScripts;
@@ -108,9 +104,6 @@ public sealed class HoshinServices
     public Committer Committer => _committer.Value;
     public ChangeRenameService ChangeRename => _changeRename.Value;
     public ChangeRemoveService ChangeRemove => _changeRemove.Value;
-    public IYamlToJsoncConverter YamlConverter => _yamlConverter.Value;
-    public IDocumentMigrator DocumentMigrator => _documentMigrator.Value;
-    public WorkspaceMigrator Migrator => _migrator.Value;
     public HookConfigService HookConfig => _hookConfig.Value;
     public LedgerStore Ledger => _ledger.Value;
     public HookScriptExporter HookScripts => _hookScripts.Value;
@@ -203,9 +196,6 @@ public sealed class HoshinServices
         _committer = new(() => new Committer(Git, Resolver, ChangeLocator, Apps, DocumentChecker, Progress, ReviewReader, MarkerReader, ScopeRules));
         _changeRename = new(() => new ChangeRenameService(Git, Apps, BranchChecker, ChangeRecords));
         _changeRemove = new(() => new ChangeRemoveService(Git, Apps, ChangeRecords));
-        _yamlConverter = new(() => new YamlToJsoncConverter());
-        _documentMigrator = new(() => new DocumentMigrator(YamlConverter));
-        _migrator = new(() => new WorkspaceMigrator(Git, Resolver, DocumentMigrator, MarkerReader, ScopeRules));
 
         _hookConfig = new(() => new HookConfigService(Git, Git));
         _ledger = new(() => new LedgerStore(Git, FileSystem));

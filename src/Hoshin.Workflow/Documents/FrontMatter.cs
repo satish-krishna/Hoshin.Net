@@ -77,7 +77,7 @@ public static partial class FrontMatter
         RefuseNewerLayout(layout, file);
         if (layout != 2)
         {
-            throw new CouldNotRunException($"{file}: layout {layout} is not read by this program; migrate it to layout 2 JSONC");
+            throw new CouldNotRunException($"{file}: layout {layout} is not read by this program; rewrite it as layout 2 JSONC");
         }
     }
 

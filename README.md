@@ -17,7 +17,7 @@ flowchart LR
     subgraph Program["Hoshin.Cli (dotnet hoshin.dll)"]
         HA["HarnessAdapter &<br/>HookOrchestrator"]
         GD["Active-Run Guard"]
-        CMDS["22 CLI Commands &<br/>hoshin migrate (Hoshin.Migration)"]
+        CMDS["21 CLI Commands"]
     end
 
     subgraph Core["Hoshin.Workflow (Markdig + Gherkin only)"]
@@ -56,11 +56,10 @@ flowchart TD
 | Path | Purpose |
 | :--- | :--- |
 | `src/Hoshin.Workflow` | Core library (`Markdig` + `Gherkin` only): `WorkflowEngine`, `WorkflowGate`, `TaskEvaluator`, `CheckRunner`, `Publisher`, `DocumentCommitter`, `ChangeStateService`, `FixStateService`, `EventRunner`, `LedgerStore`, JSONC/Gherkin readers & validators, embedded schemas, templates, and role procedures. |
-| `src/Hoshin.Migration` | Standalone YAML-to-JSONC migration assembly (`YamlDotNet`), referenced only by `Hoshin.Cli`. |
-| `src/Hoshin.Cli` | Portable CLI (`hoshin.dll`): all 22 `CLIENTS.md` commands, `hoshin migrate`, dual-harness `hoshin hook <start\|result\|subagent-stop\|stop>`, and active-run `hoshin guard`. |
+| `src/Hoshin.Cli` | Portable CLI (`hoshin.dll`): all 21 `CLIENTS.md` commands, dual-harness `hoshin hook <start\|result\|subagent-stop\|stop>`, and active-run `hoshin guard`. |
 | `skills/` | Single source of truth for all 11 harness-neutral procedures (`procedure.md`). |
 | `packaging/` | Claude Code & Antigravity hook manifests and cross-platform `package.ps1` (`pwsh`) release packager. |
-| `tests/Hoshin.Tests` | Unit tests, `ArchitectureTests` (SOLID & dependency gates), migration tests, dual-harness hook tests, and 44 black-box CLI conformance suites. |
+| `tests/Hoshin.Tests` | Unit tests, `ArchitectureTests` (SOLID & dependency gates), dual-harness hook tests, and 44 black-box CLI conformance suites. |
 
 ## Quick Start
 
@@ -70,21 +69,11 @@ Requires **.NET 10 SDK** (or .NET 10+ runtime for running packaged `hoshin.dll`;
 # Build solution (warnings treated as errors)
 dotnet build Hoshin.sln
 
-# Run full test suite (unit, architecture, migration, dual-harness hooks, and all 44 black-box suites)
+# Run full test suite (unit, architecture, dual-harness hooks, and all 44 black-box suites)
 dotnet test tests/Hoshin.Tests/Hoshin.Tests.csproj
 
 # Build release artifacts (portable CLI, NuGet package, Claude Code & Antigravity bundles)
 pwsh -NoProfile -ExecutionPolicy Bypass -File packaging/package.ps1
-```
-
-### Migrating Legacy YAML Repositories
-
-```powershell
-# Dry run (no files modified)
-dotnet hoshin.dll migrate <path-to-repo> --dry-run --json
-
-# Rewrite Layout 1 & Layout 2 YAML documents and change.yml to Layout 2 JSONC & change.jsonc (idempotent)
-dotnet hoshin.dll migrate <path-to-repo> --json
 ```
 
 ## Known Limitations
@@ -99,5 +88,5 @@ dotnet hoshin.dll migrate <path-to-repo> --json
 - [docs/GRAMMAR.md](docs/GRAMMAR.md) — Behavioral specification for document layouts, `state`/`fix-state`, events, and refusals (with v2.0.0 JSONC deltas).
 - [AGENTS.md](AGENTS.md) — Repository instructions and invariants for coding agents.
 - [CLIENTS.md](CLIENTS.md) — External CLI contract for Kata Workbench and CI callers.
-- [docs/KATA_MIGRATION.md](docs/KATA_MIGRATION.md) — Breaking-change migration guide for `v2.0.0` (`hoshin.ts` → `hoshin.dll`, YAML → JSONC).
+- [docs/KATA_MIGRATION.md](docs/KATA_MIGRATION.md) — Breaking-change migration guide for `v2.0.0` (`hoshin.ts` → `hoshin.dll`, YAML → JSONC; no upgrade command).
 - [CHANGELOG.md](CHANGELOG.md) — Release notes.

@@ -31,11 +31,9 @@
                        "C3:src/Hoshin.Workflow/Git/PullRequestClient.cs#catch-2",
                        "C3:src/Hoshin.Workflow/Red/RedRecorder.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Workspace/StaleChecker.cs#catch-1",
-                       "C3:src/Hoshin.Workflow/Workspace/WorkspaceMigrator.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Workspace/WorkspaceResolver.cs#catch-1",
                        "C3:src/Hoshin.Workflow/Workspace/WorkspaceResolver.cs#catch-2",
                        "CA1502:src/Hoshin.Cli/Commands/GateCommand.cs#private",
-                       "CA1502:src/Hoshin.Cli/Commands/MigrateCommand.cs#RunAsync",
                        "CA1502:src/Hoshin.Cli/Commands/NamingCommands.cs#RunAsync",
                        "CA1502:src/Hoshin.Cli/Commands/RedCommand.cs#RunAsync",
                        "CA1502:src/Hoshin.Cli/Commands/RunCommand.cs#RunAsync",
@@ -72,8 +70,6 @@
                        "CA1502:src/Hoshin.Workflow/Workspace/Marker.cs#MarkerProblems",
                        "CA1502:src/Hoshin.Workflow/Workspace/Marker.cs#ReadMarker",
                        "CA1502:src/Hoshin.Workflow/Workspace/Naming.cs#CheckNaming",
-                       "CA1502:src/Hoshin.Workflow/Workspace/WorkspaceMigrator.cs#Migrate",
-                       "CA1502:src/Hoshin.Workflow/Workspace/WorkspaceMigrator.cs#private",
                        "CA1502:src/Hoshin.Workflow/Workspace/WorkspaceResolver.cs#Resolve",
                        "CA1502:src/Hoshin.Workflow/Workspace/WorkspaceResolver.cs#WithMaster",
                        "S3:src/Hoshin.Cli/Hooks/HarnessAdapter.cs",
@@ -82,7 +78,6 @@
                        "S3:src/Hoshin.Workflow/Changes/FixState.cs",
                        "S3:src/Hoshin.Workflow/Events/HookConfig.cs",
                        "S3:src/Hoshin.Workflow/Events/Steps/ChangeDoneStep.cs",
-                       "S3:src/Hoshin.Workflow/Git/GitClient.cs",
-                       "S3:src/Hoshin.Workflow/Workspace/WorkspaceMigrator.cs"
+                       "S3:src/Hoshin.Workflow/Git/GitClient.cs"
                    ]
 }

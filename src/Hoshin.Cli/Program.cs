@@ -21,7 +21,6 @@ public static class Program
             ("scope", () => new ScopeCommand()),
             ("resolve", () => new ResolveCommand(services.Resolver)),
             ("instructions", () => new InstructionsCommand(services.Resolver, services.MarkerReader)),
-            ("migrate", () => new MigrateCommand(services.DocumentMigrator, services.Migrator)),
             ("run", () => new RunCommand(services.EventContext, services.BaselineTaker, services.EventRunner)),
             ("hooks", () => new HooksCommand(services.Resolver, services.MarkerReader, services.HookConfig)),
             ("status", () => new StatusCommand(services.Resolver, services.ChangeLocator, services.Apps, services.Ledger, services.Git, services.Git)),

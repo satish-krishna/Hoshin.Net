@@ -108,19 +108,13 @@ Adding is not breaking. A client ignores a field, a value of `type` in a stream,
 - Options: `--json`
 - Fields: `kind`, `layout`, `document`, `problems`, `file`, `line`, `message`, `requirements`, `id`, `title`, `from`, `scenarios`, `outline`, `steps`, `examples`, `tasks`, `shared_decisions`, `name`, `repo`, `depends_on`, `uses`, `files`, `covers`, `supports`, `sections`, `body`, `text`, `question`, `owner`, `function`, `entries`, `task`, `commits`, `departure`, `reviews`, `reviewed_at`, `findings`, `severity`, `concern`, `rule`, `test`, `compile`, `timeout`, `red`
 - Values: `spec`, `plan`, `build-log`, `review`, `high`, `medium`, `low`, `bug`, `convention`
-- Hoshin.Net v2.0.0 reads **layout 2 JSONC** only; use `hoshin migrate` to upgrade legacy YAML and layout 1 documents. Plan tasks may omit `test` or set `test` to `null` for tasks with no testable behavior.
+- Hoshin.Net v2.0.0 reads **layout 2 JSONC** only. YAML and layout 1 documents exit `2`; there is no upgrade command. Plan tasks may omit `test` or set `test` to `null` for tasks with no testable behavior.
 
 ## `red show`
 
 - Options: `--json`, `--change`, `--repo`, `--task`, `--master`, `--workspace`
 - Fields: `task`, `observed`, `reason`, `record`, `record.output`, `record.commit`, `record.outcome`, `problems`
 - Values: `failed`, `passed`, `could-not-compile`, `could-not-run`
-
-## `migrate`
-
-- Options: `--json`, `--write`, `--dry-run`, `--documents`, `--master`, `--workspace`
-- Fields: `workspace`, `master`, `layout`, `write`, `steps`, `step`, `path`, `to`, `status`, `detail`, `kept`, `manual`, `problems`
-- Values: `marker`, `copy`, `state`, `instructions`, `done`, `would`, `current`, `manual`, `refused`
 
 ## `checks`
 
@@ -168,9 +162,9 @@ Adding is not breaking. A client ignores a field, a value of `type` in a stream,
 ## Files a client reads itself
 
 - `.hoshin.json` in the master repository's root (optional `env.allow`, `testPatterns`, and `build` `{ testTimeoutSeconds, checkTimeoutSeconds, maxAttempts }`)
-- `.ai-sdlc.json` in the master repository's root (for legacy migration detection)
+- `.ai-sdlc.json` in the master repository's root (a legacy marker, still recognized)
 - `<workspace>/.hoshin/copies/<change>`
-- `intent/<system>/<change>/change.jsonc` (migrated from `change.yml` in v2.0.0)
+- `intent/<system>/<change>/change.jsonc` (replaces `change.yml` in v2.0.0)
 - `intent/<system>/<change>/intent.md`, `spec.md`, and `plan.md`: line-1 fenced ```` ```jsonc ```` front matter (`status`, `scope`, `source_intent_commit`, `source_spec_commit`)
 - `intent/<system>/context/<repo>.md`: line-1 fenced ```` ```jsonc ```` front matter (`source_commit`)
 - `intent/workspace.md` and workspace `CLAUDE.md`: block between `<!-- hoshin:start -->` and `<!-- hoshin:end -->`
