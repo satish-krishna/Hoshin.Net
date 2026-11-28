@@ -49,7 +49,7 @@ flowchart TD
 
 - **No YAML in documents:** Front matter is a fenced ```` ```jsonc ```` block on line 1 (bare line-1 JSONC written during authoring is auto-wrapped before commit); plan tasks, build logs, and review findings use ```` ```jsonc ```` blocks; change records use `change.jsonc`.
 - **Verified Red/Green commits:** Agents edit only the working tree (`hoshin guard` applies strictly during an active hoshin run for the calling session, blocking premature production edits and manual `git commit`/`git push`). When a task finishes, `TaskEvaluator` verifies Green on the working tree, verifies Red on a cached detached worktree containing only the task's test files (using `RedClassifier`, shared with `hoshin red record`), commits `test(<scope>): ...` followed by `<type>(<scope>): ...` with `Plan-Task` and `Generated-By: hoshin` trailers, writes a `build/<repo>.md` log entry, and fires `task.done`. Tasks with `"test": null` follow `NoTestPolicy` (no test edits; proved by `build.finish` checks).
-- **Harness-neutral skills:** The 10 packaged user skills (`intent`, `spec`, `plan`, `build`, `review`, `fix`, `done`, `accept`, `setup`, `context` — replacing v1's separate `start` skill with direct change creation from `intent`/`fix` and adding human-only `accept`) plus the `implement` role live once in `skills/*/procedure.md` with zero YAML, CLI invocations, or harness tool names. Human-only `reject` and `reopen` flows are also supported via hooks.
+- **Harness-neutral skills:** The 11 packaged user skills (`intent`, `spec`, `plan`, `build`, `review`, `fix`, `done`, `accept`, `decline`, `setup`, `context` — replacing v1's separate `start` skill with direct change creation from `intent`/`fix` and adding human-only `accept` and `decline`) plus the `implement` role live once in `skills/*/procedure.md` with zero YAML, CLI invocations, or harness tool names. Reject and reopen are handled by the hooks and the driver (`DecisionApplier`) but have no packaged skill yet, so Claude Code does not offer them as commands.
 
 ## Solution Layout
 
@@ -74,7 +74,7 @@ dotnet build Hoshin.sln
 # Run full test suite (unit, architecture, dual-harness hooks, and all 44 black-box suites)
 dotnet test tests/Hoshin.Tests/Hoshin.Tests.csproj
 
-# Build release artifacts (portable CLI, NuGet package, Claude Code & Antigravity bundles)
+# Build release artifacts (portable CLI, NuGet packages, Claude Code & Antigravity bundles, local Claude Code marketplace)
 pwsh -NoProfile -ExecutionPolicy Bypass -File packaging/package.ps1
 ```
 
@@ -90,7 +90,7 @@ claude plugin install hoshin@hoshin-net             # installs and enables the p
 
 Inside Claude Code the same steps are `/plugin marketplace add <path to artifacts>` and `/plugin install hoshin@hoshin-net`. To try it without installing, run `claude --plugin-dir artifacts/claude-code`. Disable the original TypeScript `hoshin` plugin first (`claude plugin disable hoshin@hoshin`): with both enabled, both sets of hooks fire on every event. After rebuilding, run `claude plugin update hoshin@hoshin-net`.
 
-The commands are `/hoshin:intent <change-name>`, `/hoshin:spec`, `/hoshin:plan`, `/hoshin:build`, `/hoshin:review`, `/hoshin:fix`, and the engineer-only `/hoshin:accept`, `/hoshin:decline <reason>`, `/hoshin:done`, `/hoshin:reject` and `/hoshin:reopen`.
+The skills are `/hoshin:intent <change-name>`, `/hoshin:spec`, `/hoshin:plan`, `/hoshin:build`, `/hoshin:review`, `/hoshin:fix`, `/hoshin:setup` and `/hoshin:context`, plus the engineer-only `/hoshin:accept`, `/hoshin:decline <reason>` and `/hoshin:done`. Reject and reopen work in the hooks and the driver but are not packaged as skills yet (round 3's B15).
 
 ## Run a change with Microsoft Agent Framework
 

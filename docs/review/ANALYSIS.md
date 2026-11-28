@@ -7,6 +7,8 @@
 
 The companion [PRIMER.md](PRIMER.md) explains the layout and where to start reading. [TASKS.md](TASKS.md) holds the first pass's work items, all marked `done` apart from EPIC-B, and the round-2 tasks (`R00`–`R20`) that come from this review (§12.2).
 
+> **Status since this review (2026-11-28).** This review describes the code at `6b10f7e` and is not updated finding by finding. Since then, round 2 (PR #6) closed the normal-path findings W1–W6 and W11–W14. Round 4 (TASKS.md, last section) removed `migrate`, so L1, L13–L16 and the migrator halves of L8, L9 and L12 no longer apply. It also landed decline at approval (W3's approval part, as R22) and per-session handoff (S16, as R23), and moved the hook path's step handling into the library's driver, which the Microsoft Agent Framework host shares. TASKS.md's round-3 index and round 4's "Remaining work" say which findings are still open.
+
 ---
 
 ## 1. Summary

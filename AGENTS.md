@@ -1,6 +1,6 @@
 # Hoshin.Net Agent Instructions
 
-This repository contains **Hoshin.Net** (`v2.0.0`): the .NET 10 workflow library (`Hoshin.Workflow`), portable CLI and dual-harness hook driver (`Hoshin.Cli` → `hoshin.dll`), harness-neutral skill procedures (`skills/`), dual-bundle packager (`packaging/`), and conformance test suite (`tests/Hoshin.Tests`).
+This repository contains **Hoshin.Net** (`v2.0.0`): the .NET 10 workflow library with its harness-neutral driver (`Hoshin.Workflow`), the Microsoft Agent Framework host (`Hoshin.Agents`), the portable CLI and Claude Code / Antigravity hook adapters (`Hoshin.Cli` → `hoshin.dll`), harness-neutral skill procedures (`skills/`), the packager (`packaging/`), and the test suite (`tests/Hoshin.Tests`).
 
 **Before any change, read [CONTRIBUTING.md](CONTRIBUTING.md) and follow it.** Its rules (Conventional Commits, test first, the SOLID design rules in §3, the code rules in §4, the coverage gate, and the document owners) are mandatory for agents and people alike. A change that breaks one is not merged. When working from [docs/review/TASKS.md](docs/review/TASKS.md), also follow the instructions at the top of that file.
 
@@ -43,7 +43,7 @@ dotnet test tests/Hoshin.Tests/Hoshin.Tests.csproj --filter "FullyQualifiedName!
 # Run the full test suite (all unit tests + all 44 black-box CLI conformance suites)
 dotnet test tests/Hoshin.Tests/Hoshin.Tests.csproj
 
-# Package portable CLI, Hoshin.Workflow NuGet package, Claude Code plugin, and Antigravity bundle
+# Package portable CLI, Hoshin.Workflow and Hoshin.Agents NuGet packages, Claude Code plugin (with a local marketplace), and Antigravity bundle
 powershell -NoProfile -ExecutionPolicy Bypass -File packaging/package.ps1
 ```
 

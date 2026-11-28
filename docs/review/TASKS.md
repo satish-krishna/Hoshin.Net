@@ -9,7 +9,7 @@ This file turns [ANALYSIS.md](ANALYSIS.md) into discrete work items that a codin
 
 The IDs in brackets (S1, E2, L4, …) point back to the matching section of ANALYSIS.md, which has the full reasoning.
 
-**Round 1** (the tasks below, `T01`–`T43`, `A1`–`A8`) is done; it landed as PR #5. **Round 2** (`R00`–`R09`) is under "Round 2 — close the lifecycle"; it is PR #6. **Round 3** (`R10`–`R40` and `B01`–`B15`) is at the end of this file, under "Round 3 — ready to replace hoshin". It takes in round 2's later tiers and EPIC-B. Each round has its own rules: read them before starting a task in that round.
+**Round 1** (the tasks below, `T01`–`T43`, `A1`–`A8`) is done; it landed as PR #5. **Round 2** (`R00`–`R09`) is under "Round 2 — close the lifecycle"; it is PR #6. **Round 3** (`R10`–`R40` and `B01`–`B15`) is at the end of this file, under "Round 3 — ready to replace hoshin". It takes in round 2's later tiers and EPIC-B. Round 3 is **paused**: two of its tasks landed, the rest is not scheduled. **Round 4** (`N01`–`N07`), at the very end of this file under "Round 4 — one driver, any host", is the smaller path the engineer chose instead on 2026-11-28; it is done. Each round has its own rules: read them before starting a task in that round.
 
 ---
 
@@ -1214,7 +1214,7 @@ R10–R20 are no longer delivered in later round-2 branches. The engineer moved 
 
 # Round 3 — ready to replace hoshin
 
-> **Paused, 2026-11-28.** The engineer stopped round 3 and chose a smaller path: `migrate` is removed, a harness-neutral driver (`Hoshin.Workflow.Driver`) and a Microsoft Agent Framework host (`Hoshin.Agents`) are added, and the Claude Code hooks share the driver's step handling. R22 and R23 were taken from `fix/round-3`; R10, R18's YAML differential and R30's migrator half no longer apply. See `CHANGELOG.md` (Unreleased). The rest of round 3 is not scheduled.
+> **Paused, 2026-11-28.** The engineer stopped round 3 and chose a smaller path, recorded as round 4 at the end of this file (D10–D12). From this round, R22 and R23 landed (as N02); R10 and the YAML halves of R18 and R30 are invalid because `migrate` is removed. The reviewer's gates (R21, B02, B03) stay on `fix/round-3`, unmerged. Every other task below is open and not scheduled; "Remaining work" in round 4 lists the ones that matter for replacing hoshin.
 
 Round 2 closed the normal path: the R0 gate passes on Linux and Windows (PR #6). Round 3 is everything else between Hoshin.Net and replacing hoshin:
 - integrity and data: R10–R16, plus the deferred findings a real user hits (R22–R30);
@@ -1300,12 +1300,12 @@ Today `hook start` returns nothing for setup and context (H2 kept them from taki
 
 | ID | Tier | Title | Fixes | Needs | Gate | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| R21 | R3-0 | Extend the acceptance gate (reviewer) | §12.2 | — | — | open |
-| B02 | R3-0 | An eval runner for the Claude Code bundle (reviewer) | EPIC-B | — | — | open |
-| B03 | R3-0 | Port the eval suite (reviewer) | EPIC-B | B02 | — | open |
-| R23 | R3-1 | One session's hand-off doesn't end another session's run | S16, R03 × R07 | — | R21 (10) | open |
-| R22 | R3-1 | The engineer can decline at approval | W3 | D6 | R21 (2) | open |
-| R10 | R3-1 | `migrate` keeps in-flight changes valid | L13–L16, L1 | — | R21 (3) | open |
+| R21 | R3-0 | Extend the acceptance gate (reviewer) | §12.2 | — | — | not merged: on `fix/round-3` |
+| B02 | R3-0 | An eval runner for the Claude Code bundle (reviewer) | EPIC-B | — | — | not merged: on `fix/round-3` |
+| B03 | R3-0 | Port the eval suite (reviewer) | EPIC-B | B02 | — | not merged: on `fix/round-3` |
+| R23 | R3-1 | One session's hand-off doesn't end another session's run | S16, R03 × R07 | — | R21 (10) | done (N02) |
+| R22 | R3-1 | The engineer can decline at approval | W3 | D6 | R21 (2) | done (N02) |
+| R10 | R3-1 | `migrate` keeps in-flight changes valid | L13–L16, L1 | — | R21 (3) | invalid: `migrate` is removed (D10) |
 | R11 | R3-1 | One stray commit doesn't burn every attempt | W7, H11, S17 | — | R21 (8) | open |
 | R12 | R3-1 | Honor event refusals; fail loudly on an unresolved repository | W8, W9 | — | R21 (7) | open |
 | R13 | R3-1 | Pin the base ref; authenticate approvals | S12, S13, S1, S6 | — | own test | open |
@@ -1318,9 +1318,9 @@ Today `hook start` returns nothing for setup and context (H2 kept them from taki
 | R27 | R3-1 | Keep the engineer's git identity and signing | E20, E7 | — | own test | open |
 | R28 | R3-1 | One judge per turn; refuse conflicting launches | W10, H4 | — | own test | open |
 | R29 | R3-1 | Fail closed on bad input | S10, C3's two catches | — | own test | open |
-| R30 | R3-1 | Readers agree with the migrator | L8, L12, L9 | — | own test | open |
+| R30 | R3-1 | Readers agree with the migrator | L8, L12, L9 | — | own test | open (the migrator half is invalid, D10) |
 | R17 | R3-2 | Make the baseline shrink-only, count every suppression, close the scanner holes | C1–C4 | R29 | own test | open |
-| R18 | R3-2 | Run the `yaml.mjs` differential in CI; record real harness payloads | §8, §10.4, §9 black-box | — | own test | open |
+| R18 | R3-2 | Run the `yaml.mjs` differential in CI; record real harness payloads | §8, §10.4, §9 black-box | — | own test | open (the `yaml.mjs` half is invalid, D10) |
 | B01 | R3-3 | Templates and shared references | §9 "Templates" | — | `ignores-system-plan-template` | open |
 | B04 | R3-3 | Skill descriptions that trigger | §9 "Skills" | — | every `skill-fired` grader | open |
 | B05 | R3-3 | Start and triage | §9 "Start / triage" | B01 | R21 (4); `start-*` | open |
@@ -1335,7 +1335,7 @@ Today `hook start` returns nothing for setup and context (H2 kept them from taki
 | B14 | R3-3 | Fix (the light track) | §9 "Reject / reopen / … / `fix --accept`" | B01, B05 | R21 (6); `fix-*` | open |
 | B15 | R3-3 | Reject, reopen and abandon | H13, R19 | — | R21 (5); reject and reopen cases | open |
 | R19 | R3-4 | Restore `start`/triage; package `reject` and `reopen` | §9, H13 | — | — | moved: B05, B15 |
-| R20 | R3-4 | Publish a marketplace entry, tag a release, fix the doc claims | §11 | D8 | bar item 5 | open |
+| R20 | R3-4 | Publish a marketplace entry, tag a release, fix the doc claims | §11 | D8 | bar item 5 | open (N06 builds a local marketplace) |
 | R40 | R3-4 | A real change, run by the engineer | §12 switching criterion | all of the above | bar item 4 | open |
 
 After this round, the findings in ANALYSIS.md that have no task are exactly the ones under "Accepted differences".
@@ -1754,3 +1754,90 @@ Moved: `start` is B05, and `reject` and `reopen` are B14, so each is judged by i
 - **Needs:** every other round-3 task `done` or `invalid`, and the release candidate from R20.
 - **Do:** install the release candidate from the marketplace in a real workspace that has a master and at least one product repository. The engineer's own `ai-sdlc` workspace qualifies. Take one real change, not a fixture, from intent to merged pull requests, using only the plugin's commands. Write `docs/review/DOGFOOD.md`: the change, every point where the engineer had to step outside the workflow, and every defect. Each defect gets a gate test and an `R-new-<n>` task (R3-rule 6).
 - **Done when:** the change's pull requests are merged, and no defect from the run is open.
+
+---
+
+# Round 4 — one driver, any host
+
+Round 3 aimed at full parity with the original before Hoshin.Net could replace it, behind reviewer-owned gates. After a week, the engineer chose a smaller path: make the mechanical part harness-neutral, so that Claude Code and Microsoft Agent Framework (MAF) both drive the same code, and stop carrying work the engineer doesn't need.
+
+Round 4 has no special rules. It follows CONTRIBUTING.md like any other change, and it was delivered as ordinary commits, one per concern, on one branch.
+
+## Decisions for round 4
+
+### D10 — Keep `hoshin migrate`?
+
+`migrate` upgrades YAML and layout 1 repositories to layout 2 JSONC. R10 would have had to make it keep in-flight changes valid, and R18 and R30 kept a YAML differential and the readers in step with it. **Answer: remove it.** Decided by the engineer, 2026-11-28. Changes started under the original hoshin are finished there; Hoshin.Net starts every change as layout 2 JSONC. This is a breaking change to the CLI contract (CLIENTS.md, CHANGELOG.md, docs/KATA_MIGRATION.md).
+
+### D11 — How is Hoshin.Net harness-neutral?
+
+Before round 4 the library held the engine and the runner, but the loop that drives a change (issue a step, judge the result, run checks, publish) lived in the CLI's hook handlers, shaped around Claude Code and Antigravity hook events. A MAF host would have had to rewrite it. **Answer:** move that loop into the library as a driver with five calls (list, start, next, submit, decide) that returns one turn at a time (agent work, a human decision, or finished), and make the hooks use the same pieces. MAF is the second host, in its own project. Decided by the engineer, 2026-11-28, with the driver API reviewed before it was built. The engineer also accepted the open choices: the API is async, the composition root moves into the library, and `DecidedBy` is enough for approvals in a host the engineer trusts.
+
+### D12 — How is round 4 delivered?
+
+**Answer:** as one pull request with one commit per concern, squash-merged like any other. No task trailers, no gate owner. The work was done on the session's branch (`ccr-79da8629-qsjdug`), which the `conventional names` check refuses because it is not `<type>/<short-description>`. Code gets no bypass (CONTRIBUTING §2.1), so the branch is re-pushed under a conforming name (for example `feat/harness-neutral-driver`) and the pull request opened from that.
+
+## Round 4 index
+
+| ID | Title | Fixes or replaces | Commit subject | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| N01 | Remove `migrate` and `Hoshin.Migration` | D10; R10, L13–L16, R18/R30 YAML halves | `feat(cli)!: remove migrate and the Hoshin.Migration assembly` | done |
+| N02 | Decline at approval, and per-session handoff | R22, R23 (taken from `fix/round-3` without its gates) | `fix(hooks)!: bring over decline at approval and session-handoff isolation` | done |
+| N03 | The harness-neutral driver | D11 | `feat(engine): add the harness-neutral driver and share it with the hooks` | done |
+| N04 | The hooks use the driver's step handling | D11; the CLI's private `WorkflowAdvancer` | (in N03's commit) | done |
+| N05 | Whole changes through the driver, with a scripted agent | — | `test(engine): drive whole changes through the driver with a scripted agent` | done |
+| N06 | The Microsoft Agent Framework host | D11 | `feat(engine): add Hoshin.Agents, a Microsoft Agent Framework host` | done |
+| N07 | Install from a local marketplace; pack the MAF host; docs | R20 (local part) | `build(packaging): install from a local marketplace; document the driver and the MAF host` | done |
+| N-new-1 | Review brief for review 2 and later says to append | found by N05 | (in N05's commit) | done |
+
+### N01 · Remove `migrate` and `Hoshin.Migration`
+
+- **Where:** `src/Hoshin.Migration` (deleted), `MigrateCommand`, `WorkspaceMigrator`, `IDocumentMigrator`, their tests, `packaging/package.ps1`, `CLIENTS.md`, `docs/KATA_MIGRATION.md`.
+- **Did:** removed the command, the assembly and YamlDotNet from the portable CLI. YAML and layout 1 documents still exit 2; the message now says to rewrite the document as layout 2 JSONC. The legacy *ledger* upgrade (`ChangeLedgerPaths.TryMigrateLegacyLedger`) is internal state, not the command, and stays.
+- **Done:** the full suite passes; `clients.test.mjs` agrees with the trimmed CLIENTS.md.
+
+### N02 · Decline at approval, and per-session handoff
+
+- **Where:** commits `759a3fe` (R22) and `2c5cf92` (R23) on `fix/round-3`, applied without the R21 acceptance tests and the eval port they were gated by.
+- **Done:** `ApprovalDeclineTests` and `SessionHandoffAndOwnershipTests` pass.
+
+### N03 · The harness-neutral driver
+
+- **Where:** `src/Hoshin.Workflow/Driver/` (`DriverContracts.cs`, `HoshinDriver.cs`, `TurnMapper.cs`, `StepAdvancer.cs`, `WorkSubmitter.cs`, `DecisionApplier.cs`, `LedgerSnapshot.cs`), `src/Hoshin.Workflow/Hosting/HoshinServices.cs`.
+- **Did:** `IHoshinDriver` (`ListOpenAsync`, `StartAsync`, `NextAsync`, `SubmitAsync`, `DecideAsync`) returns `AgentWork` (role, procedure, brief, `WorkId`, feedback, `WorkScope`), `HumanDecision` (allowed decisions) or `Finished`, each with what happened since the last call. It keeps no state in memory; a host persists only the `ChangeRef`. Stale work and out-of-step decisions throw `DriverRefusedException`. `HoshinServices` moved from the CLI into the library and gained `CreateDriver`.
+- **Done:** DESIGN.md §2.1 describes it; N05's tests pass.
+
+### N04 · The hooks use the driver's step handling
+
+- **Where:** `src/Hoshin.Cli/Hooks/` (`StartHandler`, `StopHandler`, `ResultHandler`, `HookOrchestrator`), `src/Hoshin.Cli/HookServices.cs`.
+- **Did:** the CLI's `WorkflowAdvancer` became the library's `StepAdvancer`. The Stop and Result handlers commit and judge work through `WorkSubmitter`, and the Start handler applies decisions through `DecisionApplier`. Only hook-harness concerns stay in the adapter: session ownership, Stop counters and parking, skill detection, the guard, and message wording. The messages the model sees are unchanged.
+- **Done:** every hook, acceptance and black-box test passes unchanged.
+
+### N05 · Whole changes through the driver, with a scripted agent
+
+- **Where:** `tests/Hoshin.Tests/Unit/Driver/HoshinDriverTests.cs`, `ScriptedAgent.cs`.
+- **Did:** a single-repo node project is taken from start to a published pull request; also an invalid plan fed back and fixed, a refused Red retried, a declined approval that runs a fix task and a second review, stale work, an out-of-step decision, and listing open changes.
+- **Found:** N-new-1. The review brief told the agent to start a new file for every review, and the reader refuses a file that drops the earlier reviews, so a declined approval could never get through review 2. `WorkflowBriefs.Review` now says to append from review 2 on.
+
+### N06 · The Microsoft Agent Framework host
+
+- **Where:** `src/Hoshin.Agents/` (`HoshinAgentHost.cs`, `ScopedWorkspace.cs`, `ScopedTools.cs`), on `Microsoft.Agents.AI` 1.28.0. Tests in `tests/Hoshin.Tests/Unit/Driver/HoshinAgentHostTests.cs` and `ScopedWorkspaceTests.cs`.
+- **Did:** `HoshinAgentHost` loops over the driver. Each piece of work goes to a fresh agent from `IRoleAgents` (by default a `ChatClientAgent`) whose only tools are `read_file`, `list_files`, `write_file` and `delete_file` inside its `WorkScope`, `run_command` for the task's exact commands, and `ask_person` for interviews. Decisions go to an `IHumanChannel`. Agents get no git, commit or decision tool. The host stops after `MaxTriesPerWork` attempts at the same work.
+- **Done:** a whole change reaches a published pull request with real `ChatClientAgent` function calling against a scripted model; scope refusals are unit-tested. Not yet run against a real model.
+
+### N07 · Install from a local marketplace; pack the MAF host; docs
+
+- **Where:** `packaging/package.ps1`, `packaging/claude-code/.claude-plugin/plugin.json`, README.md, DESIGN.md, AGENTS.md, CONTRIBUTING.md, CHANGELOG.md, PRIMER.md, ANALYSIS.md, GRAMMAR.md.
+- **Did:** the packager also writes `artifacts/.claude-plugin/marketplace.json` (`hoshin-net`) and `Hoshin.Agents.<version>.nupkg`.
+- **Done:** `claude plugin validate` passes (warning: no icon). `claude plugin marketplace add artifacts` and `claude plugin install hoshin@hoshin-net` install it into a clean config, and the installed copy's own `hooks.json` command lines take a change through intent, spec, plan, a Red/Green task, the guard, review and approval to a pushed branch with one pull request (against a fake `gh`), after which a later `/hoshin:build` does nothing.
+
+## Remaining work
+
+None of this blocks using Hoshin.Net from Claude Code or MAF. It is what stands between it and the original's full behavior, in the order the engineer is likely to hit it.
+
+1. **A real model run.** The engineer runs one real change with the installed plugin (round 3's R40, without its release prerequisites), and one through `HoshinAgentHost` with a real chat client. A defect either finds gets a failing test first.
+2. **The integrity and lifecycle tasks from round 3 that a user hits:** R11, R12, R14, R15, R24–R29 (and R30's reader half). They live in the library, so they now apply to every host.
+3. **Hook-harness-only hardening:** R13 (base ref and approval authentication), R16 (guard scope, MCP tools), R28 (one judge per turn). A MAF host enforces these through its tools instead.
+4. **The judgment layer (EPIC-B, B01–B15):** templates, skill descriptions, and the per-skill guidance and evals. B02/B03's runner and cases are on `fix/round-3` if wanted.
+5. **Release (R20):** a hosted marketplace entry instead of the local one, an icon, and a tag. Per D8 it ships as `hoshin` and replaces the original plugin; until then, disable the original before enabling this one.
+6. **Kata:** drop `migrate` from its command list (D10) and confirm it reads layout 2 JSONC (docs/KATA_MIGRATION.md). Not checked from this repository.
