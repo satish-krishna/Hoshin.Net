@@ -14,7 +14,7 @@ Hoshin v2.0.0 replaces the TypeScript CLI (`node <plugin>/tools/hoshin.ts`) with
 | **CLI invocation** | `node <plugin>/tools/hoshin.ts <cmd> ...` | `dotnet <plugin>/lib/hoshin.dll <cmd> ...` | Replace `node` + `tools/hoshin.ts` launcher with `dotnet` + `lib/hoshin.dll` (requires .NET 10+ runtime; `RollForward=Major` enabled). |
 | **Front matter format** | YAML delimited by `---` on line 1 | JSONC inside a fenced ```` ```jsonc ```` block on line 1 | Update Kata's direct front-matter reader/writer (`status`, `scope`, `source_commit`, `source_intent_commit`, `source_spec_commit`). |
 | **Change record file** | `intent/<system>/<change>/change.yml` | `intent/<system>/<change>/change.jsonc` | Read `change.jsonc` (JSON with `//` comments and trailing commas) instead of `change.yml`. |
-| **Document layouts** | Layouts 1 and 2 (YAML record blocks) | Layout 2 JSONC only | Run `dotnet hoshin.dll migrate <master> --json` (or `hoshin migrate --json --write`) once per legacy repository; refuse Layout 1 until migrated. |
+| **Document layouts** | Layouts 1 and 2 (YAML record blocks) | Layout 2 JSONC only | There is no upgrade command. Finish legacy changes with the original hoshin; Hoshin.Net refuses (exit `2`) any YAML or layout 1 document. |
 | **Record blocks** | ```` ```yaml ```` blocks inside `plan.md`, `build/*.md`, `build/review.md` | ```` ```jsonc ```` blocks | Update any Kata-side conformance fixture or parser reading record blocks directly. |
 | **Plugin layout** | Claude Code only (`.claude-plugin/`) | Dual-harness: `.claude-plugin/` (Claude Code) and `.agents/` (Antigravity) | Detect `lib/hoshin.dll` alongside `skills/build/SKILL.md` and `.claude-plugin/plugin.json` (`version >= 2.0.0`). |
 | **Red classification (`red record`)** | Exit-code-only rule (`compile` non-zero always `could-not-compile`; `test` non-zero always `failed`) | Unified `RedClassifier`: missing-target-symbol compile errors (`CS0246`, `TS2304`, Rust `E0425`, etc.) count as `failed` (observed Red); syntax errors map to `could-not-compile`; exit 126/127 and missing third-party modules map to `could-not-run` | Wire field names and enum values (`failed`, `passed`, `could-not-compile`, `could-not-run`) are unchanged; expect strongly-typed missing-symbol failures to report `outcome: "failed"` (exit `0`). |
@@ -75,7 +75,7 @@ status: draft
 ### Implementation Guidance for `crates/kata-sdlc`
 1. **Reading:** Look for a line-1 fenced block opening with ```` ```jsonc ```` (or ```` ```json ````) and closing on the next ```` ``` ```` line. Strip `//` line comments and `/* ... */` block comments (and allow trailing commas), then deserialize with `serde_json`.
 2. **Writing `status`:** Replace `"status": "<old>"` in place inside the line-1 ```` ```jsonc ```` block (preserving all other keys, comments, and line numbers so diff-based acceptance checks stay clean), then commit via `dotnet <plugin>/lib/hoshin.dll commit --json --kind accept-<doc> ...`.
-3. **Detection of unmigrated repos:** If line 1 is `---` or `change.yml` exists without `change.jsonc`, prompt the engineer to run `hoshin migrate`.
+3. **Detection of legacy repos:** If line 1 is `---` or `change.yml` exists without `change.jsonc`, the change was made under the original hoshin. Tell the engineer to finish it there; Hoshin.Net exits `2` on it.
 
 ---
 
@@ -107,32 +107,15 @@ status: draft
 
 ---
 
-## 4. Migrating Existing Repositories
+## 4. Existing Repositories
 
-Existing repositories with Layout 1 or Layout 2 YAML documents and `change.yml` migrate in place using `hoshin migrate`:
-
-```powershell
-# Preview changes without modifying any file:
-dotnet <plugin>/lib/hoshin.dll migrate <master-repo> --dry-run --json
-
-# Apply migration (idempotent; preserves comments and key order):
-dotnet <plugin>/lib/hoshin.dll migrate <master-repo> --json
-
-# Or migrate an entire legacy ai-sdlc/hoshin workspace (markers, copies, state, instructions, and YAML documents):
-dotnet <plugin>/lib/hoshin.dll migrate --json --write
-```
-
-After migration, verify cleanly with:
-
-```powershell
-dotnet <plugin>/lib/hoshin.dll check <change>/spec.md <change>/plan.md <change>/build/<repo>.md <change>/change.jsonc
-```
+Hoshin.Net has no `migrate` command (removed after 2.0.0). Changes written under the original hoshin (YAML front matter, `change.yml`, layout 1) are finished with the original hoshin. New changes started under Hoshin.Net are layout 2 JSONC from the start.
 
 ---
 
 ## 5. Unchanged Contracts & Exit-Code Deltas
 
-All 22 CLI subcommands (`resolve`, `state`, `list`, `stale`, `instructions`, `hooks`, `status`, `run`, `change start|show|rename|remove`, `commit`, `read`, `red show|record`, `migrate`, `checks`, `baseline show|approve|retake`, `check`, `naming`, `branch-name`, `scope`, `fix-state`, `gate`, `guard`) preserve their option names, JSON field names, enum values, and error message prefixes verified by `tests/Hoshin.Tests/BlackBox/clients.test.mjs` and the 44 black-box conformance suites, with two intentional v2.0.0 exit-code deltas:
+All 21 CLI subcommands (`resolve`, `state`, `list`, `stale`, `instructions`, `hooks`, `status`, `run`, `change start|show|rename|remove`, `commit`, `read`, `red show|record`, `checks`, `baseline show|approve|retake`, `check`, `naming`, `branch-name`, `scope`, `fix-state`, `gate`, `guard`) preserve their option names, JSON field names, enum values, and error message prefixes verified by `tests/Hoshin.Tests/BlackBox/clients.test.mjs` and the 44 black-box conformance suites, with two intentional v2.0.0 exit-code deltas:
 
-- **Layout 1 and YAML documents exit `2`:** Any unmigrated Layout 1 or `---` YAML front-matter document (or `change.yml`) exits `2` (could not run) with migration guidance instead of `0` or `1`; run `hoshin migrate` once per legacy repository.
+- **Layout 1 and YAML documents exit `2`:** Any unmigrated Layout 1 or `---` YAML front-matter document (or `change.yml`) exits `2` (could not run) instead of `0` or `1`, with a message naming the file; there is no upgrade command.
 - **Missing-symbol compile failures in `red record` exit `0` (`outcome: "failed"`):** Strongly-typed missing-target-symbol compilation errors (`CS0246`, `TS2304`, Rust `E0425`, etc.) now count as valid observed Red (`outcome: "failed"`, exit `0`) via the unified `RedClassifier`, rather than `could-not-compile` (exit `1`).

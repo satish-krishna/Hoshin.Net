@@ -126,7 +126,7 @@ public sealed class LifecycleEventsAndBuildLogTests
 
         // 7. Commit review -> fires review.finish on master ledger; Publish -> fires change.done (pushes + opens PR + updates change.jsonc).
         var fakePr = new FakePullRequestClient();
-        var services = new Hoshin.Cli.HoshinServices(
+        var services = new Hoshin.Workflow.Hosting.HoshinServices(
             TestServices.SchemaValidator,
             TestServices.CommandRunner,
             TestServices.Git,

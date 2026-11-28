@@ -44,7 +44,7 @@ public sealed class WorkspaceLocatorAndRepoSessionTests
         Assert.DoesNotContain("# Task T1:", webStartCtx, StringComparison.Ordinal);
 
         // 2. Implement T2 in `web` and submit result from `web`.
-        var repo = TestServices.Default.HookRunResolver.Resolve(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
+        var repo = TestServices.Hooks.HookRunResolver.Resolve(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "Stop",
             session_id = webSession,
@@ -175,7 +175,7 @@ public sealed class WorkspaceLocatorAndRepoSessionTests
         Assert.Equal(coordsFromMain.System, coordsFromCopy.System);
         Assert.Equal(coordsFromMain.Change, coordsFromCopy.Change);
 
-        var repo = TestServices.Default.HookRunResolver.ResolveAt(started.CopyRoot!, started.ChangeFolder!)!;
+        var repo = TestServices.Hooks.HookRunResolver.ResolveAt(started.CopyRoot!, started.ChangeFolder!)!;
         Assert.Equal(Path.GetFullPath(systemAFolder), Path.GetFullPath(repo.LedgerFolder));
 
         // Seed intent.md and confirm ChangeState from inside `api` finds the same system and change.
@@ -219,10 +219,9 @@ public sealed class WorkspaceLocatorAndRepoSessionTests
             SessionRepo: "web");
 
         var step = WorkflowEngine.Next(state);
-        var done = Assert.IsType<Done>(step);
-        Assert.True(done.Success);
-        Assert.Contains("waiting on", done.Outcome, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("T1 in `api`", done.Outcome, StringComparison.Ordinal);
+        var handoff = Assert.IsType<Handoff>(step);
+        Assert.Contains("waiting on", handoff.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("T1 in `api`", handoff.Message, StringComparison.Ordinal);
 
         using var tmp = new TempDir("hoshin-r03-nonws-");
         Assert.False(TestServices.Default.WorkspaceLocator.HasWorkspaceMarker(tmp.Path));

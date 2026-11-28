@@ -171,7 +171,7 @@ public static class WorkflowEngine
         if (review is null)
         {
             return !string.IsNullOrWhiteSpace(state.SessionRepo)
-                ? new Done(true, $"all tasks for `{state.SessionRepo}` are built and checks pass; next step: run `review` from the master repository")
+                ? new Handoff($"all tasks for `{state.SessionRepo}` are built and checks pass; next step: run `review` from the master repository")
                 : new ReviewDocument(Path.Combine(state.ChangeFolder, "build", "review.md"), codeHead, WorkflowBriefs.Review(state));
         }
 
@@ -188,7 +188,7 @@ public static class WorkflowEngine
 
         if (!approval.Approved)
         {
-            return new Done(false, $"rejected at {Short(codeHead)}: {approval.Note}");
+            return PostBuildFixEngine.NextForDeclinedApproval(state, approval);
         }
 
         var targetRef = $"refs/heads/{state.Plan.EffectiveBranch}";
@@ -313,7 +313,7 @@ public static class WorkflowEngine
         if (repoEntry is { State: "waiting" })
         {
             var deps = string.Join(", ", repoEntry.WaitingOn.Select(w => $"{w.Task} in `{w.Repo}`"));
-            sessionHandoff = new Done(true, $"`{state.SessionRepo}` is waiting on {deps}; next step: run `build` in the dependency repository first");
+            sessionHandoff = new Handoff($"`{state.SessionRepo}` is waiting on {deps}; next step: run `build` in the dependency repository first");
             return null;
         }
 
@@ -324,7 +324,7 @@ public static class WorkflowEngine
         var nextHint = nextReady.Count > 0
             ? $"next step: run `build` in {string.Join(", ", nextReady)}"
             : "remaining repositories are blocked";
-        sessionHandoff = new Done(true, $"all tasks for `{state.SessionRepo}` are built; {nextHint}");
+        sessionHandoff = new Handoff($"all tasks for `{state.SessionRepo}` are built; {nextHint}");
         return null;
     }
 
@@ -338,6 +338,9 @@ public static class WorkflowEngine
         _ => null,
     };
 
+    /// <summary>Returns <c>true</c> for every step kind that has a workflow owner (i.e. anything except <see cref="StepKind.Done"/> and <see cref="StepKind.Handoff"/>).</summary>
+    public static bool HasOwner(StepKind kind) => kind is not (StepKind.Done or StepKind.Handoff);
+
     public static string Describe(Step step) => step switch
     {
         WriteDocument { Document: WorkflowDocument.Intent } => "writing the intent (`intent`)",
@@ -349,6 +352,7 @@ public static class WorkflowEngine
         WriteFix => "drafting the light-track fix documents (`fix`)",
         NeedsApproval => "approving the built change (`accept`)",
         Implement or Retry or RunChecks or Publish => "building the accepted plan (`build`)",
+        Handoff h => h.Message,
         Done d => $"nothing: the change is finished ({d.Outcome})",
         _ => step.Kind.ToString(),
     };

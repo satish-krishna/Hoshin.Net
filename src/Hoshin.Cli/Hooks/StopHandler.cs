@@ -1,4 +1,5 @@
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Driver;
 using Hoshin.Workflow.Engine;
 
 namespace Hoshin.Cli.Hooks;
@@ -7,8 +8,8 @@ namespace Hoshin.Cli.Hooks;
 internal sealed class StopHandler(
     IHookAdapter adapter,
     IHookRunResolver runResolver,
-    IDocumentCommitter documents,
-    WorkflowAdvancer advancer,
+    WorkSubmitter submitter,
+    StepAdvancer advancer,
     IFileSystem fileSystem,
     TimeProvider timeProvider)
 {
@@ -16,8 +17,8 @@ internal sealed class StopHandler(
 
     private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
     private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
-    private readonly IDocumentCommitter _documents = documents ?? throw new ArgumentNullException(nameof(documents));
-    private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
+    private readonly WorkSubmitter _submitter = submitter ?? throw new ArgumentNullException(nameof(submitter));
+    private readonly StepAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -84,8 +85,9 @@ internal sealed class StopHandler(
             && trackedAgentId is not null
             && !repo.ReadLedger().WorkflowVerdicts.Any(v => v.Task == current.Task && v.Attempt == current.Attempt))
         {
-            var (verdict, _) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId, sessionRepo);
-            report += WorkflowAdvancer.ReportVerdict(current, verdict);
+            var judged = _submitter.SubmitTask(repo, rolesRoot, current, ev.SessionId, sessionRepo);
+            StopCounterStore.ResetAll(repo);
+            report += StepAdvancer.ReportVerdict(current, judged.Verdict);
         }
 
         return report;
@@ -151,12 +153,27 @@ internal sealed class StopHandler(
             case NeedsApproval when hasReport:
                 return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report NeedsApproval");
 
+            case Handoff:
+                if (hasReport)
+                {
+                    return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report Handoff");
+                }
+
+                TurnState.ClearTurnFiles(repo, _fs);
+                TurnState.TryDelete(repo.RunMarkerPath, _fs);
+                return (_adapter.EmptyOutput(ev.Harness), $"allow: {step.Kind}");
+
             case Done:
                 if (hasReport)
                 {
                     return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report Done");
                 }
 
+                TurnState.ClearTurnFiles(repo, _fs);
+                TurnState.TryDelete(repo.RunMarkerPath, _fs);
+                return (_adapter.EmptyOutput(ev.Harness), $"allow: {step.Kind}");
+
+            case AwaitAccept or AwaitAcceptFix:
                 TurnState.ClearTurnFiles(repo, _fs);
                 TurnState.TryDelete(repo.RunMarkerPath, _fs);
                 return (_adapter.EmptyOutput(ev.Harness), $"allow: {step.Kind}");
@@ -169,116 +186,110 @@ internal sealed class StopHandler(
 
     private (string? Output, string Decision) StopWhileWriting(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot, WriteDocument write)
     {
-        var state = _advancer.ReadState(repo, rolesRoot, out var error)
-            ?? throw new InvalidOperationException(error ?? $"Could not read workflow state for {repo.Root} ({repo.ChangeFolder}).");
         var docName = write.Document.ToWireName();
-        var doc = state.Document(write.Document);
         var shown = Path.GetRelativePath(repo.Root, write.Path).Replace('\\', '/');
-
-        if (!doc.Exists || (!doc.Uncommitted && doc.InHead))
+        switch (_submitter.SubmitDocument(repo, rolesRoot, write.Document, ev.SessionId))
         {
-            TurnState.ClearTurnFiles(repo, _fs);
-            return (_adapter.EmptyOutput(ev.Harness), $"allow: waiting, {docName} unchanged");
+            case SubmitUnchanged:
+                TurnState.ClearTurnFiles(repo, _fs);
+                return (_adapter.EmptyOutput(ev.Harness), $"allow: waiting, {docName} unchanged");
+
+            case SubmitRefused refused:
+                if (StopCounterStore.EndsWithQuestion(ev.LastAssistantMessage))
+                {
+                    StopCounterStore.Reset(repo, $"write-{docName}");
+                    return (_adapter.EmptyOutput(ev.Harness), $"allow: assistant asked a question while writing {docName}");
+                }
+
+                var blocks = StopCounterStore.Next(repo, $"write-{docName}", ev.ContinuationActive);
+                if (blocks > MaxStopBlocks)
+                {
+                    return GaveUp(ev, blocks, $"the {docName}");
+                }
+
+                var list = string.Join("\n", refused.Problems.Select(p => $"- line {p.Line}: {p.Message}"));
+                return (_adapter.BlockStopOutput(ev.Harness, $"The {docName} at {shown} cannot be committed yet:\n{list}\nFix the file, or if you are still interviewing, ask your next question. Then end your turn."), $"block {blocks}: {docName} has {refused.Problems.Count} problems");
+
+            case SubmitCommitted committed:
+                StopCounterStore.ResetAll(repo);
+                return (_adapter.BlockStopOutput(ev.Harness, $"The {docName} draft is committed as {WorkflowEngine.Short(committed.Commit)}. Tell the person it is ready to review at {shown}, and that `{HookInstructions.SkillCommand("accept", ev.Harness)}` accepts it. Then end your turn."), $"committed {WorkflowEngine.Short(committed.Commit)}; next {committed.Next.Kind}");
+
+            default:
+                throw new InvalidOperationException("A document submission cannot be judged as a task.");
         }
-
-        var (problems, commit) = _documents.CommitDocument(repo, state, write.Document);
-        if (commit is null)
-        {
-            if (StopCounterStore.EndsWithQuestion(ev.LastAssistantMessage))
-            {
-                StopCounterStore.Reset(repo, $"write-{docName}");
-                return (_adapter.EmptyOutput(ev.Harness), $"allow: assistant asked a question while writing {docName}");
-            }
-
-            var blocks = StopCounterStore.Next(repo, $"write-{docName}", ev.ContinuationActive);
-            if (blocks > MaxStopBlocks)
-            {
-                return (blocks == MaxStopBlocks + 1
-                    ? _adapter.SystemMessageOutput(ev.Harness, $"hoshin: the {docName} still has problems after {MaxStopBlocks} tries; it stays uncommitted.")
-                    : _adapter.EmptyOutput(ev.Harness), $"gave up after {MaxStopBlocks} blocks");
-            }
-
-            var list = string.Join("\n", problems.Select(p => $"- line {p.Line}: {p.Message}"));
-            return (_adapter.BlockStopOutput(ev.Harness, $"The {docName} at {shown} cannot be committed yet:\n{list}\nFix the file, or if you are still interviewing, ask your next question. Then end your turn."), $"block {blocks}: {docName} has {problems.Count} problems");
-        }
-
-        StopCounterStore.ResetAll(repo);
-        var next = _advancer.Advance(repo, rolesRoot, ev.SessionId);
-        return (_adapter.BlockStopOutput(ev.Harness, $"The {docName} draft is committed as {WorkflowEngine.Short(commit)}. Tell the person it is ready to review at {shown}, and that `{HookInstructions.SkillCommand("accept", ev.Harness)}` accepts it. Then end your turn."), $"committed {WorkflowEngine.Short(commit)}; next {next.Kind}");
     }
+
+    private (string? Output, string Decision) GaveUp(NormalizedHookEvent ev, int blocks, string what) =>
+        (blocks == MaxStopBlocks + 1
+            ? _adapter.SystemMessageOutput(ev.Harness, $"hoshin: {what} still has problems after {MaxStopBlocks} tries; it stays uncommitted.")
+            : _adapter.EmptyOutput(ev.Harness), $"gave up after {MaxStopBlocks} blocks");
 
     private (string? Output, string Decision) StopWhileReviewing(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot)
     {
-        var state = _advancer.ReadState(repo, rolesRoot, out _);
-        if (state is null)
+        if (_advancer.ReadState(repo, rolesRoot, out _) is null)
         {
             return (_adapter.EmptyOutput(ev.Harness), "allow: no state");
         }
 
-        var reviewDoc = repo.DocumentStatus(Path.Combine("build", "review.md"));
-        var shown = Path.GetRelativePath(repo.Root, reviewDoc.Path).Replace('\\', '/');
-        if (!reviewDoc.Exists || (!reviewDoc.Uncommitted && reviewDoc.InHead))
+        var shown = Path.GetRelativePath(repo.Root, repo.DocumentStatus(Path.Combine("build", "review.md")).Path).Replace('\\', '/');
+        switch (_submitter.SubmitReview(repo, rolesRoot, ev.SessionId))
         {
-            TurnState.ClearTurnFiles(repo, _fs);
-            return (_adapter.EmptyOutput(ev.Harness), "allow: waiting, review unchanged");
+            case SubmitUnchanged:
+                TurnState.ClearTurnFiles(repo, _fs);
+                return (_adapter.EmptyOutput(ev.Harness), "allow: waiting, review unchanged");
+
+            case SubmitRefused refused:
+                var blocks = StopCounterStore.Next(repo, "review", ev.ContinuationActive);
+                if (blocks > MaxStopBlocks)
+                {
+                    return GaveUp(ev, blocks, "the review");
+                }
+
+                var list = string.Join("\n", refused.Problems.Select(p => $"- line {p.Line}: {p.Message}"));
+                return (_adapter.BlockStopOutput(ev.Harness, $"The review at {shown} cannot be committed yet:\n{list}\nFix the review document, then end your turn."), $"block {blocks}: review has {refused.Problems.Count} problems");
+
+            case SubmitCommitted committed:
+                StopCounterStore.ResetAll(repo);
+                var commit = committed.Commit;
+                var msg = committed.Next is Done { Success: false } stopped
+                    ? $"The review is committed as {WorkflowEngine.Short(commit)}. {stopped.Outcome}. Report the findings to the engineer. Then end your turn."
+                    : $"The review is committed as {WorkflowEngine.Short(commit)}. Report the findings to the engineer and let them know `{HookInstructions.SkillCommand("accept", ev.Harness)}` or `{HookInstructions.SkillCommand("done", ev.Harness)}` publishes once they approve. Then end your turn.";
+                return (_adapter.BlockStopOutput(ev.Harness, msg), $"committed review {WorkflowEngine.Short(commit)}; next {committed.Next.Kind}");
+
+            default:
+                throw new InvalidOperationException("A review submission cannot be judged as a task.");
         }
-
-        var (problems, commit) = _documents.CommitReview(repo, state);
-        if (commit is null)
-        {
-            var blocks = StopCounterStore.Next(repo, "review", ev.ContinuationActive);
-            if (blocks > MaxStopBlocks)
-            {
-                return (blocks == MaxStopBlocks + 1
-                    ? _adapter.SystemMessageOutput(ev.Harness, $"hoshin: the review still has problems after {MaxStopBlocks} tries; it stays uncommitted.")
-                    : _adapter.EmptyOutput(ev.Harness), $"gave up after {MaxStopBlocks} blocks");
-            }
-
-            var list = string.Join("\n", problems.Select(p => $"- line {p.Line}: {p.Message}"));
-            return (_adapter.BlockStopOutput(ev.Harness, $"The review at {shown} cannot be committed yet:\n{list}\nFix the review document, then end your turn."), $"block {blocks}: review has {problems.Count} problems");
-        }
-
-        StopCounterStore.ResetAll(repo);
-        var next = _advancer.Advance(repo, rolesRoot, ev.SessionId);
-        var msg = next is Done { Success: false } stopped
-            ? $"The review is committed as {WorkflowEngine.Short(commit)}. {stopped.Outcome}. Report the findings to the engineer. Then end your turn."
-            : $"The review is committed as {WorkflowEngine.Short(commit)}. Report the findings to the engineer and let them know `{HookInstructions.SkillCommand("accept", ev.Harness)}` or `{HookInstructions.SkillCommand("done", ev.Harness)}` publishes once they approve. Then end your turn.";
-        return (_adapter.BlockStopOutput(ev.Harness, msg), $"committed review {WorkflowEngine.Short(commit)}; next {next.Kind}");
     }
 
     private (string? Output, string Decision) StopWhileFixing(NormalizedHookEvent ev, WorkflowRepo repo, string? rolesRoot)
     {
-        var state = _advancer.ReadState(repo, rolesRoot, out _);
-        if (state is null)
+        if (_advancer.ReadState(repo, rolesRoot, out _) is null)
         {
             return (_adapter.EmptyOutput(ev.Harness), "allow: no state");
         }
 
-        var docs = new[] { state.Intent, state.Spec, state.PlanDoc };
-        var anyDirty = docs.Any(d => d.Exists && (d.Uncommitted || !d.InHead));
-        if (!anyDirty)
+        switch (_submitter.SubmitFix(repo, rolesRoot, ev.SessionId))
         {
-            TurnState.ClearTurnFiles(repo, _fs);
-            return (_adapter.EmptyOutput(ev.Harness), "allow: waiting, fix documents unchanged");
+            case SubmitUnchanged:
+                TurnState.ClearTurnFiles(repo, _fs);
+                return (_adapter.EmptyOutput(ev.Harness), "allow: waiting, fix documents unchanged");
+
+            case SubmitRefused refused:
+                var blocks = StopCounterStore.Next(repo, "fix", ev.ContinuationActive);
+                if (blocks > MaxStopBlocks)
+                {
+                    return GaveUp(ev, blocks, "the fix draft");
+                }
+
+                var list = string.Join("\n", refused.Problems.Select(p => $"- {p.File} line {p.Line}: {p.Message}"));
+                return (_adapter.BlockStopOutput(ev.Harness, $"The light-track fix documents cannot be committed yet:\n{list}\nFix the issues above, or ask the engineer if clarification is needed. Then end your turn."), $"block {blocks}: fix has {refused.Problems.Count} problems");
+
+            case SubmitCommitted committed:
+                StopCounterStore.ResetAll(repo);
+                return (_adapter.BlockStopOutput(ev.Harness, $"The light-track fix draft is committed as {WorkflowEngine.Short(committed.Commit)}. Tell the engineer it is ready for review and acceptance via `{HookInstructions.SkillCommand("accept", ev.Harness)}`. Then end your turn."), $"committed fix {WorkflowEngine.Short(committed.Commit)}; next {committed.Next.Kind}");
+
+            default:
+                throw new InvalidOperationException("A fix submission cannot be judged as a task.");
         }
-
-        var (problems, commit) = _documents.CommitFixDocuments(repo, state);
-        if (commit is null)
-        {
-            var blocks = StopCounterStore.Next(repo, "fix", ev.ContinuationActive);
-            if (blocks > MaxStopBlocks)
-            {
-                return (blocks == MaxStopBlocks + 1
-                    ? _adapter.SystemMessageOutput(ev.Harness, $"hoshin: the fix draft still has problems after {MaxStopBlocks} tries; it stays uncommitted.")
-                    : _adapter.EmptyOutput(ev.Harness), $"gave up after {MaxStopBlocks} blocks");
-            }
-
-            var list = string.Join("\n", problems.Select(p => $"- {p.File} line {p.Line}: {p.Message}"));
-            return (_adapter.BlockStopOutput(ev.Harness, $"The light-track fix documents cannot be committed yet:\n{list}\nFix the issues above, or ask the engineer if clarification is needed. Then end your turn."), $"block {blocks}: fix has {problems.Count} problems");
-        }
-
-        StopCounterStore.ResetAll(repo);
-        var next = _advancer.Advance(repo, rolesRoot, ev.SessionId);
-        return (_adapter.BlockStopOutput(ev.Harness, $"The light-track fix draft is committed as {WorkflowEngine.Short(commit)}. Tell the engineer it is ready for review and acceptance via `{HookInstructions.SkillCommand("accept", ev.Harness)}`. Then end your turn."), $"committed fix {WorkflowEngine.Short(commit)}; next {next.Kind}");
     }
 }

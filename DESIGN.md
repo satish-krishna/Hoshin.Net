@@ -16,7 +16,7 @@ The core architectural shift from Hoshin v1.x (`tools/hoshin.ts`) is **who owns 
 
 ## 2. System Architecture
 
-`Hoshin.Workflow` has strictly two NuGet dependencies (`Markdig` and `Gherkin`; `System.Text.Json` handles JSON/JSONC natively) and zero references to Claude Code, Google Antigravity, or Microsoft Agent Framework. All harness-specific payload normalization and response formatting live in `Hoshin.Cli`.
+`Hoshin.Workflow` has strictly two NuGet dependencies (`Markdig` and `Gherkin`; `System.Text.Json` handles JSON/JSONC natively) and zero references to Claude Code, Google Antigravity, or Microsoft Agent Framework. Hook payload normalization and response formatting live in `Hoshin.Cli`; the Microsoft Agent Framework host lives in `Hoshin.Agents`. Both sit on the harness-neutral driver (§2.1).
 
 ```mermaid
 flowchart TB
@@ -24,17 +24,18 @@ flowchart TB
         CC["Claude Code<br/>(UserPromptExpansion, PreToolUse,<br/>PostToolUse, SubagentStop, Stop)"]
         AGY["Google Antigravity<br/>(PreInvocation, PreToolUse,<br/>PostToolUse, Stop)"]
         KATA["Kata Workbench & CI<br/>(subprocess CLI --json / --stream)"]
-        MAF["External .NET / MAF Hosts<br/>(NuGet: Hoshin.Workflow)"]
+        MAF["Microsoft Agent Framework hosts<br/>(Hoshin.Agents: HoshinAgentHost)"]
     end
 
     subgraph Cli["Hoshin.Cli (dotnet hoshin.dll)"]
         ADAPTER["HarnessAdapter<br/>(Auto-detects snake_case vs camelCase)"]
         ORCH["HookOrchestrator<br/>(hook start / result / subagent-stop / stop)"]
         GUARD["GuardCommand<br/>(Static + Session-Aware Fast Path)"]
-        CMDS["22 CLI Commands<br/>(check, read, state, run, migrate, ...)"]
+        CMDS["21 CLI Commands<br/>(check, read, state, run, ...)"]
     end
 
     subgraph Lib["Hoshin.Workflow (Markdig + Gherkin only)"]
+        DRIVER["IHoshinDriver (HoshinDriver)<br/>StepAdvancer, WorkSubmitter, DecisionApplier"]
         ENGINE["WorkflowEngine.Next(State) & Gate<br/>(Driven by ChangeStateService & ReadinessMap)"]
         RUNNER["TaskEvaluator, BuildLogWriter & WorkflowEventBridge<br/>(Detached Red/Green, Two-Phase Commits, build/&lt;repo&gt;.md)"]
         DOCS["Document Readers & Validators<br/>(Intent, Gherkin Spec, Plan, BuildLog, Review, CrossChecker)"]
@@ -50,9 +51,10 @@ flowchart TB
     CC & AGY --> ADAPTER
     ADAPTER --> ORCH & GUARD
     KATA --> CMDS
-    MAF --> ENGINE & RUNNER & DOCS
+    MAF --> DRIVER
 
-    ORCH --> ENGINE & RUNNER
+    ORCH --> DRIVER
+    DRIVER --> ENGINE & RUNNER
     GUARD -. "fast-path read" .-> LEDGER
     CMDS --> DOCS & EVENTS
     ENGINE --> DOCS
@@ -60,14 +62,37 @@ flowchart TB
     EVENTS --> GIT & LEDGER
 ```
 
+### 2.1 The driver and its hosts
+
+`Hoshin.Workflow.Driver` is how every host advances a change. `IHoshinDriver` has five calls: `ListOpenAsync`, `StartAsync`, `NextAsync`, `SubmitAsync` and `DecideAsync`. Each returns one `Turn`:
+
+- `AgentWork`: work for an agent. It carries a `Role` (`Intent`, `Spec`, `Plan`, `Fix`, `Review`, `Implement`), the role's procedure text, the brief, a `WorkId`, any feedback on the previous attempt, and a `WorkScope`. The scope names the working directory, the globs the agent may write, the globs it may not write, and the exact commands it may run (a task's `compile` and `test`).
+- `HumanDecision`: a decision only a person makes, with the decisions the change accepts now (`Accept`, `Approve`, `Decline`, `Reject`, `Reopen`).
+- `Finished`: published, or stopped with the reason.
+
+Checks, the baseline, Red/Green judging, commits and publishing run inside the driver, and each turn lists what happened since the last one (`Happened`). The driver keeps no state in memory: everything is in git and `.git/hoshin`, so a host persists only the `ChangeRef`. A submit for work that is no longer current, or a decision the change does not accept now, throws `DriverRefusedException` and changes nothing.
+
+Three library types do the work, and the hook handlers use the same three, so every host advances a change the same way:
+
+- `StepAdvancer` reads the state, runs the automatic steps and issues the next step.
+- `WorkSubmitter` validates and commits a drafted document, a review or the light-track documents, and judges an implement attempt.
+- `DecisionApplier` applies a person's decision after checking the change accepts it (`WorkflowEngine.Gate`).
+
+`HoshinServices` (`Hoshin.Workflow.Hosting`) composes the whole library once; `CreateDriver(HoshinDriverOptions)` returns the driver. The CLI adds its hook types in `HookServices`.
+
+**Hosts.**
+
+- **Claude Code and Antigravity** (`Hoshin.Cli`): the hooks translate harness events into the same advancing, submitting and deciding. What only a hook harness needs stays in the adapter: session ownership (`run.json`), Stop counters and parking, skill-invocation detection, the shell guard and tamper protection, and truncating injected text.
+- **Microsoft Agent Framework** (`Hoshin.Agents`): `HoshinAgentHost` loops over the driver. Each `AgentWork` goes to a fresh agent from `IRoleAgents` (by default a `ChatClientAgent` over an `IChatClient`). Its only tools come from `ScopedTools` over a `ScopedWorkspace`: `read_file`, `list_files`, `write_file`, `delete_file`, `run_command` for the exact allowed commands, and `ask_person` for interviews. Every write outside the scope and every other command is refused. Agents get no git, commit, push or decision tool. Each `HumanDecision` goes to an `IHumanChannel`. The host stops after `MaxTriesPerWork` attempts at the same work.
+
 ### Design Invariants
 
 | Concern | Implementation |
 | :--- | :--- |
 | **One unified workflow system** | Dual-harness hooks (`hoshin hook`, `hoshin guard`) and CLI commands (`hoshin state`, `hoshin fix-state`, `hoshin run`, `hoshin red`, `hoshin status`) share one domain model: `ChangeStateService`, `FixStateService`, `EventRunner`, `HookConfigService`, `RedClassifier`, `LedgerStore` (`RepoLedger`), and the narrow Git role interfaces (`ProcessGitClient`). |
 | **Single source of workflow order** | `WorkflowEngine.Next` / `NextForSkill` and `WorkflowGate` (`WorkflowEngine.Gate` / `GateFixAccept`) in `Hoshin.Workflow/Engine/`. Every `Step` record (including `WriteFix`, `AwaitAcceptFix`, and `ReviewDocument`) is constructed exclusively inside `WorkflowEngine`; the hook orchestrator constructs zero steps. |
-| **Minimal library surface** | `Hoshin.Workflow.csproj` references only `Markdig` (`1.6.0`) and `Gherkin` (`43.0.0`). YAML migration lives in `Hoshin.Migration` (`YamlDotNet`), referenced only by `Hoshin.Cli`. |
-| **SOLID seams** | External boundaries are required, constructor-injected narrow interfaces wired lazily at one composition root (`HoshinServices`): `IGitRunner`/`IGitQuery`/`IGitStatus`/`IGitBranches`/`IGitWorktrees`/`IGitCommitter`, `ITaskEvaluator`/`ICheckRunner`/`IApprovalRecorder`/`IPublisher`/`IDocumentCommitter`, `IChangeStarter`, `ITaskRepoResolver`, `IWorkflowEventBridge`, `IJsonSchemaValidator`, `ICommandRunner`, `IAllowListedCommandRunner`, `IPullRequestClient`, `IFileSystem`, `TimeProvider`, and `IHookAdapter`. |
+| **Minimal library surface** | `Hoshin.Workflow.csproj` references only `Markdig` (`1.6.0`) and `Gherkin` (`43.0.0`). |
+| **SOLID seams** | External boundaries are required, constructor-injected narrow interfaces wired lazily at one composition root (`HoshinServices` in `Hoshin.Workflow.Hosting`; the CLI adds its hook types in `HookServices`): `IGitRunner`/`IGitQuery`/`IGitStatus`/`IGitBranches`/`IGitWorktrees`/`IGitCommitter`, `ITaskEvaluator`/`ICheckRunner`/`IApprovalRecorder`/`IPublisher`/`IDocumentCommitter`, `IChangeStarter`, `ITaskRepoResolver`, `IWorkflowEventBridge`, `IJsonSchemaValidator`, `ICommandRunner`, `IAllowListedCommandRunner`, `IPullRequestClient`, `IFileSystem`, `TimeProvider`, and `IHookAdapter`. |
 | **No-shell, secret-free execution** | Both `AllowListedCommandRunner` and `ProcessGitClient` invoke processes directly (`UseShellExecute = false`) with an allow-listed OS environment, stripping model API keys and secrets (keeping push credentials strictly on `git push`). |
 | **Crash-safe hooks** | Every `hoshin hook` and `hoshin guard` invocation reads/writes raw UTF-8 streams (safe against Windows OEM codepages), catches all errors to `stderr`, and exits `0`. |
 
@@ -113,7 +138,7 @@ stateDiagram-v2
     Review --> DoneFail : "Review has high findings (no fix instructions yet)"
 
     NeedsApproval --> Publish : "Engineer invokes /accept or /done"
-    NeedsApproval --> DoneFail : "Engineer rejects"
+    NeedsApproval --> Implement : "Engineer invokes /decline <reason> (FIX-DECLINE-*)"
 
     Publish --> DoneOk : "EventRunner change.done pushes & opens/reuses PRs"
     DoneOk --> [*]
@@ -129,9 +154,12 @@ stateDiagram-v2
 - `Implement(AgentTask)` / `Retry(AgentTask, Handoff)` — Agent work requests carrying the embedded/loaded role procedure and attempt brief, scheduled across repositories via `ScheduleCalculator` and executed in each task's repository checkout (`ITaskRepoResolver`).
 - `RunChecks(Head)` — Executes `EventRunner` `build.finish` hooks per repository (read strictly from the base branch via `HookConfigService`, writing `checks.jsonl`) in Hoshin workspaces, with `BaseBranchChecksReader` fallback in standalone `.hoshin/` repos. When a `build.finish` hook fails with `onFailure: "fix"`, `PostBuildFixEngine` dispatches a bounded fix step (`FIX-CHECK-*`, up to `gateRetries`) targeting the failing repository before re-running checks; once `gateRetries` is exhausted, the step ends in `Done(false)`.
 - `ReviewDocument(Path, Head, Brief)` — Required review gate after `RunChecks` passes, keyed by **composite code head** (`WorkflowCodeHead`: sorted `<repo>=<HEAD>` across all touched product repositories in multi-repo workspaces, or the single-repo `CodeHead` excluding `build/review.md` and `change.jsonc` so neither review commits nor `change.done`'s `change.jsonc` PR-record commit invalidate checks, reviews, or published state), written and committed to `build/review.md` and firing `review.finish`. High findings stop with `Done(false)` until the engineer invokes `/hoshin:build <instructions>` from the target repository, which dispatches a fix subagent (`FIX-R<n>`) carrying the findings and instructions, commits the fix (`test(...)` / `fix(...)`), moves that repository's head in the composite code head, re-runs `build.finish` checks, and advances to the next review; zero high findings advance to `NeedsApproval`.
-- `NeedsApproval(Head, Reason)` — Built, checked, and cleanly reviewed change waiting for human approval at the current code head. Once approved and published (`Done(true)`), `StartHandler` clears `run.json` and turn files so every subsequent hook across all workspace sessions remains quiet and `/hoshin:build` dispatches nothing.
+- `NeedsApproval(Head, Reason)` — Built, checked, and cleanly reviewed change waiting for human approval at the current code head. Typed `/hoshin:decline <reason>` records a declined approval and routes back through a post-build fix step (`FIX-DECLINE-*`) carrying the reason, checks, review, and `NeedsApproval` again. Once approved and published (`Done(true)`), `StartHandler` clears `run.json` and turn files so every subsequent hook across all workspace sessions remains quiet and `/hoshin:build` dispatches nothing.
 - `Publish(Head, Ref)` — Fires `EventRunner` `change.done` (`ChangeDoneStep`) in Hoshin workspaces (pushing every repository on `change/<change>` and opening/reusing PRs via `IPullRequestClient`), with direct push + PR fallback in standalone `.hoshin/` repos.
-- `Done(Success, Outcome)` — Terminal state.
+- `Handoff(Message)` — Per-session completion in a multi-repository change (this session's repository has no tasks left or waits on another repository, while the change itself continues elsewhere); has no step owner and clears `run.json` only from the owning session.
+- `Done(Success, Outcome)` — Change-level terminal state.
+
+Session ownership: while a non-stale `run.json` exists for any step that has an owner (`WorkflowEngine.HasOwner`), `StartHandler` blocks workflow skill invocations from other sessions with a message naming the owning session (keeping unrelated non-workflow prompts silent) and clears `run.json` only from the owning session or on change-level `Done`.
 
 ## 4. Two-Phase Red/Green Verification & Commits
 
@@ -258,7 +286,7 @@ sequenceDiagram
 
 `GuardCommand` and every `hoshin hook` subcommand resolve the active run through a single injected `IHookRunResolver` (`HookRunResolver`), and all workspace marker detection goes through one `IWorkspaceLocator` (`WorkspaceLocator` over `WorkspaceResolver`) regardless of the master folder's name. Ledger coordinates are always extracted from `intent/<system>/<change>` rather than `scope`. When `/hoshin:build` runs in a session started inside a product repository, `WorkflowEngine` dispatches only that repository's tasks and tells the engineer which repository (or `review`) comes next once that repository's tasks finish. In a Hoshin workspace, `run.json`, `step.json`, `hooks.jsonl`, and per-repo ledgers live in one canonical location — `<master-git-common-dir>/hoshin/` — which the master checkout, every change copy worktree (`.hoshin/copies/<change>`), and every declared product repository all resolve to; `WorkflowRepo.Root` always points to the checkout that actually holds the active change folder (the copy when one exists). `GuardCommand` scopes every rule — static protections (`git push`, `gh pr`, protected hook configs, `baseline approve/retake`) and step-specific rules (no manual `git commit`, Red-phase test-first, single-document lock) — strictly to repositories with an active, non-stale `run.json` (24-hour window) whose owning `session_id`/`conversationId` matches the incoming event or its registered active subagent. Outside an active run (including any plain git repository or unrelated session), `hoshin guard` and `hoshin hook` stay silent, create no `.git/hoshin/` directory, and write no `hooks.jsonl` trace. Static denials inside an active run are traced to `hooks.jsonl`. If `hoshin hook` hits an internal error in `start`, `result`, or `stop`, it still exits `0` and writes to `stderr`, but also emits a visible harness message (non-blocking on `stop` so a crash never traps the session) and records the exception in `hooks.jsonl`. The shell regex guard is a fast-path speed bump; real workflow integrity is enforced in `Hoshin.Workflow` (`WorkflowHeadGuard` rejects any attempt where `HEAD` moved outside library-owned commits, and `EvaluateAndCommitTask` verifies Red/Green and protected paths before committing).
 
-## 6. Document Formats, Validation & Migration
+## 6. Document Formats & Validation
 
 ### Canonical JSONC Layout 2
 
@@ -271,14 +299,9 @@ All change documents are Markdown with JSONC structured blocks:
 - **`build/<repo>.md` & `build/review.md`:** Validated by `BuildLogReader` (`build-log-entry.schema.json`) and `ReviewReader` (`review-header.schema.json`, `finding.schema.json`, mandatory `rule` on every `convention` finding).
 - **`change.jsonc`:** Validated by `ChangeRecordStore`.
 
-### YAML-to-JSONC Migration (`Hoshin.Migration` / `hoshin migrate`)
+### No YAML, no upgrade command
 
-YAML parsing is isolated in the separate `src/Hoshin.Migration` assembly (`YamlDotNet 16.3.0`), referenced only by `Hoshin.Cli` so `Hoshin.Workflow` keeps strictly `Markdig` and `Gherkin`. `YamlToJsoncConverter` and `DocumentMigrator`:
-
-- Convert both **Layout 1** and **Layout 2** YAML documents (`intent.md`, `spec.md`, `plan.md`, `build/*.md`, `build/review.md`, `context/*.md`, `branch.md`) into canonical Layout 2 JSONC while preserving comments (`#` → `//`), key ordering, and all-digit commit hashes as strings, and fail closed on unsupported constructs.
-- Convert `change.yml` → `change.jsonc` (verifying key-set preservation and refusing cleanly if both exist).
-- Integrate with legacy `ai-sdlc` → `hoshin` workspace migration (`hoshin migrate --json [--write | --dry-run]`) and support standalone directories/files (`hoshin migrate <path>... [--dry-run] [--write] [--json]`).
-- Remain strictly idempotent: already-migrated files report `"current"` and stay byte-identical.
+Hoshin.Net reads layout 2 JSONC only. YAML front matter, layout 1 documents and `change.yml` exit `2` with a message that names the file. There is no `migrate` command: a change started under the original hoshin is finished there, and new changes start under Hoshin.Net.
 
 ## 7. Packaging & Distribution
 
@@ -286,13 +309,15 @@ YAML parsing is isolated in the separate `src/Hoshin.Migration` assembly (`YamlD
 
 | Artifact | Path | Contents |
 | :--- | :--- | :--- |
-| **Portable CLI** | `artifacts/portable/` | Framework-dependent `lib/` (`hoshin.dll`, `Hoshin.Workflow.dll`, `Hoshin.Migration.dll`, `Markdig.dll`, `Gherkin.dll`, `Cucumber.Messages.dll`, `YamlDotNet.dll`, runtimeconfig, deps) + `skills/`. Runs via Microsoft's signed `dotnet` host with no native executables or code-signing friction. |
-| **NuGet Library** | `artifacts/nuget/Hoshin.Workflow.<version>.nupkg` | `Hoshin.Workflow.dll` with embedded JSON schemas, workspace templates, and all 11 role/skill procedures; depends only on `Markdig` and `Gherkin`. |
-| **Claude Code Plugin** | `artifacts/claude-code/` | `.claude-plugin/plugin.json` (version stamped from `-Version`), `hooks/hooks.json`, `lib/`, `roles/`, and one-line `skills/<name>/SKILL.md` wrappers (`disable-model-invocation: true` on `accept` and `done`) + verbatim `references/procedure.md` for all 10 packaged user skills (`intent`, `spec`, `plan`, `build`, `review`, `fix`, `done`, `accept`, `setup`, `context`). |
+| **Portable CLI** | `artifacts/portable/` | Framework-dependent `lib/` (`hoshin.dll`, `Hoshin.Workflow.dll`, `Markdig.dll`, `Gherkin.dll`, `Cucumber.Messages.dll`, runtimeconfig, deps) + `skills/`. Runs via Microsoft's signed `dotnet` host with no native executables or code-signing friction. |
+| **NuGet Library** | `artifacts/nuget/Hoshin.Workflow.<version>.nupkg` | `Hoshin.Workflow.dll` with embedded JSON schemas, workspace templates, and all role/skill procedures, including the driver and `HoshinServices`; depends only on `Markdig` and `Gherkin`. |
+| **NuGet MAF host** | `artifacts/nuget/Hoshin.Agents.<version>.nupkg` | `Hoshin.Agents.dll` (`HoshinAgentHost`, `ScopedTools`); depends on `Hoshin.Workflow` and `Microsoft.Agents.AI` 1.28.0. |
+| **Claude Code Plugin** | `artifacts/claude-code/` | `.claude-plugin/plugin.json` (version stamped from `-Version`), `hooks/hooks.json`, `lib/`, `roles/`, and one-line `skills/<name>/SKILL.md` wrappers (`disable-model-invocation: true` on `accept`, `decline` and `done`) + verbatim `references/procedure.md` for all 11 packaged user skills (`intent`, `spec`, `plan`, `build`, `review`, `fix`, `done`, `accept`, `decline`, `setup`, `context`). |
+| **Local marketplace** | `artifacts/.claude-plugin/marketplace.json` | The `hoshin-net` marketplace, whose one plugin is `./claude-code`: `claude plugin marketplace add <artifacts>` then `claude plugin install hoshin@hoshin-net`. |
 | **Antigravity Bundle** | `artifacts/antigravity/.agents/` | `hooks.json` (unquoted relative paths for Windows `cmd /c` compatibility), `lib/`, `roles/`, and one-line `skills/<name>/SKILL.md` wrappers + verbatim `references/procedure.md` for all 10 packaged user skills. |
 
 ### Verification & Contract Guarantees
 
-- **Cross-platform CI (Linux `ubuntu-latest` + Windows `windows-latest`):** `.github/workflows/ci.yml` runs `dotnet build Hoshin.sln -warnaserror`, the full `dotnet test` suite (unit tests, `ArchitectureTests` SOLID/dependency rules, migration tests, dual-harness hook tests, `Packager_*` under `pwsh`, and all 44 ported black-box CLI conformance suites), plus changed-line coverage enforcement (`dotnet-coverage` + `diff-cover --fail-under=90` across `src/**`).
+- **Cross-platform CI (Linux `ubuntu-latest` + Windows `windows-latest`):** `.github/workflows/ci.yml` runs `dotnet build Hoshin.sln -warnaserror`, the full `dotnet test` suite (unit tests, `ArchitectureTests` SOLID/dependency rules, dual-harness hook tests, `Packager_*` under `pwsh`, and all 44 ported black-box CLI conformance suites), plus changed-line coverage enforcement (`dotnet-coverage` + `diff-cover --fail-under=90` across `src/**`).
 - **Behavioral reference:** Detailed document-layout, `state`, `fix-state`, event, and refusal rules are documented in [docs/GRAMMAR.md](docs/GRAMMAR.md).
 - **External client compatibility:** Verified continuously by `tests/Hoshin.Tests/BlackBox/clients.test.mjs` against [CLIENTS.md](CLIENTS.md); Kata Workbench upgrade steps are documented in [docs/KATA_MIGRATION.md](docs/KATA_MIGRATION.md).

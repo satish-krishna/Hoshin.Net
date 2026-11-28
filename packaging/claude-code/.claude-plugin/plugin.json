@@ -1,5 +1,8 @@
 {
   "name": "hoshin",
   "version": "2.0.0",
-  "description": "Structured engineering workflow driven by deterministic .NET harness hooks."
+  "description": "Takes a change from a product owner's intent through an accepted spec and a test-first plan to a test-driven build and published pull requests, driven by the deterministic Hoshin.Net engine (.NET 10).",
+  "author": {
+    "name": "SatishKrishna Pilla"
+  }
 }

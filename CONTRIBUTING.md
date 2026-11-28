@@ -14,7 +14,7 @@ A rule marked *(lands with Tn)* is enforced automatically once that task in `doc
 All three follow [Conventional Commits](https://www.conventionalcommits.org/).
 
 - **Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci` and `chore`. A breaking change adds `!` after the scope, as in `feat(engine)!: <subject>`.
-- **Scopes:** `engine`, `hooks`, `guard`, `cli`, `documents`, `changes`, `events`, `git`, `migration`, `workspace`, `skills`, `packaging`, `tests`, `docs` and `ci`. Use the narrowest scope that fits, and `workflow` when a change spans several of the library's scopes.
+- **Scopes:** `engine`, `hooks`, `guard`, `cli`, `documents`, `changes`, `events`, `git`, `workspace`, `skills`, `packaging`, `tests`, `docs` and `ci`. Use the narrowest scope that fits, and `workflow` when a change spans several of the library's scopes.
 - **Branches** are named `<type>/<short-description>` in lowercase kebab case, for example `fix/guard-scope`. Work from `docs/review/TASKS.md` adds the task ID: `fix/t01-guard-scope`.
 - **Commits** are `<type>(<scope>): <subject>`, for example `fix(guard): stay silent outside hoshin workspaces`.
 - **Pull request titles** use the commit format. The repository merges by squash only, and the squash commit takes the title. **[CI]**
@@ -74,7 +74,7 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 
 ### 3.3 Open/closed
 
-- **O1. Closed sets are types, not strings.** Step kinds, document kinds, verdict outcomes, harnesses, event names and migration statuses are enums or sealed record hierarchies. Code never compares a string to a literal to decide which kind something is, except when parsing it at the edge. JSON stays the same through `JsonStringEnumConverter`. **[review]**; **[test]** for `CurrentStep.Kind` and document names *(lands with T36)*.
+- **O1. Closed sets are types, not strings.** Step kinds, document kinds, verdict outcomes, harnesses, and event names are enums or sealed record hierarchies. Code never compares a string to a literal to decide which kind something is, except when parsing it at the edge. JSON stays the same through `JsonStringEnumConverter`. **[review]**; **[test]** for `CurrentStep.Kind` and document names *(lands with T36)*.
 - **O2. Extend by adding a type.** A new document kind, lifecycle event, harness or skill is added by implementing an interface (for example `IEventStep` or `IHookAdapter`) and registering the implementation in the composition root. A change that has to edit a `switch` in three places to add a kind is redesigned first. **[review]**
 
 ### 3.4 Liskov substitution
@@ -95,7 +95,7 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 
 - **D1. Every outside effect goes through an injected interface:** processes, git, the file system, the clock (`TimeProvider`), environment variables, `gh` and the network. **[review]**; **[test]** for `DateTimeOffset.UtcNow` / `DateTime.Now` outside the clock adapter.
 - **D2. Dependencies are required constructor parameters.** No optional dependency parameters (`IFoo? foo = null`), and no `?? X.Default` or `?? new X()` fallbacks. A forgotten dependency must be a compile error, not real git in a unit test. **[test]**
-- **D3. One composition root.** `src/Hoshin.Cli/HoshinServices.cs` is the only place that creates services. Library types never `new` another service, and never read a `static Default`. `static Default` properties exist only where an external caller of the NuGet package needs a ready-made instance, and each one is documented as such. **[test]**
+- **D3. One composition root.** `src/Hoshin.Workflow/Hosting/HoshinServices.cs` is the only place that creates library services; hosts add their own adapter types on top of it (`src/Hoshin.Cli/HookServices.cs` for the hooks, `HoshinAgents.CreateHost` for Microsoft Agent Framework). Library types never `new` another service, and never read a `static Default`. `static Default` properties exist only where an external caller of the NuGet package needs a ready-made instance, and each one is documented as such. **[test]**
 - **D4. No mutable static state.** Static fields are `readonly` and hold immutable values (compiled regexes, frozen sets). **[test]**
 
 ### 3.7 One owner per rule
@@ -120,9 +120,9 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 
 These come from `AGENTS.md`, and they are tested where possible.
 
-1. `Hoshin.Workflow` references only `Markdig` and `Gherkin`. Anything else, such as a YAML parser for migration, lives in a separate assembly referenced by `Hoshin.Cli`. **[test]**
-2. Harness-specific code (Claude Code, Antigravity) lives only in `src/Hoshin.Cli/Hooks` and `src/Hoshin.Cli/Commands`. **[test]**
-3. Hoshin documents contain no YAML. YAML appears only in migration inputs, in negative tests, and in the generated `SKILL.md` front matter. **[test]**
+1. `Hoshin.Workflow` references only `Markdig` and `Gherkin`. Anything else lives in a separate assembly. **[test]**
+2. Harness-specific code (Claude Code, Antigravity) lives only in `src/Hoshin.Cli/Hooks` and `src/Hoshin.Cli/Commands`, and Microsoft Agent Framework code only in `src/Hoshin.Agents`. **[test]** for the hook harnesses
+3. Hoshin documents contain no YAML. YAML appears only in negative tests and in the generated `SKILL.md` front matter. **[test]**
 4. `skills/*/procedure.md` contains judgment guidance only: no YAML, no CLI commands, no harness tool names. **[test]** (`AllSkills_PassStrictLint_NoYamlNoCliNoHarnessToolNames`)
 5. No `.agents/hooks.json` or `.claude-plugin/` in the repository root. This repository is developed outside the hoshin workflow. **[review]**
 

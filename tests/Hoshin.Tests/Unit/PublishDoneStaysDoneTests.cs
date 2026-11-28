@@ -63,13 +63,14 @@ public sealed class PublishDoneStaysDoneTests
         });
 
         var prClient = new RecordingPrClient();
-        var services = new Cli.HoshinServices(
+        var services = new Workflow.Hosting.HoshinServices(
             TestServices.SchemaValidator,
             TestServices.CommandRunner,
             TestServices.Git,
             prClient,
             TestServices.Time,
             TestServices.FileSystem);
+        var hooks = new Hoshin.Cli.HookServices(services);
 
         var started = services.ChangeStarter.StartFromHook(repoDir, "intent", "single-pub");
         Assert.True(started.Ok, started.Error);
@@ -90,7 +91,7 @@ public sealed class PublishDoneStaysDoneTests
         TestGitFixture.Git(copyRoot, "commit", "-q", "-m", $"docs(shop): log T1 {changeName}", "-m", "Generated-By: hoshin");
 
         // Record green check and clean review at current code head.
-        var wfRepo = services.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
+        var wfRepo = hooks.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
         var stateBeforeReview = services.WorkflowStateReader.Read(wfRepo)!;
         var prePublishCodeHead = stateBeforeReview.EffectiveCodeHead;
         wfRepo.UpdateLedger(l => l with
@@ -120,8 +121,8 @@ public sealed class PublishDoneStaysDoneTests
 
         // Engineer approves via /hoshin:accept -> publishes via change.done (which commits change.jsonc!).
         var headBeforePublish = TestGitFixture.Git(copyRoot, "rev-parse", "HEAD");
-        var (acceptOut, _) = services.HookOrchestrator.HandleStart(
-            services.HookAdapter.Parse(PromptPayload("po-r07", repoDir, "accept", "")),
+        var (acceptOut, _) = hooks.HookOrchestrator.HandleStart(
+            hooks.HookAdapter.Parse(PromptPayload("po-r07", repoDir, "accept", "")),
             rolesRoot: null);
         Assert.NotNull(acceptOut);
         Assert.Contains("published", acceptOut!, StringComparison.OrdinalIgnoreCase);
@@ -137,19 +138,19 @@ public sealed class PublishDoneStaysDoneTests
         Assert.True(next.Success, $"Expected Done(true) after publish, got Done(false, {next.Outcome})");
 
         // Stop in master session must be completely silent.
-        var (stopOut, _) = services.HookOrchestrator.HandleStop(
-            services.HookAdapter.Parse(StopPayload("po-r07", repoDir)),
+        var (stopOut, _) = hooks.HookOrchestrator.HandleStop(
+            hooks.HookAdapter.Parse(StopPayload("po-r07", repoDir)),
             rolesRoot: null);
         Assert.Null(stopOut);
 
         // Later /hoshin:build dispatches nothing and opens no new PR.
-        var (buildOut, _) = services.HookOrchestrator.HandleStart(
-            services.HookAdapter.Parse(PromptPayload("dev-r07", repoDir, "build", "")),
+        var (buildOut, _) = hooks.HookOrchestrator.HandleStart(
+            hooks.HookAdapter.Parse(PromptPayload("dev-r07", repoDir, "build", "")),
             rolesRoot: null);
         Assert.DoesNotContain(HookInstructions.BeginMarker, buildOut ?? "", StringComparison.Ordinal);
         Assert.Equal(1, prClient.OpenNewCalls);
-        var (devStopOut, _) = services.HookOrchestrator.HandleStop(
-            services.HookAdapter.Parse(StopPayload("dev-r07", repoDir)),
+        var (devStopOut, _) = hooks.HookOrchestrator.HandleStop(
+            hooks.HookAdapter.Parse(StopPayload("dev-r07", repoDir)),
             rolesRoot: null);
         Assert.Null(devStopOut);
     }
@@ -173,13 +174,14 @@ public sealed class PublishDoneStaysDoneTests
         });
 
         var prClient = new RecordingPrClient();
-        var services = new Cli.HoshinServices(
+        var services = new Workflow.Hosting.HoshinServices(
             TestServices.SchemaValidator,
             TestServices.CommandRunner,
             TestServices.Git,
             prClient,
             TestServices.Time,
             TestServices.FileSystem);
+        var hooks = new Hoshin.Cli.HookServices(services);
 
         var started = services.ChangeStarter.StartFromHook(masterDir, "intent", "multi-pub");
         Assert.True(started.Ok, started.Error);
@@ -199,7 +201,7 @@ public sealed class PublishDoneStaysDoneTests
         TestGitFixture.Git(copyRoot, "add", ".");
         TestGitFixture.Git(copyRoot, "commit", "-q", "-m", $"docs(shop): log T1 {changeName}", "-m", "Generated-By: hoshin");
 
-        var wfRepo = services.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
+        var wfRepo = hooks.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
         var preHead = services.WorkflowStateReader.Read(wfRepo)!.EffectiveCodeHead;
         wfRepo.UpdateLedger(l => l with
         {
@@ -226,8 +228,8 @@ public sealed class PublishDoneStaysDoneTests
         Assert.NotNull(reviewCommit);
 
         // Publish via /hoshin:accept.
-        var (acceptOut, _) = services.HookOrchestrator.HandleStart(
-            services.HookAdapter.Parse(PromptPayload("po-multi", masterDir, "accept", "")),
+        var (acceptOut, _) = hooks.HookOrchestrator.HandleStart(
+            hooks.HookAdapter.Parse(PromptPayload("po-multi", masterDir, "accept", "")),
             rolesRoot: null);
         Assert.NotNull(acceptOut);
         Assert.Contains("published", acceptOut!, StringComparison.OrdinalIgnoreCase);
@@ -237,23 +239,23 @@ public sealed class PublishDoneStaysDoneTests
         Assert.True(next.Success);
 
         // Stop in master and app sessions are both silent.
-        var (masterStop, _) = services.HookOrchestrator.HandleStop(
-            services.HookAdapter.Parse(StopPayload("po-multi", masterDir)),
+        var (masterStop, _) = hooks.HookOrchestrator.HandleStop(
+            hooks.HookAdapter.Parse(StopPayload("po-multi", masterDir)),
             rolesRoot: null);
         Assert.Null(masterStop);
-        var (appStop, _) = services.HookOrchestrator.HandleStop(
-            services.HookAdapter.Parse(StopPayload("app-multi", appDir)),
+        var (appStop, _) = hooks.HookOrchestrator.HandleStop(
+            hooks.HookAdapter.Parse(StopPayload("app-multi", appDir)),
             rolesRoot: null);
         Assert.Null(appStop);
 
         // /hoshin:build from app dispatches nothing and opens no new PR.
-        var (buildOut, _) = services.HookOrchestrator.HandleStart(
-            services.HookAdapter.Parse(PromptPayload("app-multi", appDir, "build", "")),
+        var (buildOut, _) = hooks.HookOrchestrator.HandleStart(
+            hooks.HookAdapter.Parse(PromptPayload("app-multi", appDir, "build", "")),
             rolesRoot: null);
         Assert.DoesNotContain(HookInstructions.BeginMarker, buildOut ?? "", StringComparison.Ordinal);
         Assert.Equal(2, prClient.OpenNewCalls);
-        var (appStopAfterBuild, _) = services.HookOrchestrator.HandleStop(
-            services.HookAdapter.Parse(StopPayload("app-multi", appDir)),
+        var (appStopAfterBuild, _) = hooks.HookOrchestrator.HandleStop(
+            hooks.HookAdapter.Parse(StopPayload("app-multi", appDir)),
             rolesRoot: null);
         Assert.Null(appStopAfterBuild);
     }

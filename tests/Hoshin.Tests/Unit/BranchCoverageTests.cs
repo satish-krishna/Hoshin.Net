@@ -6,7 +6,6 @@ using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Git;
-using Hoshin.Workflow.Migration;
 using Xunit;
 
 namespace Hoshin.Tests.Unit;
@@ -228,7 +227,8 @@ public sealed class BranchCoverageTests
 
         var cleanReview = passedChecks with { Reviews = [new WorkflowReviewRun("aaaa1111", 1, 0, 0, DateTimeOffset.UtcNow)] };
         var rejectedApproval = cleanReview with { WorkflowApprovals = [new WorkflowApproval("aaaa1111", false, "nope", DateTimeOffset.UtcNow)] };
-        Assert.Contains("rejected", Assert.IsType<Done>(WorkflowEngine.Next(MakeState(ledger: rejectedApproval))).Outcome);
+        var declinedFix = Assert.IsType<Implement>(WorkflowEngine.Next(MakeState(ledger: rejectedApproval)));
+        Assert.Contains("nope", declinedFix.Agent.Prompt);
 
         var approvedAndPublished = cleanReview with
         {
@@ -366,52 +366,6 @@ public sealed class BranchCoverageTests
         // Ledger with records but no plan (state == null) -> returns null
         repo.WriteLedger(LedgerStore.Empty() with { Verdicts = [new WorkflowVerdict("T1", 1, "abc", true, "ok", [], DateTimeOffset.UtcNow)] });
         Assert.Null(GuardTamperingProtection.DetectMissingRunMarkerTampering(repo, stopEv, TestServices.WorkflowStateReader, null));
-    }
-
-    // -------------------------------------------------------------------------
-    // 7. FrontMatterMigrator & YamlJsoncEmitter edge cases
-    // -------------------------------------------------------------------------
-
-    [Fact]
-    public void Migration_FrontMatterAndYamlEmitter_CoverEdgeCases()
-    {
-        var converter = new YamlToJsoncConverter();
-        var migrator = new DocumentMigrator(converter);
-
-        // Unclosed YAML front matter fails closed
-        Assert.Throws<FormatException>(() =>
-            migrator.MigrateMarkdownText("---\nlayout: 2\nsystem: demo\n# never closed\n", "spec.md", out _));
-
-        // Existing JSONC front matter upgraded to Layout 2 across empty/inline/multiline/layout:1 forms
-        var emptyOut = migrator.MigrateMarkdownText("```jsonc\n{}\n```\n\n# Build log\n", "build/app.md", out var emptyChanged);
-        Assert.True(emptyChanged);
-        Assert.Contains("\"layout\": 2", emptyOut);
-
-        var inlineOut = migrator.MigrateMarkdownText("```jsonc\n{ \"repo\": \"web\" }\n```\n\n# Build log\n", "build/web.md", out var inlineChanged);
-        Assert.True(inlineChanged);
-        Assert.Contains("\"layout\": 2", inlineOut);
-
-        var layout1Out = migrator.MigrateMarkdownText("```jsonc\n{\n  \"layout\": 1,\n  \"repo\": \"api\"\n}\n```\n\n# Build log\n", "build/api.md", out var l1Changed);
-        Assert.True(l1Changed);
-        Assert.Contains("\"layout\": 2", layout1Out);
-
-        var multiOut = migrator.MigrateMarkdownText("```jsonc\n{\n  \"repo\": \"svc\"\n}\n```\n\n# Build log\n", "build/svc.md", out var multiChanged);
-        Assert.True(multiChanged);
-        Assert.Contains("\"layout\": 2", multiOut);
-
-        var noFmOut = migrator.MigrateMarkdownText("# Build log without front matter\n", "build/raw.md", out var noFmChanged);
-        Assert.True(noFmChanged);
-        Assert.Contains("\"layout\": 2", noFmOut);
-
-        // YamlJsoncEmitter: empty, comment-only (inside & outside), empty mapping with comment, root sequence, root scalar
-        Assert.Equal("{}", converter.ConvertBlock(""));
-        Assert.Equal("[]", converter.ConvertBlock("", new YamlConversionOptions(ExpectArray: true)));
-        Assert.Contains("// note", converter.ConvertBlock("# note\n", new YamlConversionOptions(RootLeadingCommentsOutside: true)));
-        Assert.Contains("// note", converter.ConvertBlock("# note\n", new YamlConversionOptions(RootLeadingCommentsOutside: false)));
-        Assert.Contains("// seq", converter.ConvertBlock("# seq\n", new YamlConversionOptions(ExpectArray: true)));
-        Assert.Equal("[\n  \"a\",\n  \"b\"\n]", converter.ConvertBlock("- a\n- b\n", new YamlConversionOptions(ExpectArray: true)).Replace("\r\n", "\n"));
-        Assert.Equal("\"scalar\"", converter.ConvertBlock("scalar\n"));
-        Assert.Contains("// inside", converter.ConvertBlock("{}\n# inside\n"));
     }
 
     // -------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Driver;
 using Hoshin.Workflow.Engine;
 
 namespace Hoshin.Cli.Hooks;
@@ -40,10 +41,12 @@ public sealed class HookOrchestrator
         ArgumentNullException.ThrowIfNull(changeStarter);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
-        var advancer = new WorkflowAdvancer(taskEvaluator, checkRunner, publisher, fileSystem, stateReader, eventBridge);
-        _start = new StartHandler(adapter, runResolver, approvals, documentCommitter, changeStarter, advancer, fileSystem, timeProvider);
-        _result = new ResultHandler(adapter, runResolver, taskEvaluator, advancer, fileSystem, timeProvider);
-        _stop = new StopHandler(adapter, runResolver, documentCommitter, advancer, fileSystem, timeProvider);
+        var advancer = new StepAdvancer(taskEvaluator, checkRunner, publisher, fileSystem, stateReader, eventBridge);
+        var submitter = new WorkSubmitter(documentCommitter, advancer);
+        var decisions = new DecisionApplier(approvals, documentCommitter);
+        _start = new StartHandler(adapter, runResolver, decisions, changeStarter, advancer, fileSystem, timeProvider);
+        _result = new ResultHandler(adapter, runResolver, taskEvaluator, submitter, fileSystem, timeProvider);
+        _stop = new StopHandler(adapter, runResolver, submitter, advancer, fileSystem, timeProvider);
     }
 
     public (string? Output, string Decision) HandleStart(NormalizedHookEvent ev, string? rolesRoot) =>

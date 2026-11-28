@@ -5,7 +5,7 @@
     <AssemblyName>Hoshin.Workflow</AssemblyName>
     <PackageId>Hoshin.Workflow</PackageId>
     <Authors>SatishKrishna Pilla</Authors>
-    <Description>Core .NET 10 workflow library for Hoshin.Net: JSONC document readers and validators, Layout 2 migration, state machine (WorkflowEngine.Next), detached worktree Red/Green runner, and embedded harness-neutral role procedures.</Description>
+    <Description>Core .NET 10 workflow library for Hoshin.Net: JSONC document readers and validators, state machine (WorkflowEngine.Next), detached worktree Red/Green runner, and embedded harness-neutral role procedures.</Description>
     <PackageTags>hoshin;workflow;gherkin;jsonc;tdd;agents</PackageTags>
     <RepositoryUrl>https://github.com/satish-krishna/Hoshin.Net</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

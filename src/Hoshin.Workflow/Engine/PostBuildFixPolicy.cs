@@ -80,5 +80,7 @@ internal static class PostBuildFixPolicy
     private static string DescribeFix(string taskId) =>
         taskId.StartsWith("FIX-CHECK-", StringComparison.Ordinal)
             ? $"address build check failure ({taskId.ToLowerInvariant()})"
-            : $"address review findings ({taskId.ToLowerInvariant()})";
+            : taskId.StartsWith("FIX-DECLINE-", StringComparison.Ordinal)
+                ? $"address declined approval ({taskId.ToLowerInvariant()})"
+                : $"address review findings ({taskId.ToLowerInvariant()})";
 }

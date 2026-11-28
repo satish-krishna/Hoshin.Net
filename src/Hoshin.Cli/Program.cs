@@ -1,5 +1,6 @@
 using Hoshin.Cli.Commands;
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Hosting;
 
 namespace Hoshin.Cli;
 
@@ -8,6 +9,7 @@ public static class Program
     public static async Task<int> Main(string[] args)
     {
         var services = new HoshinServices();
+        var hooks = new HookServices(services);
         (string Name, Func<IHoshinCommand> Factory)[] registry =
         [
             ("check", () => new CheckCommand(services.DocumentCheckService)),
@@ -21,7 +23,6 @@ public static class Program
             ("scope", () => new ScopeCommand()),
             ("resolve", () => new ResolveCommand(services.Resolver)),
             ("instructions", () => new InstructionsCommand(services.Resolver, services.MarkerReader)),
-            ("migrate", () => new MigrateCommand(services.DocumentMigrator, services.Migrator)),
             ("run", () => new RunCommand(services.EventContext, services.BaselineTaker, services.EventRunner)),
             ("hooks", () => new HooksCommand(services.Resolver, services.MarkerReader, services.HookConfig)),
             ("status", () => new StatusCommand(services.Resolver, services.ChangeLocator, services.Apps, services.Ledger, services.Git, services.Git)),
@@ -29,8 +30,8 @@ public static class Program
             ("change", () => new ChangeCommand(services.Resolver, services.Git, services.Git, services.Git, services.MarkerReader, services.ChangeLocator, services.EventRunner, services.ScopeRules, services.ChangeRename, services.ChangeRemove, services.ChangeRecords, services.PullRequests, services.Apps)),
             ("commit", () => new CommitCommand(services.Committer)),
             ("gate", () => new GateCommand(services.Git, services.Git, services.Git, services.BuildStartStep, services.ChangeRecords, services.Progress, services.Apps, services.Ledger, services.HookConfig)),
-            ("guard", () => new GuardCommand(services.HookAdapter, services.HookRunResolver, services.FileSystem, services.TimeProvider)),
-            ("hook", () => new HookCommand(services.HookAdapter, services.HookOrchestrator, services.HookRunResolver)),
+            ("guard", () => new GuardCommand(hooks.HookAdapter, hooks.HookRunResolver, services.FileSystem, services.TimeProvider)),
+            ("hook", () => new HookCommand(hooks.HookAdapter, hooks.HookOrchestrator, hooks.HookRunResolver)),
             ("baseline", () => new BaselineCommand(services.EventContext, services.BaselineTaker, services.HookConfig, services.BaselineApprovals)),
             ("red", () => new RedCommand(services.EventContext, services.BaselineTaker, services.RedVerdict, services.RedRecorder)),
         ];

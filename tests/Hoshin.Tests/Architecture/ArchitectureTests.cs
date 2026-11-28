@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Hoshin.Cli;
 using Hoshin.Tests.Architecture.Samples;
+using Hoshin.Workflow.Hosting;
 using Hoshin.Workflow.Engine;
 using Xunit;
 using Xunit.Abstractions;
@@ -205,7 +206,7 @@ public sealed class ArchitectureTests(ITestOutputHelper output)
 
         var actual = ArchitectureRules.EvaluateAll(
             typeof(WorkflowEngine).Assembly,
-            typeof(HoshinServices).Assembly,
+            typeof(Hoshin.Cli.Program).Assembly,
             sourceFiles,
             allowList);
 

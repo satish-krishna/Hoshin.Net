@@ -155,7 +155,7 @@ public sealed class PostBuildFixLoopTests
             rolesRoot: null);
         Assert.Contains("/hoshin:accept", review2StopOut ?? "", StringComparison.Ordinal);
 
-        var masterRepo = TestServices.Default.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
+        var masterRepo = TestServices.Hooks.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
         var finalState = TestServices.ReadState(masterRepo)!;
         Assert.IsType<NeedsApproval>(WorkflowEngine.Next(finalState));
     }
@@ -238,7 +238,7 @@ public sealed class PostBuildFixLoopTests
         Assert.DoesNotContain(HookInstructions.BeginMarker, fix2Result, StringComparison.Ordinal);
         Assert.Contains("review", fix2Result, StringComparison.OrdinalIgnoreCase);
 
-        var masterRepo = TestServices.Default.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
+        var masterRepo = TestServices.Hooks.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
         var state = TestServices.ReadState(masterRepo)!;
         Assert.IsType<ReviewDocument>(WorkflowEngine.Next(state));
     }

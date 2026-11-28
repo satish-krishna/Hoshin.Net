@@ -1,19 +1,21 @@
-using Hoshin.Cli.Hooks;
 using Hoshin.Workflow.Baseline;
 using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
+using Hoshin.Workflow.Driver;
 using Hoshin.Workflow.Engine;
 using Hoshin.Workflow.Events;
 using Hoshin.Workflow.Events.Steps;
 using Hoshin.Workflow.Git;
-using Hoshin.Workflow.Migration;
 using Hoshin.Workflow.Red;
 using Hoshin.Workflow.Workspace;
 
-namespace Hoshin.Cli;
+namespace Hoshin.Workflow.Hosting;
 
-/// <summary>Lazy composition root wiring all SOLID workflow interfaces and narrow role abstractions.</summary>
+/// <summary>
+/// The library's composition root: wires every workflow service once, so the CLI, the hook adapters and any other host
+/// (for example a Microsoft Agent Framework host) use the same graph. Harness adapters add their own types on top.
+/// </summary>
 public sealed class HoshinServices
 {
     private readonly Lazy<MarkerReader> _markerReader;
@@ -42,9 +44,6 @@ public sealed class HoshinServices
     private readonly Lazy<Committer> _committer;
     private readonly Lazy<ChangeRenameService> _changeRename;
     private readonly Lazy<ChangeRemoveService> _changeRemove;
-    private readonly Lazy<IYamlToJsoncConverter> _yamlConverter;
-    private readonly Lazy<IDocumentMigrator> _documentMigrator;
-    private readonly Lazy<WorkspaceMigrator> _migrator;
     private readonly Lazy<HookConfigService> _hookConfig;
     private readonly Lazy<LedgerStore> _ledger;
     private readonly Lazy<HookScriptExporter> _hookScripts;
@@ -70,9 +69,9 @@ public sealed class HoshinServices
     private readonly Lazy<IWorkflowRunner> _workflowRunner;
     private readonly Lazy<WorkflowStateReader> _workflowStateReader;
     private readonly Lazy<IChangeStarter> _changeStarter;
-    private readonly Lazy<IHookRunResolver> _hookRunResolver;
-    private readonly Lazy<HarnessAdapter> _hookAdapter;
-    private readonly Lazy<HookOrchestrator> _hookOrchestrator;
+    private readonly Lazy<StepAdvancer> _stepAdvancer;
+    private readonly Lazy<WorkSubmitter> _workSubmitter;
+    private readonly Lazy<DecisionApplier> _decisionApplier;
 
     public TimeProvider TimeProvider { get; }
     public IFileSystem FileSystem { get; }
@@ -108,9 +107,6 @@ public sealed class HoshinServices
     public Committer Committer => _committer.Value;
     public ChangeRenameService ChangeRename => _changeRename.Value;
     public ChangeRemoveService ChangeRemove => _changeRemove.Value;
-    public IYamlToJsoncConverter YamlConverter => _yamlConverter.Value;
-    public IDocumentMigrator DocumentMigrator => _documentMigrator.Value;
-    public WorkspaceMigrator Migrator => _migrator.Value;
     public HookConfigService HookConfig => _hookConfig.Value;
     public LedgerStore Ledger => _ledger.Value;
     public HookScriptExporter HookScripts => _hookScripts.Value;
@@ -136,9 +132,9 @@ public sealed class HoshinServices
     public IWorkflowRunner WorkflowRunner => _workflowRunner.Value;
     public WorkflowStateReader WorkflowStateReader => _workflowStateReader.Value;
     public IChangeStarter ChangeStarter => _changeStarter.Value;
-    public IHookRunResolver HookRunResolver => _hookRunResolver.Value;
-    public HarnessAdapter HookAdapter => _hookAdapter.Value;
-    public HookOrchestrator HookOrchestrator => _hookOrchestrator.Value;
+    public StepAdvancer StepAdvancer => _stepAdvancer.Value;
+    public WorkSubmitter WorkSubmitter => _workSubmitter.Value;
+    public DecisionApplier DecisionApplier => _decisionApplier.Value;
 
     public HoshinServices()
         : this(new EmbeddedSchemaValidator(), new ProcessCommandRunner(), TimeProvider.System, new PhysicalFileSystem())
@@ -203,9 +199,6 @@ public sealed class HoshinServices
         _committer = new(() => new Committer(Git, Resolver, ChangeLocator, Apps, DocumentChecker, Progress, ReviewReader, MarkerReader, ScopeRules));
         _changeRename = new(() => new ChangeRenameService(Git, Apps, BranchChecker, ChangeRecords));
         _changeRemove = new(() => new ChangeRemoveService(Git, Apps, ChangeRecords));
-        _yamlConverter = new(() => new YamlToJsoncConverter());
-        _documentMigrator = new(() => new DocumentMigrator(YamlConverter));
-        _migrator = new(() => new WorkspaceMigrator(Git, Resolver, DocumentMigrator, MarkerReader, ScopeRules));
 
         _hookConfig = new(() => new HookConfigService(Git, Git));
         _ledger = new(() => new LedgerStore(Git, FileSystem));
@@ -264,20 +257,12 @@ public sealed class HoshinServices
             DocumentCommitter));
         _workflowStateReader = new(() => new WorkflowStateReader(PlanReader, ReviewReader, ChangeState, TaskRepoResolver, WorkspaceLocator, FileSystem));
         _changeStarter = new(() => new ChangeStarter(WorkspaceLocator, MarkerReader, ChangeLocator, ChangeList, ScopeRules, EventRunner, Git, Git, Git, FileSystem, TimeProvider));
-        _hookRunResolver = new(() => new HookRunResolver(Resolver, MarkerReader, Git, Git, Git, FileSystem, Ledger));
-        _hookAdapter = new(() => new HarnessAdapter(TimeProvider));
-        _hookOrchestrator = new(() => new HookOrchestrator(
-            HookAdapter,
-            HookRunResolver,
-            TaskEvaluator,
-            CheckRunner,
-            ApprovalRecorder,
-            Publisher,
-            DocumentCommitter,
-            FileSystem,
-            WorkflowStateReader,
-            WorkflowEventBridge,
-            ChangeStarter,
-            TimeProvider));
+        _stepAdvancer = new(() => new StepAdvancer(TaskEvaluator, CheckRunner, Publisher, FileSystem, WorkflowStateReader, WorkflowEventBridge));
+        _workSubmitter = new(() => new WorkSubmitter(DocumentCommitter, StepAdvancer));
+        _decisionApplier = new(() => new DecisionApplier(ApprovalRecorder, DocumentCommitter));
     }
+
+    /// <summary>Creates the harness-neutral driver over this composition (see <see cref="IHoshinDriver"/>).</summary>
+    public IHoshinDriver CreateDriver(HoshinDriverOptions options) =>
+        new HoshinDriver(ChangeStarter, StepAdvancer, WorkSubmitter, DecisionApplier, Git, Ledger, FileSystem, options);
 }

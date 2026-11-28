@@ -188,7 +188,7 @@ public sealed class HookCrashReportingTests
     [Fact]
     public void HookCommand_MissingLogUnknownAndSubagentStopCrash_AlwaysExitZero()
     {
-        var cmd = new HookCommand(TestServices.HookAdapter, TestServices.HookOrchestrator, TestServices.Default.HookRunResolver);
+        var cmd = new HookCommand(TestServices.HookAdapter, TestServices.HookOrchestrator, TestServices.Hooks.HookRunResolver);
 
         string? stdout = null;
         var stderr = new List<string>();
@@ -223,7 +223,7 @@ public sealed class HookCrashReportingTests
         return new HookCommand(
             TestServices.HookAdapter,
             orchestrator,
-            TestServices.Default.HookRunResolver);
+            TestServices.Hooks.HookRunResolver);
     }
 
     private static ActiveBuildFixture CreateActiveBuildFixture(string sessionId)
