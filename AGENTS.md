@@ -15,7 +15,7 @@ This repository contains **Hoshin.Net** (`v2.0.0`): the .NET 10 workflow library
 ## Architectural Invariants
 
 1. **Minimal dependencies in `Hoshin.Workflow`:** `src/Hoshin.Workflow/Hoshin.Workflow.csproj` may reference **only** `Markdig` and `Gherkin` (`System.Text.Json` handles JSON/JSONC natively). Never add YAML libraries, Claude Code references, Antigravity references, or agent-framework SDKs to `Hoshin.Workflow`.
-2. **Harness isolation:** All Claude Code and Google Antigravity payload normalization, response formatting, and hook orchestration live strictly in `src/Hoshin.Cli/Hooks/` and `src/Hoshin.Cli/Commands/`.
+2. **Harness isolation:** All Claude Code and Google Antigravity payload normalization, response formatting, and hook orchestration live strictly in `src/Hoshin.Cli/Hooks/` and `src/Hoshin.Cli/Commands/`. Microsoft Agent Framework code lives only in `src/Hoshin.Agents/`. Every host advances a change through the driver's `StepAdvancer`, `WorkSubmitter` and `DecisionApplier` (`src/Hoshin.Workflow/Driver/`); a host never commits, judges or gates work itself.
 3. **SOLID design is mandatory:** Follow [CONTRIBUTING.md §3](CONTRIBUTING.md#3-design-rules-solid). In short:
    - decisions are pure;
    - every outside effect goes through a required, constructor-injected interface, with no `?? Default` / `?? new` fallbacks;

@@ -16,7 +16,7 @@ The core architectural shift from Hoshin v1.x (`tools/hoshin.ts`) is **who owns 
 
 ## 2. System Architecture
 
-`Hoshin.Workflow` has strictly two NuGet dependencies (`Markdig` and `Gherkin`; `System.Text.Json` handles JSON/JSONC natively) and zero references to Claude Code, Google Antigravity, or Microsoft Agent Framework. All harness-specific payload normalization and response formatting live in `Hoshin.Cli`.
+`Hoshin.Workflow` has strictly two NuGet dependencies (`Markdig` and `Gherkin`; `System.Text.Json` handles JSON/JSONC natively) and zero references to Claude Code, Google Antigravity, or Microsoft Agent Framework. Hook payload normalization and response formatting live in `Hoshin.Cli`; the Microsoft Agent Framework host lives in `Hoshin.Agents`. Both sit on the harness-neutral driver (§2.1).
 
 ```mermaid
 flowchart TB
@@ -24,7 +24,7 @@ flowchart TB
         CC["Claude Code<br/>(UserPromptExpansion, PreToolUse,<br/>PostToolUse, SubagentStop, Stop)"]
         AGY["Google Antigravity<br/>(PreInvocation, PreToolUse,<br/>PostToolUse, Stop)"]
         KATA["Kata Workbench & CI<br/>(subprocess CLI --json / --stream)"]
-        MAF["External .NET / MAF Hosts<br/>(NuGet: Hoshin.Workflow)"]
+        MAF["Microsoft Agent Framework hosts<br/>(Hoshin.Agents: HoshinAgentHost)"]
     end
 
     subgraph Cli["Hoshin.Cli (dotnet hoshin.dll)"]
@@ -35,6 +35,7 @@ flowchart TB
     end
 
     subgraph Lib["Hoshin.Workflow (Markdig + Gherkin only)"]
+        DRIVER["IHoshinDriver (HoshinDriver)<br/>StepAdvancer, WorkSubmitter, DecisionApplier"]
         ENGINE["WorkflowEngine.Next(State) & Gate<br/>(Driven by ChangeStateService & ReadinessMap)"]
         RUNNER["TaskEvaluator, BuildLogWriter & WorkflowEventBridge<br/>(Detached Red/Green, Two-Phase Commits, build/&lt;repo&gt;.md)"]
         DOCS["Document Readers & Validators<br/>(Intent, Gherkin Spec, Plan, BuildLog, Review, CrossChecker)"]
@@ -50,15 +51,39 @@ flowchart TB
     CC & AGY --> ADAPTER
     ADAPTER --> ORCH & GUARD
     KATA --> CMDS
-    MAF --> ENGINE & RUNNER & DOCS
+    MAF --> DRIVER
 
-    ORCH --> ENGINE & RUNNER
+    ORCH --> DRIVER
+    DRIVER --> ENGINE & RUNNER
     GUARD -. "fast-path read" .-> LEDGER
     CMDS --> DOCS & EVENTS
     ENGINE --> DOCS
     RUNNER --> GIT & EVENTS & WT
     EVENTS --> GIT & LEDGER
 ```
+
+### 2.1 The driver and its hosts
+
+`Hoshin.Workflow.Driver` is how every host advances a change. `IHoshinDriver` has five calls: `ListOpenAsync`, `StartAsync`, `NextAsync`, `SubmitAsync` and `DecideAsync`. Each returns one `Turn`:
+
+- `AgentWork`: work for an agent. It carries a `Role` (`Intent`, `Spec`, `Plan`, `Fix`, `Review`, `Implement`), the role's procedure text, the brief, a `WorkId`, any feedback on the previous attempt, and a `WorkScope`. The scope names the working directory, the globs the agent may write, the globs it may not write, and the exact commands it may run (a task's `compile` and `test`).
+- `HumanDecision`: a decision only a person makes, with the decisions the change accepts now (`Accept`, `Approve`, `Decline`, `Reject`, `Reopen`).
+- `Finished`: published, or stopped with the reason.
+
+Checks, the baseline, Red/Green judging, commits and publishing run inside the driver, and each turn lists what happened since the last one (`Happened`). The driver keeps no state in memory: everything is in git and `.git/hoshin`, so a host persists only the `ChangeRef`. A submit for work that is no longer current, or a decision the change does not accept now, throws `DriverRefusedException` and changes nothing.
+
+Three library types do the work, and the hook handlers use the same three, so every host advances a change the same way:
+
+- `StepAdvancer` reads the state, runs the automatic steps and issues the next step.
+- `WorkSubmitter` validates and commits a drafted document, a review or the light-track documents, and judges an implement attempt.
+- `DecisionApplier` applies a person's decision after checking the change accepts it (`WorkflowEngine.Gate`).
+
+`HoshinServices` (`Hoshin.Workflow.Hosting`) composes the whole library once; `CreateDriver(HoshinDriverOptions)` returns the driver. The CLI adds its hook types in `HookServices`.
+
+**Hosts.**
+
+- **Claude Code and Antigravity** (`Hoshin.Cli`): the hooks translate harness events into the same advancing, submitting and deciding. What only a hook harness needs stays in the adapter: session ownership (`run.json`), Stop counters and parking, skill-invocation detection, the shell guard and tamper protection, and truncating injected text.
+- **Microsoft Agent Framework** (`Hoshin.Agents`): `HoshinAgentHost` loops over the driver. Each `AgentWork` goes to a fresh agent from `IRoleAgents` (by default a `ChatClientAgent` over an `IChatClient`). Its only tools come from `ScopedTools` over a `ScopedWorkspace`: `read_file`, `list_files`, `write_file`, `delete_file`, `run_command` for the exact allowed commands, and `ask_person` for interviews. Every write outside the scope and every other command is refused. Agents get no git, commit, push or decision tool. Each `HumanDecision` goes to an `IHumanChannel`. The host stops after `MaxTriesPerWork` attempts at the same work.
 
 ### Design Invariants
 

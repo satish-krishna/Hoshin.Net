@@ -4,6 +4,17 @@ All notable changes to **Hoshin.Net** are documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Harness-neutral driver (`Hoshin.Workflow.Driver`):** `IHoshinDriver` with `ListOpenAsync`, `StartAsync`, `NextAsync`, `SubmitAsync` and `DecideAsync`, returning `AgentWork` (with `Role`, `WorkId`, `WorkScope`, feedback), `HumanDecision` (with the allowed `DecisionKind`s) or `Finished`, plus `Happened` progress. `DriverRefusedException` for stale work or out-of-step decisions. `HoshinServices.CreateDriver(HoshinDriverOptions)`.
+- **`Hoshin.Agents` (Microsoft Agent Framework 1.28):** `HoshinAgentHost`, `IRoleAgents`/`ChatClientRoleAgents`, `IHumanChannel`, `ScopedWorkspace` and `ScopedTools` (`read_file`, `list_files`, `write_file`, `delete_file`, `run_command`, `ask_person`), `HoshinAgentHostOptions` and `HoshinAgents.CreateHost`. Packed as `Hoshin.Agents.<version>.nupkg`.
+- **Local Claude Code marketplace:** the packager writes `artifacts/.claude-plugin/marketplace.json` (`hoshin-net`), so `claude plugin install hoshin@hoshin-net` installs the bundle.
+- **`/hoshin:decline <reason>` at approval (R22)** and **per-session handoff isolation in multi-repository builds (R23)**, from `fix/round-3`.
+
+### Changed
+- **`HoshinServices` moved to `Hoshin.Workflow.Hosting`** so every host composes the same graph; the CLI's hook types are in `Hoshin.Cli.HookServices`.
+- **The hooks share the driver's step handling:** the CLI's `WorkflowAdvancer` became the library's `StepAdvancer`, and the Start, Stop and Result handlers commit work through `WorkSubmitter` and apply decisions through `DecisionApplier`. Messages are unchanged.
+- **Review brief for review 2 and later** now says to keep the earlier reviews and append the new one; it used to say to start a new file, which the reader then refused.
+
 ### Removed
 - **BREAKING: `hoshin migrate` and the `Hoshin.Migration` assembly (YamlDotNet).** There is no YAML-to-JSONC upgrade command any more. YAML and layout 1 documents still exit `2`, now with the message `layout <n> is not read by this program; rewrite it as layout 2 JSONC`. Clients must drop `migrate` from their command list (CLIENTS.md). Finish a change started under the original hoshin there.
 

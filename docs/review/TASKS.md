@@ -1214,6 +1214,8 @@ R10–R20 are no longer delivered in later round-2 branches. The engineer moved 
 
 # Round 3 — ready to replace hoshin
 
+> **Paused, 2026-11-28.** The engineer stopped round 3 and chose a smaller path: `migrate` is removed, a harness-neutral driver (`Hoshin.Workflow.Driver`) and a Microsoft Agent Framework host (`Hoshin.Agents`) are added, and the Claude Code hooks share the driver's step handling. R22 and R23 were taken from `fix/round-3`; R10, R18's YAML differential and R30's migrator half no longer apply. See `CHANGELOG.md` (Unreleased). The rest of round 3 is not scheduled.
+
 Round 2 closed the normal path: the R0 gate passes on Linux and Windows (PR #6). Round 3 is everything else between Hoshin.Net and replacing hoshin:
 - integrity and data: R10–R16, plus the deferred findings a real user hits (R22–R30);
 - enforcement: R17, R18;

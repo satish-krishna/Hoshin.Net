@@ -2,7 +2,8 @@
 .SYNOPSIS
 Builds all Hoshin.Net v2.0.0 release artifacts under artifacts/:
   - artifacts/portable/            Portable CLI DLL bundle + skills/ folder
-  - artifacts/nuget/               Hoshin.Workflow.<version>.nupkg (with embedded role texts)
+  - artifacts/nuget/               Hoshin.Workflow.<version>.nupkg (with embedded role texts) and Hoshin.Agents.<version>.nupkg
+  - artifacts/.claude-plugin/      A local Claude Code marketplace (hoshin-net) whose one plugin is artifacts/claude-code
   - artifacts/claude-code/         Claude Code plugin bundle (.claude-plugin/, hooks/, lib/, roles/, skills/)
   - artifacts/antigravity/.agents/ Google Antigravity bundle (hooks.json, lib/, roles/, skills/)
 #>
@@ -77,6 +78,16 @@ if ($LASTEXITCODE -ne 0) {
 $expectedNupkg = Join-Path $nugetDir "Hoshin.Workflow.$Version.nupkg"
 if (-not (Test-Path $expectedNupkg)) {
     throw "Expected NuGet package missing: $expectedNupkg"
+}
+
+Write-Host "Packing Hoshin.Agents NuGet package (Microsoft Agent Framework host, $Configuration, v$Version)..."
+& dotnet pack (Join-Path (Join-Path (Join-Path $repoRoot "src") "Hoshin.Agents") "Hoshin.Agents.csproj") `
+    -c $Configuration `
+    -o $nugetDir `
+    --nologo `
+    -p:Version=$Version
+if ($LASTEXITCODE -ne 0) {
+    throw "dotnet pack (Hoshin.Agents) failed with exit code $LASTEXITCODE"
 }
 
 $skillMeta = @(
@@ -166,6 +177,21 @@ $pluginJson = ($pluginManifest | ConvertTo-Json -Depth 10) + "`n"
 Copy-BundleLibAndRoles -TargetRoot $claudeDir
 Write-SkillWrappers -SkillsTargetDir (Join-Path $claudeDir "skills")
 
+# A local marketplace next to the bundle, so `/plugin marketplace add <artifacts>` then `/plugin install hoshin@hoshin-net` installs it.
+$marketplaceDir = Join-Path $OutputRoot ".claude-plugin"
+New-Item -ItemType Directory -Force -Path $marketplaceDir | Out-Null
+$marketplace = [ordered]@{
+    name    = "hoshin-net"
+    owner   = [ordered]@{ name = "Hoshin.Net" }
+    plugins = @([ordered]@{
+        name        = "hoshin"
+        source      = "./claude-code"
+        description = $pluginManifest.description
+        version     = $Version
+    })
+}
+[System.IO.File]::WriteAllText((Join-Path $marketplaceDir "marketplace.json"), (($marketplace | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
+
 # 2. Google Antigravity (.agents/) bundle
 Write-Host "Generating Antigravity bundle..."
 Copy-Item -Path (Join-Path (Join-Path (Join-Path $repoRoot "packaging") "antigravity") "hooks.json") -Destination (Join-Path $agyDir "hooks.json") -Force
@@ -175,5 +201,5 @@ Write-SkillWrappers -SkillsTargetDir (Join-Path $agyDir "skills")
 Write-Host "Packaging complete (v$Version):"
 Write-Host "  Portable:    $portableDir (lib/ + skills/)"
 Write-Host "  NuGet:       $expectedNupkg"
-Write-Host "  Claude Code: $claudeDir"
+Write-Host "  Claude Code: $claudeDir (local marketplace: $marketplaceDir)"
 Write-Host "  Antigravity: $agyDir"

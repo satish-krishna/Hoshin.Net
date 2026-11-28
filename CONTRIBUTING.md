@@ -95,7 +95,7 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 
 - **D1. Every outside effect goes through an injected interface:** processes, git, the file system, the clock (`TimeProvider`), environment variables, `gh` and the network. **[review]**; **[test]** for `DateTimeOffset.UtcNow` / `DateTime.Now` outside the clock adapter.
 - **D2. Dependencies are required constructor parameters.** No optional dependency parameters (`IFoo? foo = null`), and no `?? X.Default` or `?? new X()` fallbacks. A forgotten dependency must be a compile error, not real git in a unit test. **[test]**
-- **D3. One composition root.** `src/Hoshin.Cli/HoshinServices.cs` is the only place that creates services. Library types never `new` another service, and never read a `static Default`. `static Default` properties exist only where an external caller of the NuGet package needs a ready-made instance, and each one is documented as such. **[test]**
+- **D3. One composition root.** `src/Hoshin.Workflow/Hosting/HoshinServices.cs` is the only place that creates library services; hosts add their own adapter types on top of it (`src/Hoshin.Cli/HookServices.cs` for the hooks, `HoshinAgents.CreateHost` for Microsoft Agent Framework). Library types never `new` another service, and never read a `static Default`. `static Default` properties exist only where an external caller of the NuGet package needs a ready-made instance, and each one is documented as such. **[test]**
 - **D4. No mutable static state.** Static fields are `readonly` and hold immutable values (compiled regexes, frozen sets). **[test]**
 
 ### 3.7 One owner per rule
@@ -121,7 +121,7 @@ The code already has violations. They are listed in `tests/Hoshin.Tests/Architec
 These come from `AGENTS.md`, and they are tested where possible.
 
 1. `Hoshin.Workflow` references only `Markdig` and `Gherkin`. Anything else lives in a separate assembly. **[test]**
-2. Harness-specific code (Claude Code, Antigravity) lives only in `src/Hoshin.Cli/Hooks` and `src/Hoshin.Cli/Commands`. **[test]**
+2. Harness-specific code (Claude Code, Antigravity) lives only in `src/Hoshin.Cli/Hooks` and `src/Hoshin.Cli/Commands`, and Microsoft Agent Framework code only in `src/Hoshin.Agents`. **[test]** for the hook harnesses
 3. Hoshin documents contain no YAML. YAML appears only in negative tests and in the generated `SKILL.md` front matter. **[test]**
 4. `skills/*/procedure.md` contains judgment guidance only: no YAML, no CLI commands, no harness tool names. **[test]** (`AllSkills_PassStrictLint_NoYamlNoCliNoHarnessToolNames`)
 5. No `.agents/hooks.json` or `.claude-plugin/` in the repository root. This repository is developed outside the hoshin workflow. **[review]**
