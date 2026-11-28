@@ -151,12 +151,27 @@ internal sealed class StopHandler(
             case NeedsApproval when hasReport:
                 return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report NeedsApproval");
 
+            case Handoff:
+                if (hasReport)
+                {
+                    return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report Handoff");
+                }
+
+                TurnState.ClearTurnFiles(repo, _fs);
+                TurnState.TryDelete(repo.RunMarkerPath, _fs);
+                return (_adapter.EmptyOutput(ev.Harness), $"allow: {step.Kind}");
+
             case Done:
                 if (hasReport)
                 {
                     return (_adapter.BlockStopOutput(ev.Harness, HookInstructions.For(step, ev.Harness, prefix: verdictReport)), "continue: report Done");
                 }
 
+                TurnState.ClearTurnFiles(repo, _fs);
+                TurnState.TryDelete(repo.RunMarkerPath, _fs);
+                return (_adapter.EmptyOutput(ev.Harness), $"allow: {step.Kind}");
+
+            case AwaitAccept or AwaitAcceptFix:
                 TurnState.ClearTurnFiles(repo, _fs);
                 TurnState.TryDelete(repo.RunMarkerPath, _fs);
                 return (_adapter.EmptyOutput(ev.Harness), $"allow: {step.Kind}");

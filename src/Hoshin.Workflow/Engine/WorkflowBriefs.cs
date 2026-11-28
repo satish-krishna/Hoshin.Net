@@ -125,6 +125,30 @@ public static class WorkflowBriefs
         return new AgentTask("implement", taskId, attempt, LoadRoleProcedure(state.SkillsRoot, "implement"), b.ToString(), targetRepo);
     }
 
+    public static AgentTask FixDeclinedApproval(
+        WorkflowState state,
+        WorkflowApproval approval,
+        string taskId,
+        int attempt,
+        string? targetRepo,
+        string? extraInstructions,
+        IReadOnlyList<string> handoff)
+    {
+        var b = new StringBuilder();
+        b.AppendLine(CultureInfo.InvariantCulture, $"# Task {taskId}: Address declined approval");
+        b.AppendLine();
+        b.AppendLine(CultureInfo.InvariantCulture, $"Decline reason: {approval.Note}");
+        if (!string.IsNullOrWhiteSpace(extraInstructions))
+        {
+            b.AppendLine(CultureInfo.InvariantCulture, $"Engineer's additional instructions: {extraInstructions}");
+        }
+
+        b.AppendLine();
+        b.AppendLine(CultureInfo.InvariantCulture, $"Repository: {state.RepositoryPathForRepo(targetRepo)}");
+        AppendFixHandback(b, attempt, handoff);
+        return new AgentTask("implement", taskId, attempt, LoadRoleProcedure(state.SkillsRoot, "implement"), b.ToString(), targetRepo);
+    }
+
     private static List<ReviewFindingSummary> FilterFindingsForRepo(List<ReviewFindingSummary>? findings, string? targetRepo)
     {
         if (findings is null || findings.Count == 0)

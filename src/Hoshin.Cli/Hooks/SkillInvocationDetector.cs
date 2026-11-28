@@ -14,7 +14,7 @@ public sealed record SkillInvocation(string Skill, string? Args, SkillInvocation
 public static partial class SkillInvocationDetector
 {
     private static readonly string[] KnownSkills =
-        ["intent", "spec", "plan", "build", "review", "fix", "done", "accept", "reject", "reopen", "setup", "context"];
+        ["intent", "spec", "plan", "build", "review", "fix", "done", "accept", "decline", "reject", "reopen", "setup", "context"];
 
     [GeneratedRegex(@"(?:^|/)\.agents/skills/([a-z0-9_-]+)/SKILL\.md$", RegexOptions.IgnoreCase)]
     private static partial Regex AgySkillPathRegex();

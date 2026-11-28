@@ -71,6 +71,28 @@ internal static class PostBuildFixEngine
             : new Retry(agent, handoff);
     }
 
+    public static Step NextForDeclinedApproval(WorkflowState state, WorkflowApproval approval)
+    {
+        var targetRepo = !string.IsNullOrWhiteSpace(state.SessionRepo)
+            ? state.SessionRepo
+            : (state.Plan.Tasks.Count > 0 ? state.Plan.Tasks[0].Repo : null);
+        var declineNumber = Math.Max(1, state.Ledger.WorkflowApprovalRecords.Count(a => !a.Approved));
+        var taskId = $"FIX-DECLINE-{declineNumber}";
+        var verdicts = state.VerdictsForTaskId(taskId, targetRepo);
+        var failedVerdicts = verdicts.Where(v => !v.Passed).ToList();
+        if (failedVerdicts.Count >= state.Plan.EffectiveMaxAttempts)
+        {
+            return new Done(false, $"{taskId} failed {failedVerdicts.Count} attempts: {string.Join("; ", failedVerdicts[^1].Reasons)}");
+        }
+
+        var attempt = verdicts.Count + 1;
+        var handoff = failedVerdicts.Count > 0 ? failedVerdicts[^1].Reasons : [];
+        var agent = WorkflowBriefs.FixDeclinedApproval(state, approval, taskId, attempt, targetRepo, state.BuildInstructions, handoff);
+        return failedVerdicts.Count == 0
+            ? new Implement(agent)
+            : new Retry(agent, handoff);
+    }
+
     private static int CountConsecutiveFixableCheckFailures(IReadOnlyList<WorkflowCheckRun> checks, string? hookId)
     {
         var count = 0;

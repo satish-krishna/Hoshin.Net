@@ -40,9 +40,11 @@ internal sealed class StartHandler(
             return (_adapter.EmptyOutput(ev.Harness), $"{invocation.Skill}: allowed");
         }
 
-        if (IsBlockedByOtherActiveBuild(repo, ev))
+        if (TryGetOtherActiveRunOwner(repo, ev, out var ownerMarker, out var ownerStep))
         {
-            return (_adapter.EmptyOutput(ev.Harness), "different session owns active build run");
+            return invocation is null
+                ? (_adapter.EmptyOutput(ev.Harness), "different session owns active run")
+                : EmitStartContext(ev, repo, FormatOtherSessionOwnsRun(ownerMarker!, ownerStep!), $"blocked: session {ownerMarker!.SessionId} owns active {ownerStep!.Kind}");
         }
 
         if (TryDrainAntigravityPendingContext(ev, repo) is { } drained)
@@ -50,26 +52,33 @@ internal sealed class StartHandler(
             return drained;
         }
 
-        if (invocation is null)
-        {
-            return (_adapter.EmptyOutput(ev.Harness), "not ours");
-        }
-
-        return HandleSkillInvocation(ev, repo, resolved.ProductRepoName, invocation, rolesRoot);
+        return invocation is null
+            ? (_adapter.EmptyOutput(ev.Harness), "not ours")
+            : HandleSkillInvocation(ev, repo, resolved.ProductRepoName, invocation, rolesRoot);
     }
 
-    private bool IsBlockedByOtherActiveBuild(WorkflowRepo repo, NormalizedHookEvent ev)
+    private bool TryGetOtherActiveRunOwner(WorkflowRepo repo, NormalizedHookEvent ev, out RunMarker? marker, out CurrentStep? step)
     {
+        marker = null;
+        step = null;
         if (!_fs.FileExists(repo.RunMarkerPath))
         {
             return false;
         }
 
-        var existingMarker = repo.ReadRunMarker();
-        var existingStep = repo.ReadStep();
-        return existingStep is { Kind: StepKind.Implement or StepKind.Retry or StepKind.NeedsApproval }
-            && HookSessionScope.IsActiveNonStale(existingMarker, existingStep, _time.GetUtcNow())
-            && !HookSessionScope.IsParentRunSession(existingMarker!, ev);
+        marker = repo.ReadRunMarker();
+        step = repo.ReadStep();
+        return step is not null
+            && WorkflowEngine.HasOwner(step.Kind)
+            && HookSessionScope.IsActiveNonStale(marker, step, _time.GetUtcNow())
+            && !HookSessionScope.IsParentRunSession(marker!, ev);
+    }
+
+    private static string FormatOtherSessionOwnsRun(RunMarker marker, CurrentStep step)
+    {
+        var owner = string.IsNullOrWhiteSpace(marker.SessionId) ? "another session" : $"session `{marker.SessionId}`";
+        var stepDesc = string.IsNullOrWhiteSpace(step.Task) ? step.Kind.ToString() : $"{step.Kind} ({step.Task})";
+        return $"Another session ({owner}) currently owns the active `{stepDesc}` run for this change. Wait for that session to finish before running a workflow command here. Tell the engineer, then end your turn.";
     }
 
     private (string? Output, string Decision)? TryDrainAntigravityPendingContext(NormalizedHookEvent ev, WorkflowRepo repo)
@@ -97,11 +106,7 @@ internal sealed class StartHandler(
         if (RequiresHumanInvocation(invoked, isFixAccept) && invocation.Source != SkillInvocationSource.User)
         {
             var cmd = FormatHumanOnlyCommand(invoked, isFixAccept, ev.Harness);
-            return EmitStartContext(
-                ev,
-                repo,
-                $"Only the engineer can approve, accept, reopen, or reject a change. Ask the engineer to type `{cmd}`, then end your turn.",
-                $"{invoked}: refused model-sourced invocation");
+            return EmitStartContext(ev, repo, $"Only the engineer can approve, decline, accept, reopen, or reject a change. Ask the engineer to type `{cmd}`, then end your turn.", $"{invoked}: refused model-sourced invocation");
         }
 
         if (ev.IsAntigravity && ev.EventName == "PreInvocation")
@@ -125,23 +130,45 @@ internal sealed class StartHandler(
             return EmitStartContext(ev, repo, error ?? "There is no change plan in this repository. Tell the engineer, then end your turn.", "no plan");
         }
 
-        var gate = isFixAccept ? WorkflowEngine.GateFixAccept(state) : WorkflowEngine.Gate(state, invoked);
+        var gate = EvaluateGate(state, invoked, rawArgs, isFixAccept, ev.Harness, out var gateDecision);
         if (gate is not null)
         {
-            return EmitStartContext(ev, repo, gate + " Tell the person who asked, in one or two sentences, then end your turn.", $"{invoked}: refused, next is {WorkflowEngine.Next(state).Kind}");
+            return EmitStartContext(ev, repo, gate, gateDecision!);
         }
 
         StartRun(repo, ev);
         return DispatchSkill(ev, repo, state, sessionRepo, invocation, isFixAccept, rolesRoot, buildInstructions);
     }
 
+    private static string? EvaluateGate(
+        WorkflowState state, string invoked, string rawArgs, bool isFixAccept, HookHarness harness, out string? decision)
+    {
+        var gate = isFixAccept ? WorkflowEngine.GateFixAccept(state) : WorkflowEngine.Gate(state, invoked);
+        if (gate is not null)
+        {
+            decision = $"{invoked}: refused, next is {WorkflowEngine.Next(state).Kind}";
+            return gate + " Tell the person who asked, in one or two sentences, then end your turn.";
+        }
+
+        if (invoked == "decline" && rawArgs.Length == 0)
+        {
+            decision = "decline: missing reason";
+            return $"Declining approval requires a reason. Ask the engineer to type `{HookInstructions.SkillCommand("decline", harness)} <reason>`, then end your turn.";
+        }
+
+        decision = null;
+        return null;
+    }
+
     private static bool RequiresHumanInvocation(string invoked, bool isFixAccept) =>
-        invoked is "accept" or "done" or "reject" or "reopen" || isFixAccept;
+        invoked is "accept" or "decline" or "done" or "reject" or "reopen" || isFixAccept;
 
     private static string FormatHumanOnlyCommand(string invoked, bool isFixAccept, HookHarness harness) =>
         isFixAccept
             ? $"{HookInstructions.SkillCommand("fix", harness)} --accept"
-            : HookInstructions.SkillCommand(invoked is "reject" or "reopen" ? invoked : "accept", harness);
+            : invoked == "decline"
+                ? $"{HookInstructions.SkillCommand("decline", harness)} <reason>"
+                : HookInstructions.SkillCommand(invoked is "reject" or "reopen" ? invoked : "accept", harness);
 
     private static string? ExtractBuildInstructions(string invoked, string rawArgs) =>
         invoked == "build" && rawArgs.Length > 0 ? rawArgs : null;
@@ -158,17 +185,18 @@ internal sealed class StartHandler(
     }
 
     private (string? Output, string Decision) DispatchSkill(
-        NormalizedHookEvent ev,
-        WorkflowRepo repo,
-        WorkflowState state,
-        string? sessionRepo,
-        SkillInvocation invocation,
-        bool isFixAccept,
-        string? rolesRoot,
-        string? buildInstructions)
+        NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string? sessionRepo,
+        SkillInvocation invocation, bool isFixAccept, string? rolesRoot, string? buildInstructions)
     {
         var invoked = invocation.Skill;
         var args = (ev.CommandArgs ?? invocation.Args ?? "").Trim();
+
+        if (invoked == "decline")
+        {
+            _approvals.Answer(repo, state, approved: false, args);
+            ClearRunIfOwned(repo, ev);
+            return EmitStartContext(ev, repo, $"The engineer declined approval: {args}. Tell the engineer the next step is building the fix (`{HookInstructions.SkillCommand("build", ev.Harness)}`). Then end your turn.", "decline: recorded");
+        }
 
         if (invoked == "reject")
         {
@@ -188,11 +216,7 @@ internal sealed class StartHandler(
         }
 
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId, isFixAccept ? null : invoked, sessionRepo, buildInstructions);
-        if (step is Done)
-        {
-            TurnState.ClearTurnFiles(repo, _fs);
-            TurnState.TryDelete(repo.RunMarkerPath, _fs);
-        }
+        ClearRunIfOwnedOrDone(repo, ev, step);
 
         var suffix = BuildPromptSuffix(invoked, args, step);
         return EmitStartContext(ev, repo, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: prefix, suffix: suffix), $"{invoked}: {step.Kind}");
@@ -207,25 +231,12 @@ internal sealed class StartHandler(
         }
 
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
-        if (step is Done)
-        {
-            TurnState.ClearTurnFiles(repo, _fs);
-            TurnState.TryDelete(repo.RunMarkerPath, _fs);
-        }
+        ClearRunIfOwnedOrDone(repo, ev, step);
 
-        return EmitStartContext(
-            ev,
-            repo,
-            $"The intent is rejected, committed as {WorkflowEngine.Short(commit)}. Tell the engineer the change is closed, then end your turn.",
-            $"reject: committed {WorkflowEngine.Short(commit)}");
+        return EmitStartContext(ev, repo, $"The intent is rejected, committed as {WorkflowEngine.Short(commit)}. Tell the engineer the change is closed, then end your turn.", $"reject: committed {WorkflowEngine.Short(commit)}");
     }
 
-    private (string? Output, string Decision) HandleReopen(
-        NormalizedHookEvent ev,
-        WorkflowRepo repo,
-        WorkflowState state,
-        string args,
-        string? rolesRoot)
+    private (string? Output, string Decision) HandleReopen(NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string args, string? rolesRoot)
     {
         var target = ResolveReopenDocument(state, args);
         if (target is null)
@@ -240,11 +251,7 @@ internal sealed class StartHandler(
         }
 
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
-        return EmitStartContext(
-            ev,
-            repo,
-            $"The {target.Value.ToWireName()} is reopened (`status: draft`), committed as {WorkflowEngine.Short(commit)}. Next step: {WorkflowEngine.Describe(step)}. Tell the engineer, then end your turn.",
-            $"reopen: {target.Value.ToWireName()} {WorkflowEngine.Short(commit)}");
+        return EmitStartContext(ev, repo, $"The {target.Value.ToWireName()} is reopened (`status: draft`), committed as {WorkflowEngine.Short(commit)}. Next step: {WorkflowEngine.Describe(step)}. Tell the engineer, then end your turn.", $"reopen: {target.Value.ToWireName()} {WorkflowEngine.Short(commit)}");
     }
 
     private static WorkflowDocument? ResolveReopenDocument(WorkflowState state, string args)
@@ -263,37 +270,20 @@ internal sealed class StartHandler(
             return d.InHead && d.HeadStatus == "accepted" ? doc : null;
         }
 
-        foreach (var candidate in new[] { WorkflowDocument.Plan, WorkflowDocument.Spec, WorkflowDocument.Intent })
-        {
-            var d = state.Document(candidate);
-            if (d.InHead && d.HeadStatus == "accepted")
-            {
-                return candidate;
-            }
-        }
-
-        return null;
+        return new[] { WorkflowDocument.Plan, WorkflowDocument.Spec, WorkflowDocument.Intent }
+            .FirstOrDefault(c => state.Document(c) is { InHead: true, HeadStatus: "accepted" }) is var found
+            && state.Document(found) is { InHead: true, HeadStatus: "accepted" }
+                ? found
+                : null;
     }
 
-    private static string BuildPromptSuffix(string invoked, string args, Step step)
-    {
-        if (args.Length == 0)
-        {
-            return "";
-        }
-
-        if (invoked == "intent")
-        {
-            return $"\n\nThe product owner's idea, as they typed it: {args}";
-        }
-
-        if (invoked == "fix" && step is WriteFix)
-        {
-            return $"\n\nThe engineer's fix request: {args}";
-        }
-
-        return "";
-    }
+    private static string BuildPromptSuffix(string invoked, string args, Step step) => args.Length == 0
+        ? ""
+        : invoked == "intent"
+            ? $"\n\nThe product owner's idea, as they typed it: {args}"
+            : invoked == "fix" && step is WriteFix
+                ? $"\n\nThe engineer's fix request: {args}"
+                : "";
 
     private string ApplyHumanAcceptanceIfNeeded(NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string invoked, bool isFixAccept)
     {
@@ -337,19 +327,41 @@ internal sealed class StartHandler(
         var nextStep = WorkflowEngine.Next(updatedState);
         if (nextStep is WriteDocument nextWrite)
         {
-            TurnState.ClearTurnFiles(repo, _fs);
-            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+            ClearRunIfOwned(repo, ev);
             return EmitStartContext(ev, repo, prefix + $"Tell the person the next step is {WorkflowEngine.Describe(nextStep)}. Then end your turn.", $"accept: next {nextStep.Kind} {nextWrite.Document.ToWireName()}");
         }
 
         if (nextStep is Implement)
         {
-            TurnState.ClearTurnFiles(repo, _fs);
-            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+            ClearRunIfOwned(repo, ev);
             return EmitStartContext(ev, repo, prefix + $"Tell the person the plan is accepted and the next step is {WorkflowEngine.Describe(nextStep)}. Then end your turn.", "accept: next Implement");
         }
 
         return null;
+    }
+
+    private void ClearRunIfOwnedOrDone(WorkflowRepo repo, NormalizedHookEvent ev, Step step)
+    {
+        if (step is Done)
+        {
+            TurnState.ClearTurnFiles(repo, _fs);
+            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+        }
+        else if (step is Handoff)
+        {
+            ClearRunIfOwned(repo, ev);
+        }
+    }
+
+    private void ClearRunIfOwned(WorkflowRepo repo, NormalizedHookEvent ev)
+    {
+        if (_fs.FileExists(repo.RunMarkerPath)
+            && repo.ReadRunMarker() is { } marker
+            && HookSessionScope.IsParentRunSession(marker, ev))
+        {
+            TurnState.ClearTurnFiles(repo, _fs);
+            TurnState.TryDelete(repo.RunMarkerPath, _fs);
+        }
     }
 
     private (string? Output, string Decision) EmitStartContext(NormalizedHookEvent ev, WorkflowRepo repo, string text, string decision)

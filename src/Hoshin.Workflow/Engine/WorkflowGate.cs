@@ -26,6 +26,14 @@ internal static class WorkflowGate
             return GateReopen(state);
         }
 
+        if (normalized == "decline")
+        {
+            var step = WorkflowEngine.Next(state);
+            return step is NeedsApproval
+                ? null
+                : $"`decline` can only run when the change is awaiting approval. The next step is {WorkflowEngine.Describe(step)}.";
+        }
+
         if (state.ChangeState is { Ready: var ready })
         {
             if (ReadinessStop(state, ready, normalized) is { } stop)

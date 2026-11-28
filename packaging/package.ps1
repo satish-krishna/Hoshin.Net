@@ -113,6 +113,10 @@ $skillMeta = @(
         Description = "Records acceptance or approval of the current change document or built change so the workflow can advance or publish."
     },
     @{
+        Name = "decline"
+        Description = "Records the engineer's decline at approval with a reason so the change returns to a fix step before re-review."
+    },
+    @{
         Name = "setup"
         Description = "Sets up or updates a workspace, system home, policy areas, and workspace instructions."
     },
@@ -145,7 +149,7 @@ function Write-SkillWrappers {
         Copy-Item -Path (Join-Path $srcSkillDir "*") -Destination $refsDir -Recurse -Force
 
         # Emit one-line SKILL.md wrapper (YAML front matter is required by Claude Code / Antigravity skill loaders).
-        $userOnly = if ($name -in @("accept", "done")) { "`ndisable-model-invocation: true" } else { "" }
+        $userOnly = if ($name -in @("accept", "decline", "done")) { "`ndisable-model-invocation: true" } else { "" }
         $wrapper = "---`nname: $name`ndescription: $desc$userOnly`n---`n`nRead ``references/procedure.md`` and follow it.`n"
         [System.IO.File]::WriteAllText((Join-Path $skillDir "SKILL.md"), $wrapper, [System.Text.UTF8Encoding]::new($false))
     }

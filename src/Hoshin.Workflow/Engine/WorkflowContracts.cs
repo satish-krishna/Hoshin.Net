@@ -100,6 +100,7 @@ public enum StepKind
     RunChecks,
     NeedsApproval,
     Publish,
+    Handoff,
     Done,
 }
 
@@ -160,6 +161,12 @@ public sealed record NeedsApproval(string Head, string Reason) : Step
 public sealed record Publish(string Head, string Ref) : Step
 {
     public override StepKind Kind => StepKind.Publish;
+}
+
+/// <summary>This session's part of a multi-repository change is finished, while the change itself continues elsewhere.</summary>
+public sealed record Handoff(string Message) : Step
+{
+    public override StepKind Kind => StepKind.Handoff;
 }
 
 public sealed record Done(bool Success, string Outcome) : Step
