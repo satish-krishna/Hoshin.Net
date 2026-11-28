@@ -1,4 +1,5 @@
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Driver;
 using Hoshin.Workflow.Engine;
 
 namespace Hoshin.Cli.Hooks;
@@ -7,19 +8,17 @@ namespace Hoshin.Cli.Hooks;
 internal sealed class StartHandler(
     IHookAdapter adapter,
     IHookRunResolver runResolver,
-    IApprovalRecorder approvals,
-    IDocumentCommitter documents,
+    DecisionApplier decisions,
     IChangeStarter changeStarter,
-    WorkflowAdvancer advancer,
+    StepAdvancer advancer,
     IFileSystem fileSystem,
     TimeProvider timeProvider)
 {
     private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
     private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
-    private readonly IApprovalRecorder _approvals = approvals ?? throw new ArgumentNullException(nameof(approvals));
-    private readonly IDocumentCommitter _documents = documents ?? throw new ArgumentNullException(nameof(documents));
+    private readonly DecisionApplier _decisions = decisions ?? throw new ArgumentNullException(nameof(decisions));
     private readonly StartChangeResolver _changes = new(changeStarter, runResolver, fileSystem, timeProvider);
-    private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
+    private readonly StepAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -193,7 +192,7 @@ internal sealed class StartHandler(
 
         if (invoked == "decline")
         {
-            _approvals.Answer(repo, state, approved: false, args);
+            _decisions.Decline(repo, state, args);
             ClearRunIfOwned(repo, ev);
             return EmitStartContext(ev, repo, $"The engineer declined approval: {args}. Tell the engineer the next step is building the fix (`{HookInstructions.SkillCommand("build", ev.Harness)}`). Then end your turn.", "decline: recorded");
         }
@@ -224,11 +223,13 @@ internal sealed class StartHandler(
 
     private (string? Output, string Decision) HandleReject(NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string? rolesRoot)
     {
-        var commit = _documents.RejectIntent(repo, state);
-        if (commit is null)
+        var rejected = _decisions.Reject(repo, state);
+        if (!rejected.Applied)
         {
             return EmitStartContext(ev, repo, "The rejection could not be committed. Tell the engineer, then end your turn.", "reject: commit failed");
         }
+
+        var commit = rejected.Commits[0];
 
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
         ClearRunIfOwnedOrDone(repo, ev, step);
@@ -238,44 +239,32 @@ internal sealed class StartHandler(
 
     private (string? Output, string Decision) HandleReopen(NormalizedHookEvent ev, WorkflowRepo repo, WorkflowState state, string args, string? rolesRoot)
     {
-        var target = ResolveReopenDocument(state, args);
+        var target = DecisionApplier.ReopenTarget(state, ParseReopenDocument(args));
         if (target is null)
         {
             return EmitStartContext(ev, repo, "Specify an accepted document to reopen (`intent`, `spec`, or `plan`), then end your turn.", "reopen: no accepted target");
         }
 
-        var commit = _documents.ReopenDocument(repo, state, target.Value);
-        if (commit is null)
+        var reopened = _decisions.Reopen(repo, state, target);
+        if (!reopened.Applied)
         {
             return EmitStartContext(ev, repo, $"Could not reopen {target.Value.ToWireName()}. Tell the engineer, then end your turn.", "reopen: commit failed");
         }
+
+        var commit = reopened.Commits[0];
 
         var step = _advancer.Advance(repo, rolesRoot, ev.SessionId);
         return EmitStartContext(ev, repo, $"The {target.Value.ToWireName()} is reopened (`status: draft`), committed as {WorkflowEngine.Short(commit)}. Next step: {WorkflowEngine.Describe(step)}. Tell the engineer, then end your turn.", $"reopen: {target.Value.ToWireName()} {WorkflowEngine.Short(commit)}");
     }
 
-    private static WorkflowDocument? ResolveReopenDocument(WorkflowState state, string args)
-    {
-        var token = StartChangeResolver.StripLeadingFlags(args).Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
-        WorkflowDocument? explicitDoc = token switch
+    private static WorkflowDocument? ParseReopenDocument(string args) =>
+        StartChangeResolver.StripLeadingFlags(args).Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant() switch
         {
             "intent" or "intent.md" => WorkflowDocument.Intent,
             "spec" or "spec.md" => WorkflowDocument.Spec,
             "plan" or "plan.md" => WorkflowDocument.Plan,
             _ => null,
         };
-        if (explicitDoc is { } doc)
-        {
-            var d = state.Document(doc);
-            return d.InHead && d.HeadStatus == "accepted" ? doc : null;
-        }
-
-        return new[] { WorkflowDocument.Plan, WorkflowDocument.Spec, WorkflowDocument.Intent }
-            .FirstOrDefault(c => state.Document(c) is { InHead: true, HeadStatus: "accepted" }) is var found
-            && state.Document(found) is { InHead: true, HeadStatus: "accepted" }
-                ? found
-                : null;
-    }
 
     private static string BuildPromptSuffix(string invoked, string args, Step step) => args.Length == 0
         ? ""
@@ -292,24 +281,19 @@ internal sealed class StartHandler(
             return "";
         }
 
-        switch (WorkflowEngine.Next(state))
+        var next = WorkflowEngine.Next(state);
+        if ((next is AwaitAccept && invoked != "accept") || (next is AwaitAcceptFix && invoked != "accept" && !isFixAccept))
         {
-            case NeedsApproval:
-                _approvals.Answer(repo, state, approved: true, $"approved by the engineer in {(ev.IsAntigravity ? "Antigravity" : "Claude Code")}");
-                return "The engineer's approval is recorded.\n\n";
-            case AwaitAccept a when invoked == "accept":
-                var commit = _documents.AcceptDocument(repo, state, a.Document);
-                return commit is null
-                    ? "The acceptance could not be committed.\n\n"
-                    : $"The {a.Document.ToWireName()} is accepted, committed as {WorkflowEngine.Short(commit)}.\n\n";
-            case AwaitAcceptFix when invoked == "accept" || isFixAccept:
-                var commits = _documents.AcceptFixDocuments(repo, state);
-                return commits.Count == 0
-                    ? "The light-track fix acceptance could not be committed.\n\n"
-                    : $"The light-track fix documents are accepted ({string.Join(", ", commits.Select(WorkflowEngine.Short))}).\n\n";
-            default:
-                return "";
+            return "";
         }
+
+        if (next is not (NeedsApproval or AwaitAccept or AwaitAcceptFix))
+        {
+            return "";
+        }
+
+        var outcome = _decisions.Accept(repo, state, $"approved by the engineer in {(ev.IsAntigravity ? "Antigravity" : "Claude Code")}");
+        return outcome.Summary + "\n\n";
     }
 
     private (string? Output, string Decision)? TryFormatPostAcceptMessage(

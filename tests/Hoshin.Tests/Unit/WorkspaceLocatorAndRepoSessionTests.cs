@@ -44,7 +44,7 @@ public sealed class WorkspaceLocatorAndRepoSessionTests
         Assert.DoesNotContain("# Task T1:", webStartCtx, StringComparison.Ordinal);
 
         // 2. Implement T2 in `web` and submit result from `web`.
-        var repo = TestServices.Default.HookRunResolver.Resolve(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
+        var repo = TestServices.Hooks.HookRunResolver.Resolve(TestServices.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "Stop",
             session_id = webSession,
@@ -175,7 +175,7 @@ public sealed class WorkspaceLocatorAndRepoSessionTests
         Assert.Equal(coordsFromMain.System, coordsFromCopy.System);
         Assert.Equal(coordsFromMain.Change, coordsFromCopy.Change);
 
-        var repo = TestServices.Default.HookRunResolver.ResolveAt(started.CopyRoot!, started.ChangeFolder!)!;
+        var repo = TestServices.Hooks.HookRunResolver.ResolveAt(started.CopyRoot!, started.ChangeFolder!)!;
         Assert.Equal(Path.GetFullPath(systemAFolder), Path.GetFullPath(repo.LedgerFolder));
 
         // Seed intent.md and confirm ChangeState from inside `api` finds the same system and change.

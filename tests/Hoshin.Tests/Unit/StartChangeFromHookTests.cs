@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Hoshin.Cli;
+using Hoshin.Workflow.Hosting;
 using Hoshin.Workflow.Engine;
 using Xunit;
 
@@ -33,8 +34,9 @@ public sealed class StartChangeFromHookTests
             TestServices.PullRequests,
             fixedTime,
             TestServices.FileSystem);
+        var hooks = new Hoshin.Cli.HookServices(services);
 
-        var startEvent = services.HookAdapter.Parse(JsonSerializer.Serialize(new
+        var startEvent = hooks.HookAdapter.Parse(JsonSerializer.Serialize(new
         {
             hook_event_name = "UserPromptSubmit",
             session_id = "claude-a7",
@@ -43,7 +45,7 @@ public sealed class StartChangeFromHookTests
             command_args = "add-login",
         }));
 
-        var (output, _) = services.HookOrchestrator.HandleStart(startEvent, rolesRoot: null);
+        var (output, _) = hooks.HookOrchestrator.HandleStart(startEvent, rolesRoot: null);
         Assert.NotNull(output);
         var context = ExtractContext(output!);
 

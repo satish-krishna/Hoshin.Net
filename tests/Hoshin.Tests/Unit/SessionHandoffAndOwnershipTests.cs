@@ -28,7 +28,7 @@ public sealed class SessionHandoffAndOwnershipTests
         var reviewBrief = ExtractContext(reviewStartOut!);
         Assert.Contains("Review 1", reviewBrief, StringComparison.Ordinal);
 
-        var repo = TestServices.Default.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
+        var repo = TestServices.Hooks.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
         Assert.True(File.Exists(repo.RunMarkerPath));
         Assert.Equal(poSession, repo.ReadRunMarker()?.SessionId);
 
@@ -125,7 +125,7 @@ public sealed class SessionHandoffAndOwnershipTests
         Assert.Contains(ownerSession, secondCtx, StringComparison.Ordinal);
         Assert.DoesNotContain(briefMarker, secondCtx, StringComparison.OrdinalIgnoreCase);
 
-        var resolved = TestServices.Default.HookRunResolver.Resolve(StartEvent(ownerSession, masterDir, $"hoshin:{skill}", $"/hoshin:{skill}"));
+        var resolved = TestServices.Hooks.HookRunResolver.Resolve(StartEvent(ownerSession, masterDir, $"hoshin:{skill}", $"/hoshin:{skill}"));
         Assert.NotNull(resolved);
         Assert.Equal(ownerSession, resolved!.WorkflowRepo.ReadRunMarker()?.SessionId);
     }
@@ -368,7 +368,7 @@ public sealed class SessionHandoffAndOwnershipTests
         TestGitFixture.Git(copyRoot, "add", ".");
         TestGitFixture.Git(copyRoot, "commit", "-q", "-m", $"docs(shop): log T1 and T2 {changeName}", "-m", "Generated-By: hoshin");
 
-        var repo = TestServices.Default.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
+        var repo = TestServices.Hooks.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
         var state = TestServices.Default.WorkflowStateReader.Read(repo, null)!;
         repo.UpdateLedger(l => l with
         {

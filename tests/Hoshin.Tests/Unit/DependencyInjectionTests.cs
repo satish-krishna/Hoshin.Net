@@ -1,5 +1,6 @@
 using System.Text;
 using Hoshin.Cli;
+using Hoshin.Workflow.Hosting;
 using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;

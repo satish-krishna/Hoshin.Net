@@ -1,4 +1,5 @@
 using Hoshin.Workflow.Common;
+using Hoshin.Workflow.Driver;
 using Hoshin.Workflow.Engine;
 
 namespace Hoshin.Cli.Hooks;
@@ -8,14 +9,14 @@ internal sealed class ResultHandler(
     IHookAdapter adapter,
     IHookRunResolver runResolver,
     ITaskEvaluator tasks,
-    WorkflowAdvancer advancer,
+    WorkSubmitter submitter,
     IFileSystem fileSystem,
     TimeProvider timeProvider)
 {
     private readonly IHookAdapter _adapter = adapter ?? throw new ArgumentNullException(nameof(adapter));
     private readonly IHookRunResolver _runResolver = runResolver ?? throw new ArgumentNullException(nameof(runResolver));
     private readonly ITaskEvaluator _tasks = tasks ?? throw new ArgumentNullException(nameof(tasks));
-    private readonly WorkflowAdvancer _advancer = advancer ?? throw new ArgumentNullException(nameof(advancer));
+    private readonly WorkSubmitter _submitter = submitter ?? throw new ArgumentNullException(nameof(submitter));
     private readonly IFileSystem _fs = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
     private readonly TimeProvider _time = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -48,9 +49,9 @@ internal sealed class ResultHandler(
         }
 
         // Foreground subagent completed: judge attempt immediately and hand out next step.
-        var (verdict, step) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, ev.SessionId, resolved.ProductRepoName);
+        var (verdict, step) = Judge(repo, rolesRoot, current, ev.SessionId, resolved.ProductRepoName);
         return (
-            _adapter.ContextOutput(ev, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: WorkflowAdvancer.ReportVerdict(current, verdict))),
+            _adapter.ContextOutput(ev, HookInstructions.For(step, ev.Harness, repo.ReadStep()?.DispatchNonce, prefix: StepAdvancer.ReportVerdict(current, verdict))),
             $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
     }
 
@@ -112,9 +113,16 @@ internal sealed class ResultHandler(
             return (_adapter.EmptyOutput(ev.Harness), "not the step's subagent");
         }
 
-        var (verdict, step) = _advancer.JudgeAndAdvance(repo, rolesRoot, current, repo.ReadRunMarker()?.SessionId, resolved!.ProductRepoName);
-        TurnState.QueuePendingReport(repo, WorkflowAdvancer.ReportVerdict(current, verdict), _fs);
+        var (verdict, step) = Judge(repo, rolesRoot, current, repo.ReadRunMarker()?.SessionId, resolved!.ProductRepoName);
+        TurnState.QueuePendingReport(repo, StepAdvancer.ReportVerdict(current, verdict), _fs);
         return (_adapter.EmptyOutput(ev.Harness), $"verdict {(verdict.Passed ? "passed" : "failed")}; next {step.Kind}");
+    }
+
+    private (WorkflowVerdict Verdict, Step Next) Judge(WorkflowRepo repo, string? rolesRoot, CurrentStep current, string? sessionId, string? sessionRepo)
+    {
+        var judged = _submitter.SubmitTask(repo, rolesRoot, current, sessionId, sessionRepo);
+        StopCounterStore.ResetAll(repo);
+        return (judged.Verdict, judged.Next);
     }
 
     private static bool HasMatchingDispatchNonce(CurrentStep current, NormalizedHookEvent ev) =>

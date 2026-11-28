@@ -249,7 +249,7 @@ public sealed class BuildLogProgressTests
         TestGitFixture.Git(copyRoot, "commit", "-q", "-m", $"docs(shop): accept plan {changeName}", "-m", "Generated-By: hoshin");
 
         // Seed a stale passing verdict for T1 in the local ledger WITHOUT any committed build/app.md!
-        var masterRepo = TestServices.Default.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
+        var masterRepo = TestServices.Hooks.HookRunResolver.ResolveAt(copyRoot, changeFolder)!;
         var appRepo = TestServices.Default.TaskRepoResolver.ResolveByName(masterRepo, "app");
         appRepo.UpdateLedger(l => l with
         {

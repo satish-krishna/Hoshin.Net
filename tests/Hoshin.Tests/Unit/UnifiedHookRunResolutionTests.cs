@@ -185,7 +185,7 @@ public sealed class UnifiedHookRunResolutionTests
         var cmd = new Hoshin.Cli.Commands.HookCommand(
             TestServices.HookAdapter,
             TestServices.HookOrchestrator,
-            TestServices.Default.HookRunResolver);
+            TestServices.Hooks.HookRunResolver);
 
         var payload = JsonSerializer.Serialize(new
         {
@@ -210,7 +210,7 @@ public sealed class UnifiedHookRunResolutionTests
     [Fact]
     public void HookRunResolverAndResultHandler_CoverMissingCwdNonGitWorkspaceRootUndeclaredSiblingAndNonBuildSteps()
     {
-        var resolver = TestServices.Default.HookRunResolver;
+        var resolver = TestServices.Hooks.HookRunResolver;
         var adapter = TestServices.HookAdapter;
 
         // Missing cwd -> null

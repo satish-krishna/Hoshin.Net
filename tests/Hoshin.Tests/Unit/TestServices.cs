@@ -1,6 +1,7 @@
 using Hoshin.Cli;
 using Hoshin.Cli.Commands;
 using Hoshin.Cli.Hooks;
+using Hoshin.Workflow.Hosting;
 using Hoshin.Workflow.Changes;
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Documents;
@@ -15,6 +16,8 @@ namespace Hoshin.Tests.Unit;
 internal static class TestServices
 {
     public static HoshinServices Default { get; } = new();
+
+    public static HookServices Hooks { get; } = new(Default);
 
     public static TimeProvider Time => Default.TimeProvider;
     public static IFileSystem FileSystem => Default.FileSystem;
@@ -39,8 +42,8 @@ internal static class TestServices
     public static LedgerStore Ledger => Default.Ledger;
     public static IWorkflowRunner WorkflowRunner => Default.WorkflowRunner;
     public static WorkflowStateReader WorkflowStateReader => Default.WorkflowStateReader;
-    public static HarnessAdapter HookAdapter => Default.HookAdapter;
-    public static HookOrchestrator HookOrchestrator => Default.HookOrchestrator;
+    public static HarnessAdapter HookAdapter => Hooks.HookAdapter;
+    public static HookOrchestrator HookOrchestrator => Hooks.HookOrchestrator;
 
     public static WorkflowRepo? FindRepo(string directory, string? explicitChangeFolder = null, IGitClient? git = null)
     {
@@ -84,7 +87,7 @@ internal static class TestServices
         var r = runner ?? WorkflowRunner;
         var g = git ?? Git;
         var runResolver = git is null
-            ? Default.HookRunResolver
+            ? Hooks.HookRunResolver
             : new HookRunResolver(Resolver, MarkerReader, g, g, g, FileSystem, new LedgerStore(g, FileSystem));
         return new(
             adapter ?? HookAdapter,
@@ -108,7 +111,7 @@ internal static class TestServices
     {
         var g = git ?? Git;
         var runResolver = git is null
-            ? Default.HookRunResolver
+            ? Hooks.HookRunResolver
             : new HookRunResolver(Resolver, MarkerReader, g, g, g, FileSystem, new LedgerStore(g, FileSystem));
         return GuardCommand.Evaluate(ev, runResolver, FileSystem, timeProvider ?? Time);
     }

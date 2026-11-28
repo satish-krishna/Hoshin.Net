@@ -1,4 +1,5 @@
 using Hoshin.Cli;
+using Hoshin.Workflow.Hosting;
 using Hoshin.Workflow.Git;
 
 namespace Hoshin.Tests.Architecture.Samples;

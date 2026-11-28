@@ -1,10 +1,13 @@
 using Hoshin.Workflow.Common;
 using Hoshin.Workflow.Engine;
 
-namespace Hoshin.Cli.Hooks;
+namespace Hoshin.Workflow.Driver;
 
-/// <summary>Shared workflow state reader, automatic-step advancer, and verdict reporter used by hook handlers.</summary>
-internal sealed class WorkflowAdvancer(
+/// <summary>
+/// Reads workflow state, runs the automatic steps (checks, baseline, publish) and issues the next step that needs an agent
+/// or a person. Shared by the driver and every harness adapter, so they all advance a change the same way.
+/// </summary>
+public sealed class StepAdvancer(
     ITaskEvaluator tasks,
     ICheckRunner checks,
     IPublisher publisher,
@@ -52,7 +55,6 @@ internal sealed class WorkflowAdvancer(
         var state = ReadState(repo, rolesRoot, out var error, sessionRepo, current.FixInstructions)
             ?? throw new InvalidOperationException(error ?? $"Could not read workflow state for {repo.Root} ({repo.ChangeFolder}).");
         var verdict = _tasks.EvaluateAndCommitTask(repo, state, current.Task!, current.Attempt);
-        StopCounterStore.ResetAll(repo);
         return (verdict, Advance(repo, rolesRoot, sessionId, sessionRepo: sessionRepo, buildInstructions: verdict.Passed ? null : current.FixInstructions));
     }
 
