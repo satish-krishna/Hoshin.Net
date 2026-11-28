@@ -685,11 +685,14 @@ public static class UserPathAcceptanceTests
                 """);
             Commit($"docs(shop): write plan {Change}", $"{rel}/plan.md");
 
-            // T1, built in api on the change's branch by the original's build, then logged.
+            // T1, built in api on the change's branch by the original's build, then logged. The original's build ran T1's
+            // compile step, which leaves the gitignored dist/ current, and committed with the change's scope
+            // (tools/changes/commit.ts: `${type}(${scope})`, the scope from change.yml), not the repository's name.
             ws.Git(ws.Api, "switch", "-q", "-c", $"change/{Change}");
             ChangeScripts.MultiplyInApi(ws.Api);
+            ws.RunNode(ws.Api, "build.mjs");
             ws.Git(ws.Api, "add", "--", "src/calc.mjs", "test/multiply.test.mjs");
-            ws.Git(ws.Api, "commit", "-q", "-m", "feat(api): multiply in the calculator", "-m", "Plan-Task: T1\nGenerated-By: hoshin");
+            ws.Git(ws.Api, "commit", "-q", "-m", "feat(shop): multiply in the calculator", "-m", "Plan-Task: T1\nGenerated-By: hoshin");
             var built = ws.Git(ws.Api, "rev-parse", "--short", "HEAD");
             ChangeScripts.Write(folder, "build/api.md", $"""
                 ---
