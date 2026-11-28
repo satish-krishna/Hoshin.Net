@@ -50,6 +50,27 @@ public sealed class HoshinAgentHostTests
     }
 
     [Fact]
+    public async Task Host_StopsAtMaxTurns()
+    {
+        using var project = HoshinDriverTests.DriverProject.Create();
+        var model = new ScriptedModel(new ScriptedAgent());
+        var host = new HoshinAgentHost(project.Driver, new TrackingRoleAgents(model), new ScriptedHuman(), TestServices.AllowListedRunner, new HoshinAgentHostOptions(MaxTurns: 1));
+
+        var finished = await host.StartAndRunAsync(new StartRequest(new WorkspaceRef(project.Repo), "add-shout"));
+
+        Assert.False(finished.Success);
+        Assert.Contains("did not finish in 1 turns", finished.Outcome, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CreateHost_BuildsAHostOverTheLibraryComposition()
+    {
+        var host = HoshinAgents.CreateHost(new HoshinServices(), new ScriptedModel(null), new ScriptedHuman(), new HoshinAgentHostOptions(), new HoshinDriverOptions());
+
+        Assert.NotNull(host);
+    }
+
+    [Fact]
     public void UserMessage_CarriesTheBriefTheWriteScopeAndFeedback()
     {
         var work = new AgentWork(

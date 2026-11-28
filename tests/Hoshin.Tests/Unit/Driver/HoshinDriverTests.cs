@@ -121,6 +121,68 @@ public sealed class HoshinDriverTests
     }
 
     [Fact]
+    public async Task Reject_ClosesTheChange_FromTheIntentDecision()
+    {
+        using var project = DriverProject.Create();
+        var change = await project.Start();
+        var work = Assert.IsType<AgentWork>(await project.Driver.NextAsync(change));
+        new ScriptedAgent().Do(work);
+        var decision = Assert.IsType<HumanDecision>(await project.Driver.SubmitAsync(change, work.Id));
+        Assert.Contains(DecisionKind.Reject, decision.Allowed);
+
+        var after = await project.Driver.DecideAsync(change, new Reject(), Engineer);
+
+        Assert.IsType<Finished>(after);
+        Assert.Contains(after.Happened, h => h.Detail.Contains("rejected", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Reopen_ReturnsTheLatestAcceptedDocumentToDraft()
+    {
+        using var project = DriverProject.Create();
+        var agent = new ScriptedAgent();
+        var change = await project.Start();
+        for (var i = 0; i < 2; i++)
+        {
+            var work = Assert.IsType<AgentWork>(await project.Driver.NextAsync(change));
+            agent.Do(work);
+            Assert.IsType<HumanDecision>(await project.Driver.SubmitAsync(change, work.Id));
+            await project.Driver.DecideAsync(change, new Accept(), Engineer);
+        }
+
+        var after = await project.Driver.DecideAsync(change, new Reopen(), Engineer);
+
+        Assert.Contains(after.Happened, h => h.Detail.Contains("spec is reopened", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Decline_IsRefused_WithoutAReason()
+    {
+        using var project = DriverProject.Create();
+        var asked = false;
+        var refusal = "";
+
+        var (finished, transcript) = await project.RunToEnd(new ScriptedAgent(), d =>
+        {
+            if (d.Allowed.Contains(DecisionKind.Accept))
+            {
+                return new Accept();
+            }
+
+            if (!asked)
+            {
+                asked = true;
+                refusal = Assert.ThrowsAsync<DriverRefusedException>(() => project.Driver.DecideAsync(project.Change!, new Decline("  "), Engineer)).GetAwaiter().GetResult().Message;
+            }
+
+            return new Approve("");
+        });
+
+        Assert.True(finished.Success, transcript);
+        Assert.Contains("requires a reason", refusal, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ListOpen_FindsAChange_OnceItsIntentIsDrafted()
     {
         using var project = DriverProject.Create();
