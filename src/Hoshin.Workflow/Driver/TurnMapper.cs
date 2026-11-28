@@ -10,7 +10,7 @@ public static class TurnMapper
 
     /// <summary>Paths no agent may write during any step, relative to the repository root.</summary>
     public static readonly IReadOnlyList<string> AlwaysProtected =
-        [.. ProtectedPaths.ProtectedDirectories.Select(d => d + "/**"), MarkerConstants.FileName];
+        [.. ProtectedPaths.ProtectedDirectories.Select(d => d + "/**/*"), MarkerConstants.FileName];
 
     /// <summary>
     /// Maps <paramref name="step"/> to a turn. <paramref name="current"/> is the issued step (<c>step.json</c>) the work id comes
@@ -86,7 +86,7 @@ public static class TurnMapper
         var changeRel = Relative(root, state.ChangeFolder);
         if (!changeRel.StartsWith("..", StringComparison.Ordinal))
         {
-            mayNotWrite.Add(changeRel + "/**");
+            mayNotWrite.Add(changeRel + "/**/*");
         }
 
         var mayRun = new List<IReadOnlyList<string>>();
@@ -100,7 +100,7 @@ public static class TurnMapper
             mayRun.Add(test);
         }
 
-        var scope = new WorkScope(root, ["**"], mayNotWrite, mayRun);
+        var scope = new WorkScope(root, ["**/*"], mayNotWrite, mayRun);
         return Work(Role.Implement, agent.Instructions, agent.Brief, scope, current, agent.Attempt, [.. handoff, .. feedback], happened);
     }
 

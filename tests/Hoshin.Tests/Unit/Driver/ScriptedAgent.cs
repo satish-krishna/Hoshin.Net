@@ -22,6 +22,15 @@ internal sealed partial class ScriptedAgent
 
     public void Do(AgentWork work)
     {
+        foreach (var (path, text) in FilesFor(work))
+        {
+            TestGitFixture.Write(Path.Combine(work.Scope.WorkingDirectory, path), text);
+        }
+    }
+
+    /// <summary>The files (relative to the work's directory) a compliant agent writes for <paramref name="work"/>.</summary>
+    public IReadOnlyList<(string Path, string Text)> FilesFor(AgentWork work)
+    {
         Done.Add(work.Role);
         var root = work.Scope.WorkingDirectory;
         switch (work.Role)
@@ -29,49 +38,47 @@ internal sealed partial class ScriptedAgent
             case Role.Intent:
             case Role.Spec:
             case Role.Plan:
-                TestGitFixture.Write(Path.Combine(root, work.Scope.MayWrite[0]), DocumentText(work));
-                break;
+                return [(work.Scope.MayWrite[0], DocumentText(work))];
             case Role.Review:
                 var reviewPath = Path.Combine(root, work.Scope.MayWrite[0]);
                 var existing = File.Exists(reviewPath) ? File.ReadAllText(reviewPath).TrimEnd() + "\n\n" : "```jsonc\n{ \"layout\": 2 }\n```\n\n# Review findings\n\n";
-                TestGitFixture.Write(reviewPath, existing + ReviewSection(work.Brief));
-                break;
+                return [(work.Scope.MayWrite[0], existing + ReviewSection(work.Brief))];
             case Role.Implement when work.Id.Task?.StartsWith("FIX-", StringComparison.Ordinal) == true:
-                FixDeclined(root);
-                break;
+                return FixDeclined();
             case Role.Implement:
-                Implement(root, work.Attempt);
-                break;
+                return Implement(work.Attempt);
             default:
                 throw new InvalidOperationException($"The scripted agent does not do {work.Role} work.");
         }
     }
 
-    private void Implement(string root, int attempt)
+    private List<(string Path, string Text)> Implement(int attempt)
     {
+        var files = new List<(string, string)>();
         if (!(SkipTestOnFirstAttempt && attempt == 1))
         {
-            TestGitFixture.Write(Path.Combine(root, "test", "shout.test.mjs"), """
+            files.Add(("test/shout.test.mjs", """
                 import test from 'node:test';
                 import assert from 'node:assert/strict';
                 import { shout } from '../src/greet.mjs';
                 test('shout', () => { assert.equal(shout('Ada'), 'Hello, Ada!'); });
-                """);
+                """));
         }
 
-        TestGitFixture.Write(Path.Combine(root, "src", "greet.mjs"), "export const greet = (name) => `Hello, ${name}`;\nexport const shout = (name) => `${greet(name)}!`;\n");
+        files.Add(("src/greet.mjs", "export const greet = (name) => `Hello, ${name}`;\nexport const shout = (name) => `${greet(name)}!`;\n"));
+        return files;
     }
 
-    private static void FixDeclined(string root)
-    {
-        TestGitFixture.Write(Path.Combine(root, "test", "shout-empty.test.mjs"), """
+    private static List<(string Path, string Text)> FixDeclined() =>
+    [
+        ("test/shout-empty.test.mjs", """
             import test from 'node:test';
             import assert from 'node:assert/strict';
             import { shout } from '../src/greet.mjs';
             test('shout an empty name', () => { assert.equal(shout(''), 'Hello!'); });
-            """);
-        TestGitFixture.Write(Path.Combine(root, "src", "greet.mjs"), "export const greet = (name) => `Hello, ${name}`;\nexport const shout = (name) => (name ? `${greet(name)}!` : 'Hello!');\n");
-    }
+            """),
+        ("src/greet.mjs", "export const greet = (name) => `Hello, ${name}`;\nexport const shout = (name) => (name ? `${greet(name)}!` : 'Hello!');\n"),
+    ];
 
     private string DocumentText(AgentWork work)
     {
